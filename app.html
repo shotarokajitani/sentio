@@ -1,0 +1,2185 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SENTIO — ダッシュボード</title>
+    <meta
+      name="description"
+      content="Sentio ダッシュボード — データを判断に変える"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ============================================================
+         SENTIO App — Light Theme
+         bg:#f7f5f2  accent:#0e5070  fonts: Cormorant Garamond + Inter
+         ============================================================ */
+      :root {
+        --bg: #f7f5f2;
+        --bg-surface: #ffffff;
+        --bg-elevated: #f0ede9;
+        --bg-input: #ffffff;
+        --accent: #0e5070;
+        --accent-light: rgba(14, 80, 112, 0.08);
+        --accent-hover: #0a3f5a;
+        --success: #1a8a5c;
+        --success-light: rgba(26, 138, 92, 0.08);
+        --warning: #b45309;
+        --warning-light: rgba(180, 83, 9, 0.08);
+        --danger: #b91c1c;
+        --danger-light: rgba(185, 28, 28, 0.06);
+        --text: #1a1a1a;
+        --text-secondary: #6b6b6b;
+        --text-dim: #999999;
+        --border: #e0dcd6;
+        --border-light: rgba(0, 0, 0, 0.05);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.06);
+        --font-heading: "Cormorant Garamond", Georgia, serif;
+        --font-body: "Inter", -apple-system, sans-serif;
+        --sidebar-w: 240px;
+        --header-h: 56px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        font-size: 16px;
+      }
+
+      body {
+        font-family: var(--font-body);
+        font-weight: 400;
+        color: var(--text);
+        background: var(--bg);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        font-family: var(--font-heading);
+        font-weight: 400;
+        line-height: 1.2;
+      }
+
+      button {
+        font-family: var(--font-body);
+        cursor: pointer;
+        border: none;
+        background: none;
+      }
+
+      input,
+      textarea,
+      select {
+        font-family: var(--font-body);
+        font-size: 14px;
+      }
+
+      /* ---- Auth Screen ---- */
+      .auth-screen {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .auth-card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .auth-brand {
+        font-family: var(--font-heading);
+        font-size: 32px;
+        font-weight: 300;
+        letter-spacing: 0.1em;
+        text-align: center;
+        margin-bottom: 8px;
+      }
+
+      .auth-brand .accent-e {
+        color: var(--accent);
+      }
+
+      .auth-subtitle {
+        font-size: 13px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-bottom: 36px;
+      }
+
+      .auth-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 28px;
+      }
+
+      .auth-tab {
+        flex: 1;
+        padding: 10px 0;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-dim);
+        text-align: center;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .auth-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+
+      .auth-tab:hover {
+        color: var(--text);
+      }
+
+      .form-group {
+        margin-bottom: 18px;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        letter-spacing: 0.03em;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--bg-input);
+        color: var(--text);
+        transition: border-color 0.2s;
+        outline: none;
+      }
+
+      .form-input:focus {
+        border-color: var(--accent);
+      }
+
+      .form-input::placeholder {
+        color: var(--text-dim);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 11px 24px;
+        border-radius: 5px;
+        transition: all 0.2s;
+        letter-spacing: 0.02em;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+        width: 100%;
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .btn-secondary {
+        background: var(--bg-elevated);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .btn-secondary:hover {
+        background: var(--border);
+      }
+
+      .btn-ghost {
+        color: var(--text-secondary);
+        padding: 8px 12px;
+      }
+
+      .btn-ghost:hover {
+        color: var(--text);
+        background: var(--bg-elevated);
+        border-radius: 5px;
+      }
+
+      .btn-accent-outline {
+        border: 1px solid var(--accent);
+        color: var(--accent);
+      }
+
+      .btn-accent-outline:hover {
+        background: var(--accent-light);
+      }
+
+      .auth-error {
+        display: none;
+        font-size: 13px;
+        color: var(--danger);
+        background: var(--danger-light);
+        padding: 10px 14px;
+        border-radius: 5px;
+        margin-bottom: 16px;
+      }
+
+      .auth-error.show {
+        display: block;
+      }
+
+      .auth-footer {
+        text-align: center;
+        margin-top: 24px;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+
+      .auth-footer a {
+        color: var(--accent);
+      }
+
+      /* ---- App Shell ---- */
+      .app-shell {
+        display: none;
+        min-height: 100vh;
+      }
+
+      .app-shell.active {
+        display: flex;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: var(--sidebar-w);
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 50;
+      }
+
+      .sidebar-brand {
+        font-family: var(--font-heading);
+        font-size: 20px;
+        font-weight: 400;
+        letter-spacing: 0.12em;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sidebar-brand .accent-e {
+        color: var(--accent);
+      }
+
+      .sidebar-nav {
+        flex: 1;
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text-secondary);
+        transition: all 0.15s;
+        cursor: pointer;
+      }
+
+      .sidebar-item:hover {
+        background: var(--bg-elevated);
+        color: var(--text);
+      }
+
+      .sidebar-item.active {
+        background: var(--accent-light);
+        color: var(--accent);
+        font-weight: 500;
+      }
+
+      .sidebar-item svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+
+      .sidebar-badge {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+        padding: 1px 7px;
+        border-radius: 10px;
+        min-width: 20px;
+        text-align: center;
+      }
+
+      .sidebar-footer {
+        padding: 16px;
+        border-top: 1px solid var(--border);
+      }
+
+      .sidebar-user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .sidebar-user:hover {
+        background: var(--bg-elevated);
+      }
+
+      .sidebar-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--accent-light);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .sidebar-user-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .sidebar-user-name {
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sidebar-user-email {
+        font-size: 11px;
+        color: var(--text-dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Main Content */
+      .main {
+        flex: 1;
+        margin-left: var(--sidebar-w);
+        min-height: 100vh;
+      }
+
+      .main-header {
+        height: var(--header-h);
+        padding: 0 32px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-surface);
+        position: sticky;
+        top: 0;
+        z-index: 40;
+      }
+
+      .main-title {
+        font-family: var(--font-heading);
+        font-size: 20px;
+        font-weight: 400;
+      }
+
+      .main-content {
+        padding: 32px;
+      }
+
+      /* Tab panels */
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      /* ---- Dashboard Tab ---- */
+      .greeting {
+        margin-bottom: 32px;
+      }
+
+      .greeting h2 {
+        font-size: 28px;
+        margin-bottom: 4px;
+      }
+
+      .greeting p {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .action-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 32px;
+      }
+
+      .action-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 24px;
+        position: relative;
+        transition: box-shadow 0.2s;
+      }
+
+      .action-card:hover {
+        box-shadow: var(--shadow-lg);
+      }
+
+      .action-card-priority {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 10px;
+      }
+
+      .action-card h3 {
+        font-size: 16px;
+        font-weight: 400;
+        margin-bottom: 8px;
+        line-height: 1.5;
+      }
+
+      .action-card p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.7;
+      }
+
+      .action-card-deadline {
+        display: inline-block;
+        margin-top: 14px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--warning);
+        background: var(--warning-light);
+        padding: 3px 10px;
+        border-radius: 4px;
+      }
+
+      .action-card-check {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 24px;
+        height: 24px;
+        border: 1.5px solid var(--border);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: transparent;
+      }
+
+      .action-card-check:hover {
+        border-color: var(--success);
+        color: var(--success);
+      }
+
+      .action-card-check.done {
+        border-color: var(--success);
+        background: var(--success);
+        color: #fff;
+      }
+
+      .summary-section {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 24px;
+      }
+
+      .card-header {
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 16px;
+      }
+
+      .sowhat-summary {
+        font-family: var(--font-heading);
+        font-size: 18px;
+        line-height: 1.8;
+        color: var(--text);
+      }
+
+      .metric-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .metric-value {
+        font-family: var(--font-heading);
+        font-size: 36px;
+        font-weight: 300;
+        color: var(--accent);
+        text-align: center;
+      }
+
+      .metric-label {
+        font-size: 11px;
+        color: var(--text-dim);
+        letter-spacing: 0.1em;
+        text-align: center;
+      }
+
+      /* ---- Analysis Tab ---- */
+      .analysis-area {
+        max-width: 800px;
+      }
+
+      .analysis-area h2 {
+        font-size: 24px;
+        margin-bottom: 8px;
+      }
+
+      .analysis-area > p {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 28px;
+      }
+
+      .input-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 28px;
+        margin-bottom: 24px;
+      }
+
+      .input-card textarea {
+        width: 100%;
+        min-height: 200px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        resize: vertical;
+        line-height: 1.8;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      .input-card textarea:focus {
+        border-color: var(--accent);
+      }
+
+      .input-card textarea::placeholder {
+        color: var(--text-dim);
+      }
+
+      .input-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16px;
+      }
+
+      .input-hint {
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+
+      .generate-btn {
+        padding: 12px 28px;
+        font-size: 14px;
+        font-weight: 500;
+        width: auto;
+      }
+
+      /* Loading */
+      .analysis-loading {
+        display: none;
+        text-align: center;
+        padding: 48px 0;
+      }
+
+      .analysis-loading.show {
+        display: block;
+      }
+
+      .spinner {
+        width: 36px;
+        height: 36px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .analysis-loading p {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      /* Result card */
+      .result-card {
+        display: none;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .result-card.show {
+        display: block;
+      }
+
+      .result-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 28px;
+        background: var(--accent-light);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .result-header-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+
+      .result-header-text {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .result-body {
+        padding: 28px;
+      }
+
+      .result-sowhat {
+        font-family: var(--font-heading);
+        font-size: 20px;
+        line-height: 1.8;
+        color: var(--text);
+        margin-bottom: 28px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .result-actions-title {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 16px;
+      }
+
+      .result-action {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--border-light);
+      }
+
+      .result-action:last-child {
+        border-bottom: none;
+      }
+
+      .result-action-p {
+        font-size: 11px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-top: 2px;
+        flex-shrink: 0;
+      }
+
+      .result-action-content {
+        flex: 1;
+      }
+
+      .result-action-text {
+        font-size: 14px;
+        line-height: 1.7;
+        margin-bottom: 4px;
+      }
+
+      .result-action-reason {
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.6;
+      }
+
+      .result-action-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .result-action-deadline {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--warning);
+        background: var(--warning-light);
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+
+      .result-action-done {
+        font-size: 12px;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition: color 0.15s;
+      }
+
+      .result-action-done:hover {
+        color: var(--success);
+      }
+
+      .result-action-done.checked {
+        color: var(--success);
+        font-weight: 500;
+      }
+
+      .result-risks {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+
+      .result-risk {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 14px;
+        background: var(--danger-light);
+        border-radius: 6px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .result-risk-level {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--danger);
+        padding: 2px 6px;
+        background: rgba(185, 28, 28, 0.1);
+        border-radius: 3px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      .result-risk-level.medium {
+        color: var(--warning);
+        background: var(--warning-light);
+      }
+
+      /* ---- Insights Tab ---- */
+      .insights-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+
+      .insights-header h2 {
+        font-size: 24px;
+      }
+
+      .execution-rate {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .execution-bar {
+        width: 120px;
+        height: 6px;
+        background: var(--bg-elevated);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .execution-fill {
+        height: 100%;
+        background: var(--success);
+        border-radius: 3px;
+        transition: width 0.4s ease;
+      }
+
+      .execution-text {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .execution-text strong {
+        color: var(--success);
+        font-weight: 600;
+      }
+
+      .session-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .session-item {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px 24px;
+        cursor: pointer;
+        transition: box-shadow 0.2s;
+      }
+
+      .session-item:hover {
+        box-shadow: var(--shadow-lg);
+      }
+
+      .session-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .session-date {
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+
+      .session-status {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+
+      .session-status.done {
+        color: var(--success);
+        background: var(--success-light);
+      }
+
+      .session-status.partial {
+        color: var(--warning);
+        background: var(--warning-light);
+      }
+
+      .session-sowhat {
+        font-family: var(--font-heading);
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--text);
+        margin-bottom: 8px;
+      }
+
+      .session-actions-count {
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+
+      /* ---- Reports Tab ---- */
+      .reports-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        max-width: 800px;
+      }
+
+      .report-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 28px;
+      }
+
+      .report-card h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+
+      .report-card p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.7;
+        margin-bottom: 20px;
+      }
+
+      /* ---- Settings Tab ---- */
+      .settings-section {
+        max-width: 640px;
+        margin-bottom: 40px;
+      }
+
+      .settings-section h3 {
+        font-size: 18px;
+        margin-bottom: 6px;
+      }
+
+      .settings-section > p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+
+      .settings-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 24px;
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--border-light);
+      }
+
+      .settings-row:last-child {
+        border-bottom: none;
+      }
+
+      .settings-row-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .settings-row-value {
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      .plan-badge {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: var(--accent-light);
+        padding: 4px 12px;
+        border-radius: 4px;
+      }
+
+      /* ---- Toast ---- */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: var(--text);
+        color: #fff;
+        font-size: 13px;
+        padding: 12px 20px;
+        border-radius: 6px;
+        box-shadow: var(--shadow-lg);
+        transform: translateY(80px);
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 999;
+      }
+
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      /* ---- Responsive ---- */
+      @media (max-width: 1024px) {
+        .action-cards {
+          grid-template-columns: 1fr;
+        }
+        .summary-section {
+          grid-template-columns: 1fr;
+        }
+        .reports-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .sidebar {
+          transform: translateX(-100%);
+          transition: transform 0.3s ease;
+          width: 260px;
+        }
+
+        .sidebar.open {
+          transform: translateX(0);
+        }
+
+        .sidebar-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.3);
+          z-index: 49;
+        }
+
+        .sidebar-overlay.show {
+          display: block;
+        }
+
+        .main {
+          margin-left: 0;
+        }
+
+        .mobile-menu-btn {
+          display: flex !important;
+        }
+
+        .main-content {
+          padding: 24px 16px;
+        }
+      }
+
+      .mobile-menu-btn {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text-secondary);
+      }
+
+      .mobile-menu-btn:hover {
+        background: var(--bg-elevated);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .mt-12 {
+        margin-top: 12px;
+      }
+      .mt-24 {
+        margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ============================================================
+         Auth Screen (Login / Register)
+         ============================================================ -->
+    <div class="auth-screen" id="authScreen">
+      <div class="auth-card">
+        <div class="auth-brand">S<span class="accent-e">e</span>ntio</div>
+        <p class="auth-subtitle">データを判断に変える</p>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-auth="login">ログイン</button>
+          <button class="auth-tab" data-auth="register">新規登録</button>
+        </div>
+
+        <div class="auth-error" id="authError"></div>
+
+        <!-- Login Form -->
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label" for="loginEmail">メールアドレス</label>
+            <input
+              class="form-input"
+              type="email"
+              id="loginEmail"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="loginPassword">パスワード</label>
+            <input
+              class="form-input"
+              type="password"
+              id="loginPassword"
+              placeholder="8文字以上"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" id="loginBtn">
+            ログイン
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="registerForm" class="hidden">
+          <div class="form-group">
+            <label class="form-label" for="regEmail">メールアドレス</label>
+            <input
+              class="form-input"
+              type="email"
+              id="regEmail"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regPassword">パスワード</label>
+            <input
+              class="form-input"
+              type="password"
+              id="regPassword"
+              placeholder="8文字以上"
+              minlength="8"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regCompany">会社名</label>
+            <input
+              class="form-input"
+              type="text"
+              id="regCompany"
+              placeholder="株式会社ディセーノ"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regName">担当者名</label>
+            <input
+              class="form-input"
+              type="text"
+              id="regName"
+              placeholder="梶谷 将太郎"
+              required
+            />
+          </div>
+          <button type="submit" class="btn btn-primary" id="registerBtn">
+            アカウント作成
+          </button>
+        </form>
+
+        <div class="auth-footer">
+          <a href="index.html">&larr; トップページに戻る</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         App Shell
+         ============================================================ -->
+    <div class="app-shell" id="appShell">
+      <!-- Sidebar Overlay (mobile) -->
+      <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">S<span class="accent-e">e</span>ntio</div>
+        <nav class="sidebar-nav">
+          <button class="sidebar-item active" data-tab="dashboard">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            ダッシュボード
+          </button>
+          <button class="sidebar-item" data-tab="analysis">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+            分析を依頼
+            <span class="sidebar-badge" title="コア機能">&#9733;</span>
+          </button>
+          <button class="sidebar-item" data-tab="insights">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M18 9l-5 5-2-2-4 4" />
+            </svg>
+            インサイト一覧
+            <span class="sidebar-badge" id="pendingBadge" style="display: none"
+              >0</span
+            >
+          </button>
+          <button class="sidebar-item" data-tab="reports">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+            レポート
+          </button>
+          <button class="sidebar-item" data-tab="settings">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z"
+              />
+            </svg>
+            設定
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-user" id="sidebarUser" onclick="logout()">
+            <div class="sidebar-avatar" id="userAvatar">U</div>
+            <div class="sidebar-user-info">
+              <div class="sidebar-user-name" id="userName">ユーザー</div>
+              <div class="sidebar-user-email" id="userEmail">ログアウト</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <div class="main">
+        <header class="main-header">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <h1 class="main-title" id="mainTitle">ダッシュボード</h1>
+          </div>
+          <button class="btn btn-ghost" onclick="logout()">ログアウト</button>
+        </header>
+
+        <div class="main-content">
+          <!-- ======== Dashboard ======== -->
+          <div class="tab-panel active" id="panel-dashboard">
+            <div class="greeting">
+              <h2 id="greetingText">おはようございます</h2>
+              <p>今週のアクションを確認しましょう。</p>
+            </div>
+
+            <div class="card-header">今週の3つ &mdash; THIS WEEK'S ACTIONS</div>
+            <div class="action-cards" id="weeklyActions">
+              <div class="action-card">
+                <div class="action-card-check" onclick="toggleCheck(this)">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div class="action-card-priority">Priority 1</div>
+                <h3>台湾向けに2ブランドの追加仕入れ交渉を開始する</h3>
+                <p>
+                  口コミの「種類が少ない」は購入意欲の裏返し。ピークを逃さない。
+                </p>
+                <span class="action-card-deadline">今週中</span>
+              </div>
+              <div class="action-card">
+                <div class="action-card-check" onclick="toggleCheck(this)">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div class="action-card-priority">Priority 2</div>
+                <h3>国内EC -5%の原因を広告CPAとリピート率で切り分ける</h3>
+                <p>
+                  下落が構造的か一時的かを判断するために、数値の内訳が必要。
+                </p>
+                <span class="action-card-deadline">来週月曜まで</span>
+              </div>
+              <div class="action-card">
+                <div class="action-card-check" onclick="toggleCheck(this)">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div class="action-card-priority">Priority 3</div>
+                <h3>韓国市場のリソースを台湾にシフト、在庫配分を見直す</h3>
+                <p>韓国は横ばい。成長余地のある台湾に集中した方がROIが高い。</p>
+                <span class="action-card-deadline">今月中</span>
+              </div>
+            </div>
+
+            <div class="summary-section">
+              <div class="card">
+                <div class="card-header">最新の So What</div>
+                <p class="sowhat-summary">
+                  台湾コスメの急成長は本物ですが、「種類が少ない」の声が急増しています。このまま放置すると、需要のピークを取りこぼします。国内ECの微減は広告効率の悪化が主因と推測されます。韓国市場は現状維持で問題ありません。
+                </p>
+              </div>
+              <div class="card">
+                <div class="card-header">ステータス</div>
+                <div class="metric-grid">
+                  <div>
+                    <div class="metric-value" id="pendingCount">3</div>
+                    <div class="metric-label">未実行アクション</div>
+                  </div>
+                  <div>
+                    <div class="metric-value">7</div>
+                    <div class="metric-label">今月の分析回数</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======== Analysis ======== -->
+          <div class="tab-panel" id="panel-analysis">
+            <div class="analysis-area">
+              <h2>分析を依頼</h2>
+              <p>
+                データや報告書をテキストで貼り付けてください。Sentioが「だから何をすべきか」を判断します。
+              </p>
+
+              <div class="input-card">
+                <textarea
+                  id="analysisInput"
+                  placeholder="ここにデータを貼り付けてください。&#10;&#10;例：&#10;3月の売上報告：台湾向けコスメが前月比+40%。&#10;韓国市場は横ばい。国内ECは-5%。&#10;在庫回転率は1.2ヶ月。&#10;口コミサイトに「種類が少ない」の投稿が先月比3倍。"
+                ></textarea>
+                <div class="input-actions">
+                  <span class="input-hint">Ctrl + Enter で送信</span>
+                  <button
+                    class="btn btn-primary generate-btn"
+                    id="generateBtn"
+                    onclick="generateSoWhat()"
+                  >
+                    so whatを生成する
+                  </button>
+                </div>
+              </div>
+
+              <div class="analysis-loading" id="analysisLoading">
+                <div class="spinner"></div>
+                <p>Sentioが分析しています...</p>
+              </div>
+
+              <div class="result-card" id="resultCard">
+                <div class="result-header">
+                  <div class="result-header-dot"></div>
+                  <span class="result-header-text"
+                    >Sentio Analysis Complete</span
+                  >
+                </div>
+                <div class="result-body">
+                  <div class="result-sowhat" id="resultSoWhat"></div>
+                  <div class="result-actions-title">推奨アクション</div>
+                  <div id="resultActions"></div>
+                  <div class="result-risks" id="resultRisks"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======== Insights ======== -->
+          <div class="tab-panel" id="panel-insights">
+            <div class="insights-header">
+              <h2>インサイト一覧</h2>
+              <div class="execution-rate">
+                <div class="execution-bar">
+                  <div class="execution-fill" style="width: 67%"></div>
+                </div>
+                <span class="execution-text">
+                  実行率 <strong>67%</strong>
+                </span>
+              </div>
+            </div>
+
+            <div class="session-list" id="sessionList">
+              <div class="session-item">
+                <div class="session-meta">
+                  <span class="session-date">2026年3月30日</span>
+                  <span class="session-status partial">2/3 実行済</span>
+                </div>
+                <p class="session-sowhat">
+                  台湾コスメの急成長は本物だが、「種類が少ない」の声に即対応が必要。国内ECの微減は広告効率を要確認。
+                </p>
+                <span class="session-actions-count">3つのアクション</span>
+              </div>
+              <div class="session-item">
+                <div class="session-meta">
+                  <span class="session-date">2026年3月23日</span>
+                  <span class="session-status done">3/3 実行済</span>
+                </div>
+                <p class="session-sowhat">
+                  新規顧客獲得コストが前月比+18%。リターゲティング広告の配信先を見直し、LTV上位セグメントに集中すべき。
+                </p>
+                <span class="session-actions-count">3つのアクション</span>
+              </div>
+              <div class="session-item">
+                <div class="session-meta">
+                  <span class="session-date">2026年3月16日</span>
+                  <span class="session-status done">3/3 実行済</span>
+                </div>
+                <p class="session-sowhat">
+                  在庫回転率が1.8ヶ月に改善。A品番の発注サイクルを2週間短縮したことが効いている。この調子で継続。
+                </p>
+                <span class="session-actions-count">2つのアクション</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======== Reports ======== -->
+          <div class="tab-panel" id="panel-reports">
+            <h2 style="font-size: 24px; margin-bottom: 8px">レポート</h2>
+            <p
+              style="
+                font-size: 14px;
+                color: var(--text-secondary);
+                margin-bottom: 28px;
+              "
+            >
+              月次サマリーPDFの生成と送付を管理します。
+            </p>
+
+            <div class="reports-grid">
+              <div class="report-card">
+                <h3>月次レポート生成</h3>
+                <p>今月の分析結果・アクション実行率をPDFにまとめます。</p>
+                <button
+                  class="btn btn-primary"
+                  onclick="generateReport()"
+                  style="width: 100%"
+                >
+                  3月のレポートを生成
+                </button>
+              </div>
+              <div class="report-card">
+                <h3>送付先メール設定</h3>
+                <p>レポートの自動送付先を設定します。</p>
+                <div>
+                  <div class="form-group">
+                    <input
+                      class="form-input"
+                      type="email"
+                      id="reportEmail"
+                      placeholder="report@example.com"
+                    />
+                  </div>
+                  <button
+                    class="btn btn-secondary"
+                    onclick="saveReportEmail()"
+                    style="width: 100%"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-24">
+              <div class="card-header">送付履歴</div>
+              <div class="card mt-12">
+                <div style="text-align: center; padding: 32px 0">
+                  <p style="font-size: 14px; color: var(--text-dim)">
+                    まだレポートが送付されていません。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======== Settings ======== -->
+          <div class="tab-panel" id="panel-settings">
+            <h2 style="font-size: 24px; margin-bottom: 28px">設定</h2>
+
+            <div class="settings-section">
+              <h3>会社情報</h3>
+              <p>Sentioの分析精度に影響します。正確に入力してください。</p>
+              <div class="settings-card">
+                <div class="form-group">
+                  <label class="form-label">会社名</label>
+                  <input
+                    class="form-input"
+                    type="text"
+                    id="settingsCompany"
+                    placeholder="株式会社ディセーノ"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">業種</label>
+                  <input
+                    class="form-input"
+                    type="text"
+                    id="settingsIndustry"
+                    placeholder="EC・小売"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">会社コンテキスト（任意）</label>
+                  <textarea
+                    class="form-input"
+                    id="settingsContext"
+                    rows="3"
+                    placeholder="主力商品、市場、注力テーマなど"
+                    style="resize: vertical; line-height: 1.7"
+                  ></textarea>
+                </div>
+                <button
+                  class="btn btn-primary"
+                  onclick="saveCompanyInfo()"
+                  style="width: 100%"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <h3>プラン・お支払い</h3>
+              <p>現在のプランとサブスクリプション管理。</p>
+              <div class="settings-card">
+                <div class="settings-row">
+                  <span class="settings-row-label">現在のプラン</span>
+                  <span class="plan-badge" id="currentPlan">Starter</span>
+                </div>
+                <div class="settings-row">
+                  <span class="settings-row-label">今月の分析回数</span>
+                  <span class="settings-row-value"
+                    ><span id="usageCount">7</span> / 10</span
+                  >
+                </div>
+                <div class="settings-row">
+                  <span class="settings-row-label">サブスクリプション管理</span>
+                  <button
+                    class="btn btn-accent-outline"
+                    onclick="openPortal()"
+                    style="padding: 6px 16px; font-size: 12px"
+                  >
+                    Stripeポータル
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <h3>APIキー（v1.5〜）</h3>
+              <p>
+                外部サービスとの連携用APIキー。Scaleプランで利用可能になります。
+              </p>
+              <div class="settings-card">
+                <div class="settings-row">
+                  <span class="settings-row-label">ステータス</span>
+                  <span
+                    class="settings-row-value"
+                    style="color: var(--text-dim)"
+                    >Scaleプランで利用可能</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ============================================================
+         Scripts
+         ============================================================ -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script>
+      // ---- Supabase Client ----
+      const SUPABASE_URL = "https://kwpldqbnkraftaahnpev.supabase.co";
+      const SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3cGxkcWJua3JhZnRhYWhucGV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MjQxNTMsImV4cCI6MjA5MDUwMDE1M30.Jec0fNpaJQuQWQ88RJEDJtcif-fXs0aauPOpcbDr5Ig";
+
+      const supabase = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+      );
+
+      // ---- State ----
+      let currentUser = null;
+      let currentCompany = null;
+
+      // ---- DOM refs ----
+      const authScreen = document.getElementById("authScreen");
+      const appShell = document.getElementById("appShell");
+      const authError = document.getElementById("authError");
+      const loginForm = document.getElementById("loginForm");
+      const registerForm = document.getElementById("registerForm");
+
+      // ---- Auth Tab Toggle ----
+      document.querySelectorAll(".auth-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document
+            .querySelectorAll(".auth-tab")
+            .forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          const mode = tab.dataset.auth;
+          loginForm.classList.toggle("hidden", mode !== "login");
+          registerForm.classList.toggle("hidden", mode !== "register");
+          authError.classList.remove("show");
+        });
+      });
+
+      // Handle hash-based tab (e.g. #register from LP)
+      if (window.location.hash === "#register") {
+        document.querySelector('[data-auth="register"]').click();
+      }
+
+      // ---- Show Auth Error ----
+      function showAuthError(msg) {
+        authError.textContent = msg;
+        authError.classList.add("show");
+      }
+
+      // ---- Login ----
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        authError.classList.remove("show");
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+        const btn = document.getElementById("loginBtn");
+        btn.disabled = true;
+        btn.textContent = "ログイン中...";
+
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        btn.disabled = false;
+        btn.textContent = "ログイン";
+
+        if (error) {
+          showAuthError(
+            error.message === "Invalid login credentials"
+              ? "メールアドレスまたはパスワードが正しくありません。"
+              : error.message,
+          );
+        }
+      });
+
+      // ---- Register ----
+      registerForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        authError.classList.remove("show");
+        const email = document.getElementById("regEmail").value;
+        const password = document.getElementById("regPassword").value;
+        const company = document.getElementById("regCompany").value;
+        const name = document.getElementById("regName").value;
+        const btn = document.getElementById("registerBtn");
+        btn.disabled = true;
+        btn.textContent = "作成中...";
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { company_name: company, full_name: name } },
+        });
+        btn.disabled = false;
+        btn.textContent = "アカウント作成";
+
+        if (error) {
+          showAuthError(error.message);
+          return;
+        }
+
+        // Create company record
+        if (data.user) {
+          await supabase.from("companies").insert({
+            user_id: data.user.id,
+            company_name: company,
+          });
+        }
+
+        showToast("確認メールを送信しました。メールを確認してください。");
+      });
+
+      // ---- Ctrl+Enter for textarea ----
+      document
+        .getElementById("analysisInput")
+        .addEventListener("keydown", (e) => {
+          if (e.ctrlKey && e.key === "Enter") {
+            generateSoWhat();
+          }
+        });
+
+      // ---- Auth State Change ----
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session && session.user) {
+          currentUser = session.user;
+          await loadApp();
+        } else {
+          currentUser = null;
+          currentCompany = null;
+          authScreen.style.display = "flex";
+          appShell.classList.remove("active");
+        }
+      });
+
+      async function loadApp() {
+        authScreen.style.display = "none";
+        appShell.classList.add("active");
+
+        // Set user info
+        const meta = currentUser.user_metadata || {};
+        const name = meta.full_name || currentUser.email.split("@")[0];
+        document.getElementById("userName").textContent = name;
+        document.getElementById("userEmail").textContent = "ログアウト";
+        document.getElementById("userAvatar").textContent = name
+          .charAt(0)
+          .toUpperCase();
+
+        // Set greeting
+        const hour = new Date().getHours();
+        const greetingText =
+          hour < 12
+            ? "おはようございます"
+            : hour < 18
+              ? "こんにちは"
+              : "お疲れさまです";
+        document.getElementById("greetingText").textContent = greetingText;
+
+        // Load company
+        const { data: companies } = await supabase
+          .from("companies")
+          .select("*")
+          .eq("user_id", currentUser.id)
+          .limit(1);
+
+        if (companies && companies.length > 0) {
+          currentCompany = companies[0];
+          document.getElementById("settingsCompany").value =
+            currentCompany.company_name || "";
+          document.getElementById("settingsIndustry").value =
+            currentCompany.industry || "";
+          document.getElementById("settingsContext").value =
+            currentCompany.context_note || "";
+        }
+      }
+
+      // ---- Logout ----
+      async function logout() {
+        await supabase.auth.signOut();
+      }
+
+      // ---- Tab Navigation ----
+      const tabTitles = {
+        dashboard: "ダッシュボード",
+        analysis: "分析を依頼",
+        insights: "インサイト一覧",
+        reports: "レポート",
+        settings: "設定",
+      };
+
+      document.querySelectorAll(".sidebar-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          const tab = item.dataset.tab;
+          switchTab(tab);
+          // Close mobile sidebar
+          document.getElementById("sidebar").classList.remove("open");
+          document.getElementById("sidebarOverlay").classList.remove("show");
+        });
+      });
+
+      function switchTab(tab) {
+        document
+          .querySelectorAll(".sidebar-item")
+          .forEach((i) => i.classList.remove("active"));
+        document
+          .querySelector('[data-tab="' + tab + '"]')
+          .classList.add("active");
+        document
+          .querySelectorAll(".tab-panel")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("panel-" + tab).classList.add("active");
+        document.getElementById("mainTitle").textContent =
+          tabTitles[tab] || tab;
+      }
+
+      // ---- Mobile Menu ----
+      document.getElementById("mobileMenuBtn").addEventListener("click", () => {
+        document.getElementById("sidebar").classList.toggle("open");
+        document.getElementById("sidebarOverlay").classList.toggle("show");
+      });
+      document
+        .getElementById("sidebarOverlay")
+        .addEventListener("click", () => {
+          document.getElementById("sidebar").classList.remove("open");
+          document.getElementById("sidebarOverlay").classList.remove("show");
+        });
+
+      // ---- Action Check Toggle ----
+      function toggleCheck(el) {
+        el.classList.toggle("done");
+        updatePendingCount();
+      }
+
+      function updatePendingCount() {
+        const total = document.querySelectorAll(".action-card-check").length;
+        const done = document.querySelectorAll(
+          ".action-card-check.done",
+        ).length;
+        const pending = total - done;
+        document.getElementById("pendingCount").textContent = pending;
+        const badge = document.getElementById("pendingBadge");
+        if (pending > 0) {
+          badge.textContent = pending;
+          badge.style.display = "inline";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+
+      // ---- Generate So What ----
+      async function generateSoWhat() {
+        const input = document.getElementById("analysisInput").value.trim();
+        if (!input) {
+          showToast("データを入力してください。");
+          return;
+        }
+
+        const loading = document.getElementById("analysisLoading");
+        const resultCard = document.getElementById("resultCard");
+        const btn = document.getElementById("generateBtn");
+
+        btn.disabled = true;
+        btn.textContent = "分析中...";
+        resultCard.classList.remove("show");
+        loading.classList.add("show");
+
+        try {
+          // Try calling the edge function
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+
+          const response = await fetch(
+            SUPABASE_URL + "/functions/v1/generate-so-what",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({
+                input_data: input,
+                company_id: currentCompany?.id,
+              }),
+            },
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            displayResult(data);
+          } else {
+            // Edge function not deployed — show mock
+            await new Promise(function (r) {
+              setTimeout(r, 2000);
+            });
+            displayMockResult();
+          }
+        } catch (e) {
+          // Offline or unavailable — show mock
+          await new Promise(function (r) {
+            setTimeout(r, 2000);
+          });
+          displayMockResult();
+        }
+
+        loading.classList.remove("show");
+        btn.disabled = false;
+        btn.textContent = "so whatを生成する";
+      }
+
+      function displayResult(data) {
+        document.getElementById("resultSoWhat").textContent =
+          data.so_what || "";
+
+        var actionsContainer = document.getElementById("resultActions");
+        actionsContainer.innerHTML = "";
+        (data.actions || []).forEach(function (a, i) {
+          var div = document.createElement("div");
+          div.className = "result-action";
+          div.innerHTML =
+            '<span class="result-action-p">P' +
+            (a.priority || i + 1) +
+            "</span>" +
+            '<div class="result-action-content">' +
+            '<div class="result-action-text">' +
+            escapeHtml(a.action) +
+            "</div>" +
+            '<div class="result-action-reason">' +
+            escapeHtml(a.reason || "") +
+            "</div>" +
+            '<div class="result-action-meta">' +
+            '<span class="result-action-deadline">' +
+            escapeHtml(a.deadline || "") +
+            "</span>" +
+            '<span class="result-action-done" onclick="this.classList.toggle(\'checked\')">\u2713 実行済みにする</span>' +
+            "</div>" +
+            "</div>";
+          actionsContainer.appendChild(div);
+        });
+
+        var risksContainer = document.getElementById("resultRisks");
+        risksContainer.innerHTML = "";
+        if (data.risk_alerts && data.risk_alerts.length > 0) {
+          risksContainer.innerHTML =
+            '<div class="result-actions-title">リスクアラート</div>';
+          data.risk_alerts.forEach(function (r) {
+            var levelClass = r.level === "medium" ? "medium" : "";
+            var riskDiv = document.createElement("div");
+            riskDiv.className = "result-risk";
+            riskDiv.innerHTML =
+              '<span class="result-risk-level ' +
+              levelClass +
+              '">' +
+              escapeHtml(r.level) +
+              "</span>" +
+              "<span>" +
+              escapeHtml(r.message) +
+              "</span>";
+            risksContainer.appendChild(riskDiv);
+          });
+        }
+
+        document.getElementById("resultCard").classList.add("show");
+      }
+
+      function displayMockResult() {
+        displayResult({
+          so_what:
+            "入力されたデータを分析しました。現在、generate-so-what Edge Functionは未デプロイのため、モック結果を表示しています。本番環境ではClaude APIがあなたの会社の文脈に合わせた具体的な判断を生成します。",
+          actions: [
+            {
+              priority: 1,
+              action: "Edge Functionをデプロイして本番分析を有効にする",
+              reason:
+                "モック表示のままではSentioの価値を体験できない。デプロイ後に再度分析を実行してください。",
+              deadline: "今週中",
+            },
+            {
+              priority: 2,
+              action: "会社コンテキストを設定画面で入力する",
+              reason:
+                "業種・主力商品・注力テーマを設定することで、分析の精度が大幅に向上します。",
+              deadline: "今週中",
+            },
+            {
+              priority: 3,
+              action: "データの入力形式を整理する（売上表・KPI・口コミなど）",
+              reason:
+                "構造化されたデータほど、具体的なアクションを生成しやすくなります。",
+              deadline: "来週まで",
+            },
+          ],
+          risk_alerts: [
+            {
+              level: "medium",
+              message:
+                "Edge Functionが未デプロイのため、実際の分析は行われていません。本番環境での動作確認が必要です。",
+            },
+          ],
+        });
+      }
+
+      // ---- Reports ----
+      function generateReport() {
+        showToast(
+          "レポート生成機能は準備中です。Edge Functionデプロイ後に利用可能になります。",
+        );
+      }
+
+      function saveReportEmail() {
+        var email = document.getElementById("reportEmail").value;
+        if (!email) {
+          showToast("メールアドレスを入力してください。");
+          return;
+        }
+        showToast("送付先を保存しました: " + email);
+      }
+
+      // ---- Settings ----
+      async function saveCompanyInfo() {
+        if (!currentCompany) {
+          showToast("会社情報の取得に失敗しました。");
+          return;
+        }
+
+        var result = await supabase
+          .from("companies")
+          .update({
+            company_name: document.getElementById("settingsCompany").value,
+            industry: document.getElementById("settingsIndustry").value,
+            context_note: document.getElementById("settingsContext").value,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", currentCompany.id);
+
+        if (result.error) {
+          showToast("保存に失敗しました: " + result.error.message);
+        } else {
+          showToast("会社情報を保存しました。");
+        }
+      }
+
+      function openPortal() {
+        showToast(
+          "Stripeポータル機能は準備中です。create-portal-link Edge Functionデプロイ後に利用可能になります。",
+        );
+      }
+
+      // ---- Toast ----
+      function showToast(msg) {
+        var toast = document.getElementById("toast");
+        toast.textContent = msg;
+        toast.classList.add("show");
+        setTimeout(function () {
+          toast.classList.remove("show");
+        }, 3500);
+      }
+
+      // ---- Utility ----
+      function escapeHtml(str) {
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      // ---- Init: check existing session ----
+      (async function () {
+        var result = await supabase.auth.getSession();
+        if (!result.data.session) {
+          authScreen.style.display = "flex";
+        }
+      })();
+    </script>
+  </body>
+</html>

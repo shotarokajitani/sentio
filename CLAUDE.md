@@ -184,8 +184,8 @@ git add . && git commit -m "[変更内容]" && git push
 ✅ DBスキーマ実行（6テーブル）
 ✅ Vercel デプロイ設定
 ⬜ sentio-ai.jp ドメイン設定
-⬜ Supabase Secrets登録
-⬜ index.html（LP）作成
+✅ Supabase Secrets登録（ANTHROPIC_API_KEY）
+✅ index.html（LP）作成
 ⬜ app.html（ダッシュボード）作成
 ⬜ generate-so-what Edge Function 実装
 ⬜ Stripe 3プラン設定・決済フロー実装

@@ -76,14 +76,14 @@ sentio/
 
 ## Supabase 設定
 
-| 項目           | 値                             |
-| -------------- | ------------------------------ |
-| プロジェクト名 | sentio                         |
-| リージョン     | **東京（ap-northeast-1）必須** |
-| Auth           | メール/パスワード認証          |
-| Project Ref    | （作成後に記入）               |
-| Supabase URL   | （作成後に記入）               |
-| Anon Key       | （作成後に記入）               |
+| 項目           | 値                                                                                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| プロジェクト名 | sentio                                                                                                                                                                                                           |
+| リージョン     | **東京（ap-northeast-1）必須**                                                                                                                                                                                   |
+| Auth           | メール/パスワード認証                                                                                                                                                                                            |
+| Project Ref    | kwpldqbnkraftaahnpev                                                                                                                                                                                             |
+| Supabase URL   | https://kwpldqbnkraftaahnpev.supabase.co                                                                                                                                                                         |
+| Anon Key       | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3cGxkcWJua3JhZnRhYWhucGV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MjQxNTMsImV4cCI6MjA5MDUwMDE1M30.Jec0fNpaJQuQWQ88RJEDJtcif-fXs0aauPOpcbDr5Ig |
 
 ### 登録が必要な Secrets
 
@@ -128,12 +128,12 @@ const session = await stripe.checkout.sessions.create({
 
 ```powershell
 # Edge Function デプロイ（SUPABASE_PROJECT_REFは作成後に確認）
-npx supabase functions deploy generate-so-what  --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
-npx supabase functions deploy create-checkout   --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
-npx supabase functions deploy stripe-webhook    --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
-npx supabase functions deploy create-portal-link --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
-npx supabase functions deploy generate-report   --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
-npx supabase functions deploy send-report       --no-verify-jwt --project-ref <SUPABASE_PROJECT_REF>
+npx supabase functions deploy generate-so-what  --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
+npx supabase functions deploy create-checkout   --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
+npx supabase functions deploy stripe-webhook    --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
+npx supabase functions deploy create-portal-link --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
+npx supabase functions deploy generate-report   --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
+npx supabase functions deploy send-report       --no-verify-jwt --project-ref kwpldqbnkraftaahnpev
 
 # フロントエンドデプロイ（Vercel 自動）
 git add . && git commit -m "[変更内容]" && git push
@@ -179,15 +179,16 @@ git add . && git commit -m "[変更内容]" && git push
 ```
 ✅ SENTIO_ProjectContext.md 作成完了
 ✅ CLAUDE.md 作成完了
-⬜ GitHubリポジトリ作成
-⬜ Supabaseプロジェクト作成（東京リージョン）
-⬜ DBスキーマ実行（6テーブル）
+✅ GitHubリポジトリ作成
+✅ Supabaseプロジェクト作成（東京リージョン）
+✅ DBスキーマ実行（6テーブル）
+⬜ Vercel デプロイ設定
+⬜ sentio-ai.jp ドメイン設定
+⬜ Supabase Secrets登録
 ⬜ index.html（LP）作成
-⬜ app.html（ダッシュボード・6画面）作成
+⬜ app.html（ダッシュボード）作成
 ⬜ generate-so-what Edge Function 実装
 ⬜ Stripe 3プラン設定・決済フロー実装
-⬜ Vercel デプロイ
-⬜ sentio-ai.jp ドメイン設定
 ⬜ エンドツーエンドテスト
 ```
 
@@ -195,14 +196,14 @@ git add . && git commit -m "[変更内容]" && git push
 
 ## 関連サービスのリンク（作成後に記入）
 
-| サービス         | URL                                       |
-| ---------------- | ----------------------------------------- |
-| LP               | https://www.sentio-ai.jp                  |
-| アプリ           | https://www.sentio-ai.jp/app.html         |
-| GitHub           | https://github.com/shotarokajitani/sentio |
-| Vercel           | https://vercel.com/diseno1/sentio         |
-| Supabase         | （作成後に記入）                          |
-| Stripe Dashboard | https://dashboard.stripe.com              |
+| サービス           | URL                                                         |
+| ------------------ | ----------------------------------------------------------- |
+| LP                 | https://www.sentio-ai.jp                                    |
+| アプリ             | https://www.sentio-ai.jp/app.html                           |
+| GitHub             | https://github.com/shotarokajitani/sentio                   |
+| Vercel             | https://vercel.com/diseno1/sentio                           |
+| Supabase Dashboard | https://supabase.com/dashboard/project/kwpldqbnkraftaahnpev |
+| Stripe Dashboard   | https://dashboard.stripe.com                                |
 
 ---
 

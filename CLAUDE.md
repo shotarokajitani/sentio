@@ -183,7 +183,7 @@ git add . && git commit -m "[変更内容]" && git push
 ✅ Supabaseプロジェクト作成（東京リージョン）
 ✅ DBスキーマ実行（6テーブル）
 ✅ Vercel デプロイ設定
-⬜ sentio-ai.jp ドメイン設定
+✅ sentio-ai.jp ドメイン設定（DNS浸透待ち）
 ✅ Supabase Secrets登録（ANTHROPIC_API_KEY）
 ✅ index.html（LP）作成
 ⬜ app.html（ダッシュボード）作成

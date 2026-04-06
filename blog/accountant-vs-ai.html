@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>税理士・顧問とAI経営判断ツールは何が違うのか — Sentio</title>
+    <meta
+      name="description"
+      content="税理士に経営相談をしている経営者は多い。しかし、税理士の役割とAI経営判断ツールの役割はまったく異なる。その違いを整理します。"
+    />
+    <meta
+      name="keywords"
+      content="税理士 経営 相談 違い AI, 経営判断 AI ツール, 顧問 税理士 限界"
+    />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/accountant-vs-ai.html"
+    />
+    <meta
+      property="og:title"
+      content="税理士・顧問とAI経営判断ツールは何が違うのか"
+    />
+    <meta
+      property="og:description"
+      content="税理士の役割とAI経営判断ツールの役割はまったく異なる。その違いを整理します。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/accountant-vs-ai.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 32px 0;
+        font-size: 14px;
+      }
+      .article-body th {
+        background: var(--ocean);
+        color: #fff;
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 500;
+        font-size: 13px;
+      }
+      .article-body td {
+        padding: 12px 16px;
+        border-bottom: 0.5px solid var(--border);
+        color: var(--earth-soft);
+        vertical-align: top;
+      }
+      .article-body tr:nth-child(even) td {
+        background: var(--ocean-light);
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-body table {
+          font-size: 12px;
+        }
+        .article-body th,
+        .article-body td {
+          padding: 8px 10px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        税理士・顧問とAI経営判断ツールは<br />何が違うのか
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>「経営のことは税理士に相談している」という声</h2>
+      <p>
+        従業員5名から50名の会社では、経営者にとって最も身近な専門家は税理士であることが多い。月に一度、試算表を見ながら話をする。決算期には節税の相談をする。融資の際には事業計画書の作成を手伝ってもらう。
+      </p>
+      <p>
+        「経営の相談は税理士にしている」と言う経営者は少なくない。実際、税理士との関係は長く、深い。会社の数字を最もよく知っている外部の存在であることは間違いない。
+      </p>
+      <p>
+        しかし、税理士に相談した後、すっきりしないことがある。数字の話はできた。でも、自分が本当に聞きたかったことには触れられなかった。そんな感覚を持ったことはないだろうか。
+      </p>
+
+      <h2>税理士の本来の役割</h2>
+      <p>
+        税理士は税務の専門家だ。確定申告、税務調査への対応、節税対策、記帳指導。これらが税理士の本来の業務であり、法律で定められた独占業務も含まれている。
+      </p>
+      <p>
+        もちろん、多くの税理士は経営についてもアドバイスをしてくれる。しかし、それは税理士の本来の専門領域ではない。税理士が見ている数字は「過去の数字」だ。確定した取引、確定した利益、確定した税額。過去の数字を正確に処理し、報告することが、税理士に求められている仕事だ。
+      </p>
+      <p>
+        一方、経営者が判断しなければならないのは「未来」のことだ。来月の投資、来期の人員計画、3年後の事業方針。過去の数字は判断材料にはなるが、それだけで未来を決めることはできない。
+      </p>
+
+      <h2>顧問の限界</h2>
+      <p>
+        顧問コンサルタントや経営コーチといった存在もある。彼らは経営者の壁打ち相手として機能する。経験に基づいたアドバイスをくれる。
+      </p>
+      <p>しかし、顧問には構造的な限界がある。</p>
+      <p>
+        まず、顧問は常にそばにいるわけではない。月に一度、あるいは週に一度の面談。その間に起きた変化を、限られた時間で共有しなければならない。共有しきれない情報は、判断の材料にならない。
+      </p>
+      <p>
+        次に、顧問は「経営者が話したこと」しか知らない。経営者が意識していない変化、無意識に避けているデータ、言語化できていない違和感。これらは、会話の中からは出てこない。
+      </p>
+      <p>
+        そして、顧問の知見は過去の経験に基づいている。「私の経験では」という言葉は、その顧問が経験した業界、時代、規模の範囲でしか有効ではない。
+      </p>
+
+      <h2>それぞれの役割を整理する</h2>
+      <table>
+        <tr>
+          <th></th>
+          <th>税理士</th>
+          <th>顧問</th>
+          <th>Sentio</th>
+        </tr>
+        <tr>
+          <td>見ているもの</td>
+          <td>過去の確定した数字</td>
+          <td>経営者が話した内容</td>
+          <td>複数データの矛盾と変化</td>
+        </tr>
+        <tr>
+          <td>提供するもの</td>
+          <td>税務処理・節税助言</td>
+          <td>経験に基づく助言</td>
+          <td>今週向き合うべき問い</td>
+        </tr>
+        <tr>
+          <td>頻度</td>
+          <td>月次〜年次</td>
+          <td>週次〜月次</td>
+          <td>週次（自動）</td>
+        </tr>
+        <tr>
+          <td>依存するもの</td>
+          <td>会計データ</td>
+          <td>経営者の言語化力</td>
+          <td>御社の公開・連携データ</td>
+        </tr>
+        <tr>
+          <td>判断の主体</td>
+          <td>税理士が判断を代行</td>
+          <td>顧問が方向性を示す</td>
+          <td>経営者自身が判断する</td>
+        </tr>
+      </table>
+
+      <h2>AIが経営判断に使えるのか、という疑問</h2>
+      <p>
+        「AIに経営のことが分かるのか」という疑問は当然だ。結論から言えば、AIは経営判断をしない。できないし、するべきでもない。
+      </p>
+      <p>
+        AIにできるのは、人間が見落としやすいデータの矛盾を検出し、それを問いの形で経営者に届けることだ。
+      </p>
+      <p>
+        例えば、売上は横ばいなのに、主要取引先の発注単価がじわじわ下がっていること。採用ページを更新したのに、応募数が減っていること。競合がここ半年で3回値上げしていること。
+      </p>
+      <p>
+        これらの事実は、個々のデータソースを見ているだけでは気づきにくい。しかし、複数のデータを横断して読んだとき、そこには「問い」が浮かび上がる。
+      </p>
+
+      <blockquote>
+        AIは答えを出さない。問いを届ける。<br />
+        判断するのは、あなた自身だ。
+      </blockquote>
+
+      <h2>置き換えではなく、補完</h2>
+      <p>
+        Sentioは税理士の代わりにはならない。顧問の代わりにもならない。そもそも、代わりになろうとしていない。
+      </p>
+      <p>
+        税理士は過去の数字を正確に処理する。顧問は経験に基づいて方向性を示す。Sentioは、データの中から「今週、あなたが向き合うべきこと」を問いの形で届ける。
+      </p>
+      <p>
+        これらは競合する関係ではない。それぞれが異なる角度から、経営者の判断を支えている。足りなかったのは、データの矛盾を読み、問いに変換し、週次で届けてくれる存在だ。
+      </p>
+
+      <h2>問いを持つことで、税理士との会話も変わる</h2>
+      <p>
+        興味深いことに、問いを持った状態で税理士と話すと、会話の質が変わる。
+      </p>
+      <p>
+        「今月の試算表はどうでしたか」ではなく、「売掛金の回収サイトが3ヶ月で5日伸びているんですが、これは取引先の資金繰りの変化として見たほうがいいですか」と聞ける。
+      </p>
+      <p>
+        税理士も、具体的な問いがあれば、より具体的な答えを返せる。問いの存在が、専門家の力を最大限に引き出す。
+      </p>
+      <p>
+        税理士・顧問・Sentio。それぞれの役割を理解し、組み合わせること。それが、経営判断の質を上げる最も現実的な方法だ。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>税理士でも顧問でもない、<br />もう一つの視点を。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

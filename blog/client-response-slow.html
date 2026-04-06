@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      取引先の返事が、最近遅い気がする。気のせいか、それとも — Sentio
+    </title>
+    <meta
+      name="description"
+      content="取引先の返事が遅くなった。気のせいかもしれない。でも、その違和感には意味がある。返事が遅くなるパターンと、それをシグナルとして読む方法。"
+    />
+    <meta
+      name="keywords"
+      content="取引先 返事 遅い 理由, 取引先 連絡 遅くなった, 取引先 対応 変化"
+    />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/client-response-slow.html"
+    />
+    <meta
+      property="og:title"
+      content="取引先の返事が、最近遅い気がする。気のせいか、それとも"
+    />
+    <meta
+      property="og:description"
+      content="取引先の返事が遅くなった。その違和感には意味がある。返事が遅くなるパターンと、シグナルとしての読み方。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/client-response-slow.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        取引先の返事が、最近遅い気がする。<br />気のせいか、それとも
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>「気のせいかもしれない」で済ませている違和感</h2>
+      <p>
+        メールを送った。いつもなら当日中に返事が来る相手だ。でも今回は、翌日になっても返事がない。翌々日の午後に、短い返信が来た。「確認します」とだけ。
+      </p>
+      <p>
+        一回だけなら気にしない。しかし、同じことが2回、3回と続くと、ある感覚が生まれる。「最近、返事が遅い気がする」。
+      </p>
+      <p>
+        この感覚を、多くの経営者は「気のせいかもしれない」で片付ける。相手も忙しいのだろう。年度末だからだろう。そう自分に言い聞かせて、普段通りに振る舞う。
+      </p>
+      <p>
+        しかし、経営者の直感は、しばしば正しい。「返事が遅い」という違和感は、ビジネスにおける重要なシグナルの一つだ。
+      </p>
+
+      <h2>返事が遅くなる5つのパターン</h2>
+      <p>
+        取引先の返事が遅くなるとき、その裏側にはいくつかの典型的なパターンが存在する。
+      </p>
+      <p>
+        第一に、相手の社内で意思決定者が変わった場合。担当者は変わっていなくても、その上の承認フローが変わると、レスポンスは遅くなる。新しい上司が慎重なタイプであれば、すべての案件で「持ち帰り」が増える。
+      </p>
+      <p>
+        第二に、相手の資金繰りが厳しくなっている場合。支払いに関わる話題への返信が特に遅い場合、資金繰りの問題が背景にあることがある。直接「お金がない」とは言えないから、返事を先延ばしにする。
+      </p>
+      <p>
+        第三に、競合への切り替えを検討している場合。比較検討中は、現在の取引先への対応が後回しになりやすい。まだ決まっていないから断ることもできず、返事が曖昧になる。
+      </p>
+      <p>
+        第四に、相手の組織自体が混乱している場合。リストラ、組織再編、経営陣の交代。こうした変動期には、外部への対応速度が一律に落ちる。
+      </p>
+      <p>
+        第五に、あなたの会社への優先度が下がっている場合。取引規模が相対的に小さくなった、あるいは相手のビジネスモデルが変わり、あなたの会社との取引の戦略的重要性が低下した。
+      </p>
+
+      <h2>なぜ、直接聞けないのか</h2>
+      <p>
+        「返事が遅い理由を直接聞けばいい」という声もあるだろう。しかし、実際にはそれが難しい場面が多い。
+      </p>
+      <p>
+        「最近、返事が遅いですが何かありましたか」と聞くことは、相手に「あなたの対応に不満がある」というメッセージを送ることにもなりかねない。関係がぎくしゃくするリスクがある。特に、相手が重要な取引先であればあるほど、直接的な確認はしにくい。
+      </p>
+      <p>
+        結果として、経営者は違和感を抱えたまま、何も確認できない状態が続く。その間に、状況はゆっくりと変化していく。
+      </p>
+
+      <blockquote>
+        「聞きたかった。でも聞けなかった。聞く代わりに、自分に問いかけてほしかった。」
+      </blockquote>
+
+      <h2>違和感を「シグナル」として読む</h2>
+      <p>
+        経営における「違和感」は、多くの場合、複数のデータポイントが無意識のうちに統合された結果として生まれる。返事が遅い。発注量が微減している。先方の担当者の言葉遣いが変わった。これらの個別の事象が組み合わさって、「何かがおかしい」という感覚になる。
+      </p>
+      <p>
+        この感覚を、単なる「気のせい」で終わらせるのか、それとも経営判断の材料として活用するのか。その違いは大きい。
+      </p>
+      <p>
+        シグナルとして読むとは、違和感を言語化し、それが指し示す可能性を検討し、次のアクションを考えることだ。ただし、ここで重要なのは、シグナルは「答え」ではないということ。シグナルは「問い」を生むための素材だ。
+      </p>
+
+      <h2>一つの事象ではなく、複数の変化を重ねて見る</h2>
+      <p>
+        返事が遅いという一つの事象だけで判断するのは危険だ。重要なのは、複数の変化を重ねて見ること。
+      </p>
+      <p>
+        返事が遅い + 発注頻度が下がっている → 取引縮小の可能性。返事が遅い +
+        しかし発注金額は変わらない → 相手の社内事情の可能性。返事が遅い +
+        競合の採用が活発化している → 市場全体の変動の可能性。
+      </p>
+      <p>
+        一つの事象は「気のせい」かもしれない。しかし、複数の事象が同じ方向を指しているとき、それは無視できないシグナルになる。
+      </p>
+
+      <h2>問いを持てば、動ける</h2>
+      <p>
+        「取引先の返事が遅い。どうしよう」では動けない。しかし、「この取引先との関係が変わりつつあるとしたら、自分は今週何を確認すべきか」と問い直すと、具体的な行動が見えてくる。
+      </p>
+      <p>
+        別のルートで相手の状況を確認する。自社の売上構成における依存度を再確認する。代替の取引先候補をリストアップしておく。これらは「返事が遅い理由」を直接聞かなくても、できることだ。
+      </p>
+      <p>
+        違和感を持ったまま何もしない日が続くことが、最もリスクの高い状態だ。問いがあれば、少なくとも「確認する」という行動を起こせる。
+      </p>
+
+      <h2>「来るべきものが来ていない」に気づく</h2>
+      <p>
+        取引先の返事が遅いことは、「沈黙のシグナル」の一つだ。何かが起きたのではない。来るべきものが、来ていない。
+      </p>
+      <p>
+        売上の急落や大きなクレームは、誰でも気づく。しかし、「いつもなら来るメールが来ない」「いつもなら入る発注が入らない」「いつもなら出る質問が出ない」——こうした「不在」に気づくのは難しい。
+      </p>
+      <p>
+        しかし、経営において最も危険なシグナルは、しばしば「沈黙」の中にある。来るべきものが来ていないことに気づけるかどうか。それが、早い段階で手を打てるかどうかの分岐点になる。
+      </p>
+      <p>
+        あなたの取引先の返事が遅いのは、気のせいかもしれない。しかし、もしそうでないとしたら。今週、あなたが確認すべきことは何だろうか。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>見落としがちな変化を、<br />問いの形で届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

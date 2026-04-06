@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>データは見ている。でも何も決められない。その正体 — Sentio</title>
+    <meta
+      name="description"
+      content="経営データは揃っている。ダッシュボードも整っている。なのに判断できない。その原因は情報過多ではなく「問い」の不在かもしれません。"
+    />
+    <meta
+      name="keywords"
+      content="経営 データ 判断できない, 意思決定 できない 経営者, データ活用 経営判断"
+    />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/data-but-no-decision.html"
+    />
+    <meta
+      property="og:title"
+      content="データは見ている。でも何も決められない。その正体"
+    />
+    <meta
+      property="og:description"
+      content="経営データは揃っている。なのに判断できない。その原因は情報過多ではなく「問い」の不在かもしれません。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/data-but-no-decision.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        データは見ている。でも何も決められない。<br />その正体
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>ダッシュボードを開いて、閉じる。それを繰り返す朝</h2>
+      <p>
+        朝、出社してまずダッシュボードを開く。売上、利益率、キャッシュフロー、顧客数。数字はきれいに並んでいる。色分けされ、グラフ化され、前月比も出ている。
+      </p>
+      <p>5分ほど眺めて、そっと閉じる。</p>
+      <p>
+        何かが分かったわけではない。何かを決めたわけでもない。ただ「見た」という事実だけが残る。この朝のルーティンに、自分でも違和感を持ち始めている経営者は少なくない。
+      </p>
+      <p>
+        データは手元にある。情報は十分にある。なのに、判断できない。この状態には名前がない。だから、誰にも説明できない。
+      </p>
+
+      <h2>「情報が足りない」は、本当か</h2>
+      <p>
+        判断できないとき、人はまず「情報が足りない」と考える。もう少しデータがあれば。もう少し分析すれば。もう少し他社の事例を見れば。
+      </p>
+      <p>
+        しかし、5名から50名規模の会社の経営者であれば、すでに膨大な情報を持っている。会計データ、顧客の声、営業の感触、業界の動向。持っていないのは情報ではない。
+      </p>
+      <p>
+        持っていないのは、「今週、自分は何について判断すべきか」という問いだ。
+      </p>
+      <p>
+        情報は地図のようなものだ。地図がどれだけ精密でも、「どこに行きたいのか」が分からなければ、地図を眺めているだけで終わる。経営における「どこに行きたいか」を引き出すのが、問いの役割だ。
+      </p>
+
+      <blockquote>
+        「データが足りないんじゃなかった。自分に問いが足りなかった。」
+      </blockquote>
+
+      <h2>情報過多が判断を麻痺させるメカニズム</h2>
+      <p>
+        現代の経営者は、かつてないほどの情報にアクセスできる。Google
+        Analytics、CRM、会計ソフト、SNSの反応、競合の動向。それらすべてが、リアルタイムで目の前に並ぶ。
+      </p>
+      <p>
+        一見、恵まれた状況に見える。しかし、情報が多すぎると、脳は防御反応を起こす。すべてを処理しようとして、結果的にどれも処理できなくなる。心理学でいう「決定疲れ」だ。
+      </p>
+      <p>
+        重要なのは、情報の量を増やすことではない。情報の中から「今、見るべきもの」を絞り込むことだ。そして、その絞り込みを可能にするのが、的確な問いにほかならない。
+      </p>
+
+      <h2>BIツールが解決しないもの</h2>
+      <p>
+        BIツールは優れた道具だ。データを集約し、可視化し、トレンドを見せてくれる。しかし、BIツールは「何を見るべきか」を教えてくれない。
+      </p>
+      <p>
+        ダッシュボードに表示されるKPIは、過去に自分が「重要だ」と設定した指標だ。しかし、経営環境は変わる。3ヶ月前に重要だった指標が、今も重要とは限らない。
+      </p>
+      <p>
+        本当に必要なのは、「今、このダッシュボードに載っていない数字の中に、見落としているものはないか」という視点だ。しかし、その視点は、ダッシュボードの中からは生まれない。
+      </p>
+
+      <h2>問いが変わると、同じデータが違って見える</h2>
+      <p>
+        ある経営者が、月次レポートを見ていた。売上は微増。利益率も安定。表面上、問題はなさそうに見えた。
+      </p>
+      <p>
+        しかし、「この3ヶ月で、あなたが一番避けていた数字は何ですか」と問われたとき、その経営者はハッとした。売掛金の回収日数が、じわじわと伸びていたことに気づいていたが、目を逸らしていたのだ。
+      </p>
+      <p>
+        データは同じだ。しかし、問いが変わると、見え方が変わる。そして見え方が変われば、行動が変わる。
+      </p>
+
+      <h2>「判断できない」の正体</h2>
+      <p>判断できない原因は、大きく分けて三つある。</p>
+      <p>
+        一つ目は、「何を判断すべきか」が明確でないこと。情報に囲まれすぎて、判断の対象が絞れていない状態。
+      </p>
+      <p>
+        二つ目は、判断した結果への恐れ。決めたら後戻りできない、という重圧が判断を先延ばしにさせる。
+      </p>
+      <p>
+        三つ目は、自分の判断を確認してくれる存在がいないこと。判断の孤独が、判断そのものを鈍らせる。
+      </p>
+      <p>
+        これらはすべて、情報の量では解決しない。解決するのは、「今週、あなたが向き合うべきことは何か」を示す、一つの問いだ。
+      </p>
+
+      <h2>必要なのは、答えではなく問いを届ける存在</h2>
+      <p>
+        コンサルタントは答えを持ってくる。BIツールは数字を見せてくれる。しかし、経営者の判断力を引き出す「問い」を届ける存在は、ほとんどない。
+      </p>
+      <p>
+        経営者が「データは見ている。でも何も決められない」と感じる夜。その夜に必要なのは、もう一つのグラフではない。「あなたが見ないようにしているものは何ですか」と、静かに問う存在だ。
+      </p>
+      <p>
+        問いを持てた瞬間、経営者は動き出す。問いがあれば、データは意味を持ち始める。判断は、問いから始まる。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>データの中から、今週の問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

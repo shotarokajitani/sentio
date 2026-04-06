@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      売上が落ちた原因が分からない夜、経営者が本当に必要としているもの — Sentio
+    </title>
+    <meta
+      name="description"
+      content="売上が落ちた原因が分からない。深夜、数字を眺めながら動けなくなる夜。経営者が本当に必要としているのは、答えではなく「問い」かもしれません。"
+    />
+    <meta
+      name="keywords"
+      content="売上 落ちた 原因 分からない, 経営者 売上低下, 売上減少 対策"
+    />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/sales-down.html"
+    />
+    <meta
+      property="og:title"
+      content="売上が落ちた原因が分からない夜、経営者が本当に必要としているもの"
+    />
+    <meta
+      property="og:description"
+      content="深夜、数字を眺めながら動けなくなる夜。経営者が本当に必要としているのは、答えではなく「問い」かもしれません。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/sales-down.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      /* Nav */
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+
+      /* Article */
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+
+      /* CTA */
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+
+      /* Footer */
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+
+      /* Back link */
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        売上が落ちた原因が分からない夜、<br />経営者が本当に必要としているもの
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>深夜、数字を見ているのに何も見えない</h2>
+      <p>
+        午前1時。オフィスには誰もいない。画面には月次の売上推移が映っている。先月比マイナス12%。3ヶ月連続の下降トレンド。数字はそこにある。しかし、原因が見えない。
+      </p>
+      <p>
+        広告費は変えていない。主力商品のクレームが増えたわけでもない。営業チームの動きも悪くないように見える。なのに、売上だけが静かに落ちている。
+      </p>
+      <p>
+        「何かがおかしい」という感覚はある。でも、それが何なのかを言葉にできない。Google
+        で「売上 落ちた 原因
+        分からない」と検索してみる。出てくるのは「顧客分析をしましょう」「マーケティングを見直しましょう」という教科書的な答え。どれも間違ってはいない。でも、今の自分が欲しいものとは違う気がする。
+      </p>
+
+      <h2>「分からない」は、情報不足のせいではない</h2>
+      <p>
+        多くの経営者がこの状況に陥ったとき、まずデータを集めようとする。CRMを開き、GA4をチェックし、営業日報を読み返す。情報が足りないから判断できないのだ、と思うから。
+      </p>
+      <p>しかし、本当にそうだろうか。</p>
+      <p>
+        売上が落ちた原因が分からないとき、多くの場合、情報は「ある」。ただ、その情報のどこに注目すべきかが分からない。あるいは、見たくない数字から無意識に目を逸らしている。あるいは、気になっていることはあるのに、それを誰にも確認できていない。
+      </p>
+      <p>
+        つまり、足りないのはデータではない。足りないのは、自分に向けられた「正しい問い」だ。
+      </p>
+
+      <blockquote>
+        「売上が落ちているのは知っている。でも、なぜ自分がそれを怖いと思っているのか、考えたことがなかった。」<br />
+        — ある経営者の言葉
+      </blockquote>
+
+      <h2>答えを探す前に、問いを持っているか</h2>
+      <p>
+        経営者は常に判断を求められる。新規事業に投資するか。人を増やすか減らすか。この取引先との関係をどうするか。毎日が意思決定の連続だ。
+      </p>
+      <p>
+        しかし、意思決定の質は、持っている「問い」の質に左右される。「売上をどうやって上げるか」という問いと、「なぜ今、自分はこの売上の変動を怖いと感じているのか」という問いでは、たどり着く場所がまったく違う。
+      </p>
+      <p>前者は戦術的な答えを生む。後者は、本質的な判断を生む。</p>
+      <p>
+        売上が落ちた原因が分からない夜に必要なのは、もしかすると「原因」ではないのかもしれない。必要なのは、自分が何を恐れているのか、何を見ないようにしているのか、それを明らかにするための問いだ。
+      </p>
+
+      <h2>なぜ経営者は、一人で考え込んでしまうのか</h2>
+      <p>
+        従業員が5人から50人くらいの会社では、経営者の周りに「本当のことを言ってくれる人」が極端に少ない。社員は気を遣う。税理士は数字の話をする。銀行は返済の話をする。家族には心配をかけたくない。
+      </p>
+      <p>
+        結果、経営者は深夜に一人でExcelを開き、同じ数字を何度も眺めることになる。数字の向こう側にある「本当の問題」を、一人で見つけ出さなければならない。
+      </p>
+      <p>これは能力の問題ではない。構造の問題だ。</p>
+      <p>
+        社員数が増えるほど、経営者が弱さを見せる場所は減る。しかし、判断の重さは増える。この非対称性が、「売上が落ちた原因が分からない」という夜を生む。
+      </p>
+
+      <h2>必要なのは、コンサルでも分析ツールでもない</h2>
+      <p>
+        「プロに相談すればいい」という声もあるだろう。もちろん、それが有効な場面もある。しかし、深夜にオフィスで感じているあの感覚は、コンサルタントに「御社の課題は○○です」と言われて解決するものだろうか。
+      </p>
+      <p>
+        BIツールにダッシュボードを作ってもらえば、数字は見やすくなる。でも、数字の見やすさと「判断できるかどうか」は、まったく別の話だ。
+      </p>
+      <p>
+        経営者が本当に必要としているのは、外からの答えではない。自分の中にある判断を引き出すための、的確な問いだ。
+      </p>
+
+      <h2>データの中に隠れている「矛盾」を読む</h2>
+      <p>
+        売上が落ちているとき、数字の中にはほぼ必ず「矛盾」が隠れている。例えば、広告費は据え置きなのに問い合わせ数だけが減っている。あるいは、売上は下がっているのに粗利率は上がっている。あるいは、主要取引先の発注頻度が少しずつ長くなっている。
+      </p>
+      <p>
+        こうした矛盾は、個々のデータを見ているだけでは気づきにくい。複数のデータを横断して見て、初めて浮かび上がる。そして、その矛盾が指し示す先に、「今週、考えるべきこと」がある。
+      </p>
+      <p>
+        ただし、矛盾を指摘されたからといって、それが即座に「答え」になるわけではない。矛盾は問いの種だ。その種から何を育てるかは、経営者自身にしか決められない。
+      </p>
+
+      <h2>問いがあれば、動ける</h2>
+      <p>
+        不思議なことに、原因が分からなくても、「正しい問い」を持てた瞬間に、人は動き出せる。
+      </p>
+      <p>
+        「売上が落ちた原因は何か」ではなく、「この数字の変動を、自分はなぜ3ヶ月間放置していたのか」と問い直したとき。「営業チームは機能しているか」ではなく、「自分は営業チームに何を伝えていないか」と問い直したとき。
+      </p>
+      <p>
+        問いが変われば、視界が変わる。視界が変われば、判断できる。判断できれば、動ける。
+      </p>
+      <p>
+        売上が落ちた原因が分からない夜、最初に必要なのは答えを探すことではない。自分にとっての「正しい問い」を受け取ることだ。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

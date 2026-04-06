@@ -3,9 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PAGUS — ブランドパートナー募集</title>
+    <title>Sentio — 決断が生まれる組織をデザインする。</title>
+    <meta
+      name="description"
+      content="Sentioは、御社のデータを読み、今週動くべき一つの問いを届けます。従業員5名〜50名の経営者へ。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+JP:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -17,69 +23,189 @@
         padding: 0;
       }
       :root {
-        --cream: #faf7f2;
-        --parchment: #f2ede3;
+        --cream: #f7f5f2;
         --white: #ffffff;
-        --earth: #1e1810;
-        --umber: #3a2e20;
-        --clay: #8a6040;
-        --clay-l: #b08060;
-        --stone: #8a8078;
-        --mist: #ddd8ce;
-        --border: #e8e2d8;
-        --gold: #c8a96e;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
       }
       body {
-        background: var(--cream);
-        color: var(--earth);
-        font-family: "Noto Sans JP", sans-serif;
+        font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
-        -webkit-font-smoothing: antialiased;
+        color: var(--earth);
+        background: var(--cream);
         line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
       }
 
-      nav {
+      /* Nav */
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 0 56px;
-        height: 58px;
-        background: var(--white);
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border-bottom: 0.5px solid var(--border);
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
         font-weight: 500;
-        font-size: 17px;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
+        font-size: 22px;
+        letter-spacing: 0.12em;
         color: var(--earth);
-        text-decoration: none;
       }
-      .logo span {
-        color: var(--gold);
+      .logo .e {
+        color: var(--ocean);
       }
-      .nav-label {
-        font-size: 11px;
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
         color: var(--stone);
+        transition: color 0.2s;
       }
-      .nav-label a {
-        color: var(--stone);
-        text-decoration: none;
-        border-bottom: 0.5px solid var(--mist);
+      .nav-links a:hover {
+        color: var(--earth);
       }
       .nav-cta {
-        font-size: 11px;
-        padding: 8px 22px;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .nav-hamburger {
+        display: none;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+      }
+      .nav-hamburger span {
+        display: block;
+        width: 20px;
+        height: 1px;
         background: var(--earth);
-        color: var(--parchment);
-        text-decoration: none;
+        margin: 5px 0;
       }
 
+      /* Utility */
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 56px;
+      }
+      .sec-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .sec-label::before {
+        content: "";
+        width: 20px;
+        height: 0.5px;
+        background: var(--ocean-mid);
+      }
+      .sec-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 26px;
+        font-weight: 400;
+        color: var(--earth);
+        line-height: 1.6;
+        margin-bottom: 48px;
+      }
+      .sec-title em {
+        font-style: normal;
+        color: var(--ocean);
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .btn-outline {
+        display: inline-block;
+        padding: 14px 36px;
+        background: transparent;
+        color: var(--earth);
+        font-size: 13px;
+        border: 0.5px solid var(--border);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+      .btn-outline:hover {
+        border-color: var(--stone);
+      }
+
+      /* Fade in */
+      .fi {
+        opacity: 0;
+        transform: translateY(24px);
+        transition:
+          opacity 0.7s ease,
+          transform 0.7s ease;
+      }
+      .fi.v {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ===== HERO ===== */
       .hero {
+        padding: 140px 0 100px;
         background: var(--parchment);
-        padding: 100px 56px 88px;
-        border-bottom: 0.5px solid var(--mist);
+        border-bottom: 0.5px solid var(--border);
         position: relative;
         overflow: hidden;
       }
@@ -90,22 +216,22 @@
         background: repeating-linear-gradient(
           105deg,
           transparent,
-          transparent 60px,
-          rgba(140, 100, 60, 0.018) 60px,
-          rgba(140, 100, 60, 0.018) 61px
+          transparent 80px,
+          rgba(14, 80, 112, 0.015) 80px,
+          rgba(14, 80, 112, 0.015) 81px
         );
         pointer-events: none;
       }
       .hero-inner {
         position: relative;
         z-index: 2;
-        max-width: 680px;
+        max-width: 640px;
       }
       .hero-eyebrow {
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: 0.14em;
-        color: var(--clay);
-        margin-bottom: 24px;
+        color: var(--ocean);
+        margin-bottom: 28px;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -114,49 +240,40 @@
         content: "";
         width: 20px;
         height: 0.5px;
-        background: var(--clay-l);
+        background: var(--ocean-mid);
       }
-      .hero-pagus {
+      .hero-wordmark {
         font-family: "Cormorant Garamond", serif;
         font-weight: 500;
-        font-size: 80px;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
+        font-size: 72px;
+        letter-spacing: 0.14em;
         color: var(--earth);
         line-height: 1;
         margin-bottom: 20px;
       }
-      .hero-pagus span {
-        color: var(--gold);
+      .hero-wordmark .e {
+        color: var(--ocean);
       }
-      .hero-h {
+      .hero h1 {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 400;
         line-height: 1.6;
         color: var(--earth);
         margin-bottom: 28px;
       }
-      .hero-h em {
-        font-style: normal;
-        color: var(--clay);
-      }
       .hero-sub {
         font-size: 14px;
-        line-height: 2.1;
-        color: var(--umber);
-        max-width: 560px;
-        margin-bottom: 40px;
-        opacity: 0.85;
+        line-height: 2.2;
+        color: var(--earth-soft);
+        max-width: 540px;
+        margin-bottom: 44px;
+        opacity: 0.82;
       }
-      .hero-cta {
-        display: inline-block;
-        padding: 14px 36px;
-        background: var(--earth);
-        color: var(--parchment);
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-decoration: none;
+      .hero-buttons {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
       }
       .hero-deco {
         position: absolute;
@@ -164,79 +281,61 @@
         top: 50%;
         transform: translateY(-50%);
         z-index: 2;
-        opacity: 0.18;
-      }
-      .hero-deco-vt {
-        font-family: "Cormorant Garamond", serif;
-        font-size: 11px;
-        font-style: italic;
-        color: var(--clay);
-        line-height: 2.6;
-        letter-spacing: 0.04em;
+        opacity: 0.15;
         writing-mode: vertical-rl;
+        font-family: "Cormorant Garamond", serif;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--ocean);
+        letter-spacing: 0.08em;
+        line-height: 2.4;
       }
 
-      .sec-label {
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        color: var(--clay);
-        margin-bottom: 14px;
-      }
-      .sec-title {
-        font-family: "Noto Serif JP", serif;
-        font-size: 26px;
-        font-weight: 400;
-        color: var(--earth);
-        margin-bottom: 44px;
-        line-height: 1.55;
-      }
-      .sec-title em {
-        font-style: normal;
-        color: var(--clay);
-      }
-
-      .offer {
+      /* ===== EMPATHY ===== */
+      .empathy {
         background: var(--white);
-        padding: 80px 56px;
+        padding: 100px 0;
         border-bottom: 0.5px solid var(--border);
       }
-      .offer-grid {
+      .empathy-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 20px;
       }
-      .offer-card {
-        padding: 28px;
+      .empathy-card {
+        padding: 32px;
         border: 0.5px solid var(--border);
         background: var(--cream);
       }
-      .offer-num {
+      .empathy-card .num {
         font-family: "Cormorant Garamond", serif;
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 300;
-        color: var(--gold);
-        opacity: 0.7;
+        color: var(--ocean);
+        opacity: 0.4;
         line-height: 1;
         margin-bottom: 14px;
       }
-      .offer-card-title {
-        font-size: 13px;
-        font-weight: 500;
+      .empathy-card h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        font-weight: 400;
         color: var(--earth);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
       }
-      .offer-card-body {
-        font-size: 12px;
+      .empathy-card p {
+        font-size: 13px;
         color: var(--stone);
-        line-height: 1.9;
+        line-height: 2;
       }
 
-      .how {
+      /* ===== STEPS ===== */
+      .steps {
         background: var(--parchment);
-        padding: 80px 56px;
-        border-bottom: 0.5px solid var(--mist);
+        padding: 100px 0;
+        border-bottom: 0.5px solid var(--border);
       }
-      .how-steps {
+      .steps-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 0;
@@ -253,426 +352,978 @@
         font-family: "Cormorant Garamond", serif;
         font-size: 11px;
         letter-spacing: 0.2em;
-        color: var(--gold);
+        color: var(--ocean);
         margin-bottom: 14px;
       }
       .step-title {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 500;
         color: var(--earth);
         margin-bottom: 10px;
       }
       .step-body {
-        font-size: 12px;
-        color: var(--stone);
-        line-height: 1.9;
-      }
-
-      .about {
-        background: var(--earth);
-        padding: 80px 56px;
-      }
-      .about-label {
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        color: var(--gold);
-        opacity: 0.7;
-        margin-bottom: 14px;
-      }
-      .about-title {
-        font-family: "Noto Serif JP", serif;
-        font-size: 26px;
-        font-weight: 400;
-        color: var(--parchment);
-        margin-bottom: 32px;
-        line-height: 1.55;
-      }
-      .about-title em {
-        font-style: normal;
-        color: var(--gold);
-      }
-      .about-card {
-        padding: 28px 32px;
-        border: 0.5px solid rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.03);
-        margin-bottom: 16px;
-      }
-      .about-card p {
         font-size: 13px;
-        color: rgba(242, 237, 227, 0.55);
-        line-height: 2.2;
-      }
-      .about-card p + p {
-        margin-top: 14px;
-      }
-      .about-mission {
-        padding: 28px 32px;
-        border: 0.5px solid rgba(200, 169, 110, 0.3);
-        background: rgba(200, 169, 110, 0.06);
-      }
-      .about-mission p {
-        font-family: "Noto Serif JP", serif;
-        font-size: 17px;
-        color: rgba(200, 169, 110, 0.85);
+        color: var(--stone);
         line-height: 2;
-        font-weight: 400;
       }
 
-      .promise {
+      /* ===== COMPARE ===== */
+      .compare {
         background: var(--white);
-        padding: 80px 56px;
+        padding: 100px 0;
         border-bottom: 0.5px solid var(--border);
       }
-      .promise-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
+      .compare-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0;
       }
-      .promise-card {
-        padding: 32px;
+      .compare-table th,
+      .compare-table td {
+        padding: 16px 20px;
+        text-align: left;
+        border-bottom: 0.5px solid var(--border);
+        font-size: 13px;
+      }
+      .compare-table th {
+        font-weight: 500;
+        color: var(--stone);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+      .compare-table td {
+        color: var(--earth-soft);
+        line-height: 1.8;
+      }
+      .compare-table .col-sentio {
+        background: var(--ocean-light);
+        font-weight: 400;
+        color: var(--earth);
+      }
+      .compare-table .col-sentio-h {
+        background: var(--ocean);
+        color: #fff;
+        font-weight: 500;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+      }
+      .check {
+        color: var(--ocean);
+        font-weight: 500;
+      }
+      .cross {
+        color: var(--mist);
+      }
+
+      /* ===== DEMO ===== */
+      .demo {
+        background: var(--cream);
+        padding: 100px 0;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .demo-card {
+        background: var(--white);
         border: 0.5px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .demo-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 28px;
+        border-bottom: 0.5px solid var(--border);
         background: var(--cream);
       }
-      .promise-val {
-        font-family: "Cormorant Garamond", serif;
-        font-size: 48px;
-        font-weight: 300;
-        color: var(--gold);
-        line-height: 1;
-        margin-bottom: 12px;
+      .demo-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
-      .promise-label {
-        font-size: 10px;
-        letter-spacing: 0.1em;
+      .demo-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--mist);
+      }
+      .demo-dot.active {
+        background: var(--ocean);
+      }
+      .demo-header-text {
+        font-size: 11px;
+        letter-spacing: 0.12em;
         color: var(--stone);
-        margin-bottom: 10px;
       }
-      .promise-desc {
+      .industry-tabs {
+        display: flex;
+        gap: 8px;
+      }
+      .industry-tab {
+        padding: 6px 16px;
         font-size: 12px;
         color: var(--stone);
-        line-height: 1.9;
+        background: transparent;
+        border: 0.5px solid var(--border);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: "Inter", sans-serif;
       }
-
-      .faq {
-        background: var(--parchment);
-        padding: 80px 56px;
-        border-bottom: 0.5px solid var(--mist);
+      .industry-tab.active {
+        background: var(--ocean);
+        color: #fff;
+        border-color: var(--ocean);
       }
-      .faq-list {
+      .demo-body {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 0;
       }
-      .faq-item {
-        padding: 22px 28px 22px 0;
-        border-bottom: 0.5px solid var(--border);
+      .demo-input,
+      .demo-output {
+        padding: 32px;
       }
-      .faq-item:nth-child(even) {
-        padding-left: 28px;
-        padding-right: 0;
-        border-left: 0.5px solid var(--border);
+      .demo-input {
+        border-right: 0.5px solid var(--border);
       }
-      .faq-q {
+      .demo-label {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        color: var(--stone);
+        margin-bottom: 16px;
+      }
+      .demo-label.ocean {
+        color: var(--ocean);
+      }
+      .demo-signal {
         font-size: 13px;
-        font-weight: 500;
-        color: var(--earth);
-        margin-bottom: 10px;
+        color: var(--earth-soft);
+        line-height: 2;
       }
-      .faq-a {
+      .demo-question {
+        font-family: "Noto Serif JP", serif;
+        font-size: 17px;
+        font-weight: 400;
+        line-height: 1.9;
+        color: var(--earth);
+        margin-bottom: 20px;
+      }
+      .demo-rationale {
         font-size: 12px;
         color: var(--stone);
         line-height: 1.9;
+        padding-top: 16px;
+        border-top: 0.5px solid var(--border);
       }
 
-      .cta-final {
-        background: var(--parchment);
-        padding: 100px 56px;
-        text-align: center;
-        border-top: 0.5px solid var(--mist);
+      /* ===== PRICING ===== */
+      .pricing {
+        background: var(--white);
+        padding: 100px 0;
+        border-bottom: 0.5px solid var(--border);
       }
-      .cta-final-pagus {
-        font-family: "Cormorant Garamond", serif;
-        font-weight: 500;
-        font-size: 56px;
+      .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+      }
+      .pricing-card {
+        padding: 44px 32px;
+        border: 0.5px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+      .pricing-card:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+      .pricing-card:last-child {
+        border-radius: 0 6px 6px 0;
+      }
+      .pricing-card.featured {
+        background: var(--ocean-light);
+        border-color: var(--ocean);
+        position: relative;
+      }
+      .pricing-badge {
+        position: absolute;
+        top: -1px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        color: #fff;
+        background: var(--ocean);
+        padding: 4px 16px;
+        border-radius: 0 0 4px 4px;
+      }
+      .pricing-plan {
+        font-size: 11px;
         letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--earth);
+        color: var(--stone);
         margin-bottom: 12px;
       }
-      .cta-final-pagus span {
-        color: var(--gold);
+      .pricing-price {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 38px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 4px;
+      }
+      .pricing-price span {
+        font-size: 14px;
+        color: var(--stone);
+        font-family: "Inter", sans-serif;
+      }
+      .pricing-desc {
+        font-size: 13px;
+        color: var(--stone);
+        margin-bottom: 28px;
+        line-height: 1.7;
+      }
+      .pricing-features {
+        list-style: none;
+        margin-bottom: 32px;
+        flex-grow: 1;
+      }
+      .pricing-features li {
+        font-size: 13px;
+        color: var(--earth-soft);
+        padding: 10px 0;
+        border-bottom: 0.5px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .pricing-features li::before {
+        content: "";
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--ocean);
+        flex-shrink: 0;
+      }
+      .pricing-card .btn-primary,
+      .pricing-card .btn-outline {
+        width: 100%;
+        text-align: center;
+      }
+      .pricing-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 48px;
+      }
+      .pricing-toggle span {
+        font-size: 13px;
+        color: var(--stone);
+      }
+      .pricing-toggle .active-label {
+        color: var(--earth);
+        font-weight: 500;
+      }
+      .toggle-switch {
+        width: 44px;
+        height: 24px;
+        background: var(--mist);
+        border-radius: 12px;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle-switch.on {
+        background: var(--ocean);
+      }
+      .toggle-switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.2s;
+      }
+      .toggle-switch.on::after {
+        transform: translateX(20px);
+      }
+
+      /* ===== FAQ ===== */
+      .faq {
+        background: var(--parchment);
+        padding: 100px 0;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .faq-list {
+        max-width: 720px;
+      }
+      .faq-item {
+        border-bottom: 0.5px solid var(--border);
+      }
+      .faq-q {
+        padding: 22px 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--earth);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .faq-q::after {
+        content: "+";
+        font-family: "Cormorant Garamond", serif;
+        font-size: 22px;
+        font-weight: 300;
+        color: var(--ocean);
+        transition: transform 0.2s;
+      }
+      .faq-item.open .faq-q::after {
+        content: "−";
+      }
+      .faq-a {
+        font-size: 13px;
+        color: var(--stone);
+        line-height: 2;
+        max-height: 0;
+        overflow: hidden;
+        transition:
+          max-height 0.3s ease,
+          padding 0.3s ease;
+        padding: 0 0;
+      }
+      .faq-item.open .faq-a {
+        max-height: 200px;
+        padding: 0 0 22px;
+      }
+
+      /* ===== CTA FINAL ===== */
+      .cta-final {
+        background: var(--cream);
+        padding: 120px 0;
+        text-align: center;
+      }
+      .cta-final-wordmark {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 48px;
+        letter-spacing: 0.14em;
+        color: var(--earth);
+        margin-bottom: 8px;
+      }
+      .cta-final-wordmark .e {
+        color: var(--ocean);
       }
       .cta-final-tagline {
         font-family: "Cormorant Garamond", serif;
         font-size: 13px;
         font-style: italic;
-        color: var(--clay);
-        opacity: 0.6;
-        margin-bottom: 40px;
+        color: var(--ocean);
+        opacity: 0.5;
+        margin-bottom: 44px;
       }
-      .cta-final-h {
+      .cta-final h2 {
         font-family: "Noto Serif JP", serif;
         font-size: 24px;
         font-weight: 400;
         color: var(--earth);
         margin-bottom: 14px;
       }
-      .cta-final-sub {
-        font-size: 13px;
+      .cta-final p {
+        font-size: 14px;
         color: var(--stone);
         line-height: 2;
         max-width: 440px;
-        margin: 0 auto 40px;
+        margin: 0 auto 44px;
       }
-      .btn-solid {
-        display: inline-block;
-        padding: 14px 36px;
-        background: var(--earth);
-        color: var(--parchment);
-        font-size: 12px;
-        letter-spacing: 0.06em;
-        text-decoration: none;
+
+      /* ===== FOOTER ===== */
+      .footer {
+        background: var(--white);
+        border-top: 0.5px solid var(--border);
+        padding: 36px 56px;
       }
-      .cta-contact {
+      .footer-inner {
+        max-width: 1080px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .footer-brand {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        color: var(--earth);
+        opacity: 0.4;
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
         font-size: 12px;
         color: var(--stone);
-        margin-top: 24px;
-        line-height: 2;
+        opacity: 0.6;
+        transition: opacity 0.2s;
       }
-      .cta-contact a {
-        color: var(--clay);
-        text-decoration: none;
-        border-bottom: 0.5px solid var(--clay-l);
+      .footer-links a:hover {
+        opacity: 1;
+      }
+      .footer-copy {
+        font-size: 11px;
+        color: var(--earth);
+        opacity: 0.25;
+      }
+
+      /* ===== RESPONSIVE ===== */
+      @media (max-width: 768px) {
+        .container {
+          padding: 0 24px;
+        }
+        .nav {
+          padding: 0 24px;
+          height: 56px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .nav-hamburger {
+          display: block;
+        }
+        .hero {
+          padding: 110px 0 72px;
+        }
+        .hero-wordmark {
+          font-size: 48px;
+        }
+        .hero h1 {
+          font-size: 24px;
+        }
+        .hero-deco {
+          display: none;
+        }
+        .empathy-grid {
+          grid-template-columns: 1fr;
+        }
+        .steps-grid {
+          grid-template-columns: 1fr;
+        }
+        .step {
+          border-right: none;
+          border-bottom: 0.5px solid var(--mist);
+          padding: 20px 0;
+        }
+        .step:last-child {
+          border-bottom: none;
+        }
+        .compare-table {
+          font-size: 12px;
+        }
+        .compare-table th,
+        .compare-table td {
+          padding: 12px 10px;
+        }
+        .demo-body {
+          grid-template-columns: 1fr;
+        }
+        .demo-input {
+          border-right: none;
+          border-bottom: 0.5px solid var(--border);
+        }
+        .industry-tabs {
+          flex-wrap: wrap;
+        }
+        .pricing-grid {
+          grid-template-columns: 1fr;
+        }
+        .pricing-card,
+        .pricing-card:first-child,
+        .pricing-card:last-child {
+          border-radius: 0;
+        }
+        .pricing-card:first-child {
+          border-radius: 6px 6px 0 0;
+        }
+        .pricing-card:last-child {
+          border-radius: 0 0 6px 6px;
+        }
+        .footer-inner {
+          flex-direction: column;
+          gap: 16px;
+          text-align: center;
+        }
       }
     </style>
   </head>
   <body>
-    <nav>
-      <a href="#" class="logo">P<span>A</span>GUS</a>
-      <span class="nav-label"
-        >運営：<a href="https://mdc-diseno.co.jp" target="_blank" rel="noopener"
-          >株式会社ディセーノ</a
-        ></span
+    <!-- NAV -->
+    <nav class="nav">
+      <a href="#" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="#steps">Sentioとは</a></li>
+        <li><a href="#demo">デモ</a></li>
+        <li><a href="#pricing">料金</a></li>
+        <li><a href="#faq">よくある質問</a></li>
+        <li><a href="app.html" class="nav-cta">無料で始める</a></li>
+      </ul>
+      <button
+        class="nav-hamburger"
+        onclick="
+          document.querySelector('.nav-links').style.display = this.dataset.open
+            ? 'none'
+            : 'flex';
+          this.dataset.open = this.dataset.open ? '' : '1';
+        "
+        aria-label="メニュー"
       >
-      <a href="#contact" class="nav-cta">お問い合わせ</a>
+        <span></span><span></span><span></span>
+      </button>
     </nav>
 
-    <div class="hero">
-      <div class="hero-inner">
-        <div class="hero-eyebrow">ブランドパートナー募集</div>
-        <div class="hero-pagus">P<span>A</span>GUS</div>
-        <h1 class="hero-h">
-          あなたの手仕事を、<br />
-          世界の人に届けたい。<br />
-          <em>英語対応も、発送も、すべてPAGUSが担います。</em>
-        </h1>
-        <p class="hero-sub">
-          PAGUSは、日本の土地・時間・手仕事が生んだブランドを海外に届ける越境ECです。産地と職人にストーリーがあるものを厳選して掲載し、英語コンテンツ制作・国際発送・カスタマー対応のすべてを弊社が担います。貴社のブランドを、ぜひPAGUSでご一緒させてください。
-        </p>
-        <a href="#contact" class="hero-cta">お問い合わせはこちら</a>
-      </div>
-      <div class="hero-deco">
-        <div class="hero-deco-vt">
-          Shaped by land · Kept by time · Made by hand
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-inner">
+          <div class="hero-eyebrow">従業員5名〜50名の経営者へ。</div>
+          <div class="hero-wordmark">S<span class="e">e</span>ntio</div>
+          <h1>決断が生まれる組織を<br />デザインする。</h1>
+          <p class="hero-sub">
+            会議が終わった。でも、何も決まらなかった。<br />
+            数字は見た。でも、動く理由が見つからない。<br />
+            感じていることはある。でも、誰にも話せない。<br /><br />
+            Sentioは、その「なんとなく」を読んで、<br />
+            今週動くべき一つの問いを届けます。
+          </p>
+          <div class="hero-buttons">
+            <a href="app.html#register" class="btn-primary"
+              >まず、会社名とURLだけで試してみる</a
+            >
+            <a href="#demo" class="btn-outline">デモを見る</a>
+          </div>
         </div>
+        <div class="hero-deco">sentire — to feel, to perceive, to judge</div>
       </div>
-    </div>
+    </section>
 
-    <div class="offer">
-      <div class="sec-label">PAGUSができること</div>
-      <h2 class="sec-title">
-        海外展開に必要なことを、<br /><em>すべてPAGUSが引き受けます。</em>
-      </h2>
-      <div class="offer-grid">
-        <div class="offer-card">
-          <div class="offer-num">01</div>
-          <div class="offer-card-title">英語コンテンツの制作</div>
-          <div class="offer-card-body">
-            商品説明・ブランドストーリー・SNS投稿文まで、すべて英語で制作します。機械翻訳ではなく、あなたのブランドの核心を英語で語る文章を書きます。
+    <!-- EMPATHY -->
+    <section class="empathy">
+      <div class="container">
+        <div class="sec-label">WHY SENTIO</div>
+        <h2 class="sec-title">
+          経営者が深夜に感じていること。<br /><em
+            >それは、データでは出てこない。</em
+          >
+        </h2>
+        <div class="empathy-grid">
+          <div class="empathy-card fi">
+            <div class="num">01</div>
+            <h3>数字は揃っている。<br />でも、動けない。</h3>
+            <p>
+              売上・利益・キャッシュフロー。全部見ている。でも「だから何をすべきか」が見えない。データは事実を教えてくれるが、判断は教えてくれない。
+            </p>
           </div>
-        </div>
-        <div class="offer-card">
-          <div class="offer-num">02</div>
-          <div class="offer-card-title">国際発送・物流の管理</div>
-          <div class="offer-card-body">
-            北米・欧州・台湾へ向けた発送をPAGUSが担います。通関書類・追跡対応・キャリア手配もすべてPAGUSが行います。国際物流に関わる必要は一切ありません。
+          <div class="empathy-card fi">
+            <div class="num">02</div>
+            <h3>誰にも言えないことが<br />ある。</h3>
+            <p>
+              従業員には言えない。顧問には伝わらない。パートナーにも話しにくい。経営者だけが抱えている違和感を、受け止める相手がいない。
+            </p>
           </div>
-        </div>
-        <div class="offer-card">
-          <div class="offer-num">03</div>
-          <div class="offer-card-title">英語カスタマー対応</div>
-          <div class="offer-card-body">
-            海外のお客様からの問い合わせ・クレーム・返品対応は、すべてPAGUSが英語で行います。読めないメールが届くことはありません。
-          </div>
-        </div>
-        <div class="offer-card">
-          <div class="offer-num">04</div>
-          <div class="offer-card-title">Shopifyストアへの掲載</div>
-          <div class="offer-card-body">
-            pagus.shopは北米・欧州・台湾の顧客に向けて設計されたストアです。商品ページの制作・写真手配・公開まで、PAGUSが対応します。
-          </div>
-        </div>
-        <div class="offer-card">
-          <div class="offer-num">05</div>
-          <div class="offer-card-title">SNS・コンテンツ発信</div>
-          <div class="offer-card-body">
-            Instagram・TikTokで、あなたのブランドと商品を発信します。宣伝ではなくストーリーとして伝えることで、世界中に共感者を増やします。
-          </div>
-        </div>
-        <div class="offer-card">
-          <div class="offer-num">06</div>
-          <div class="offer-card-title">月次レポートの提供（日本語）</div>
-          <div class="offer-card-body">
-            毎月、日本語で販売レポートをお届けします。何が売れたか、どこに届いたか、在庫状況はどうか。すべて透明に共有します。
+          <div class="empathy-card fi">
+            <div class="num">03</div>
+            <h3>会議で何も<br />決まらない。</h3>
+            <p>
+              報告は聞いた。意見も出た。でも「今週、これをやる」という決断が出なかった。問題は情報不足ではなく、問いの不在。
+            </p>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="how">
-      <div class="sec-label">進め方</div>
-      <h2 class="sec-title">
-        ご連絡いただければ、<br /><em>PAGUSがすべてご提案します。</em>
-      </h2>
-      <div class="how-steps">
-        <div class="step">
-          <div class="step-num">01</div>
-          <div class="step-title">ご連絡・ご相談</div>
-          <div class="step-body">
-            まずは30分のお時間を頂戴できますと幸いです。貴社のブランドとPAGUSの方向性が合うかを確認させていただくための対話です。
+    <!-- STEPS -->
+    <section class="steps" id="steps">
+      <div class="container">
+        <div class="sec-label">HOW IT WORKS</div>
+        <h2 class="sec-title">
+          Sentioがすること。<br /><em>答えではなく、問いをデザインする。</em>
+        </h2>
+        <div class="steps-grid">
+          <div class="step fi">
+            <div class="step-num">STEP 01</div>
+            <div class="step-title">御社のことを知る</div>
+            <div class="step-body">
+              会社名とURLを入力するだけ。Sentioが御社のウェブサイト、口コミ、求人情報、競合の動きを自動で収集し、文脈を理解します。
+            </div>
           </div>
-        </div>
-        <div class="step">
-          <div class="step-num">02</div>
-          <div class="step-title">掲載内容のご提案</div>
-          <div class="step-body">
-            ブランドのストーリー・商品・産地をもとに、PAGUSでの掲載イメージをご提案いたします。写真・文章・価格はすべてご確認いただいてから公開します。
+          <div class="step fi">
+            <div class="step-num">STEP 02</div>
+            <div class="step-title">気になることを届ける</div>
+            <div class="step-body">
+              集めたデータを掛け合わせて見えた矛盾やチャンス。それを「問い」の形にして、毎週メールでお届けします。答えではなく、考えるきっかけを。
+            </div>
           </div>
-        </div>
-        <div class="step">
-          <div class="step-num">03</div>
-          <div class="step-title">販売開始</div>
-          <div class="step-body">
-            掲載後は英語コンテンツ・SNS発信・カスタマー対応まで、PAGUSがすべてを担います。貴社の負担はありません。
+          <div class="step fi">
+            <div class="step-num">STEP 03</div>
+            <div class="step-title">会話が積み上がる</div>
+            <div class="step-body">
+              問いに答えると、Sentioはさらに深く御社を理解します。会話が積み上がるほど、問いの精度が上がり、御社だけの判断パートナーになっていきます。
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="about">
-      <div class="about-label">PAGUSについて</div>
-      <h2 class="about-title">
-        日本のテロワールを、<br /><em>英語で世界に届けるブランド。</em>
-      </h2>
-      <div class="about-card">
-        <p>
-          PAGUSはラテン語で「地方・地域」を意味します。ワインの世界で使われる「テロワール」の語源でもあります。土地が育んだ素材、時間をかけて磨かれた製法、職人の手が生む固有性。その三つが揃ったとき、ものは「製品」ではなく「物語」になります。
-        </p>
-        <p>
-          その物語を、英語で世界に届けることがPAGUSの使命です。「JAPAN」を前面に出すのではなく、産地の名前・職人の言葉・作られる理由を丁寧に語ることで、その価値が世界の顧客に届くコンテンツを作ります。
-        </p>
+    <!-- COMPARE -->
+    <section class="compare">
+      <div class="container">
+        <div class="sec-label">COMPARISON</div>
+        <h2 class="sec-title">
+          ChatGPTでもBIツールでもない。<br /><em
+            >Sentioは「問い」をつくる存在。</em
+          >
+        </h2>
+        <table class="compare-table fi">
+          <thead>
+            <tr>
+              <th style="width: 25%"></th>
+              <th style="width: 25%">ChatGPT</th>
+              <th style="width: 25%">BIツール</th>
+              <th style="width: 25%" class="col-sentio-h">Sentio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-weight: 500">御社の文脈を理解</td>
+              <td class="cross">毎回説明が必要</td>
+              <td class="cross">データ接続が必要</td>
+              <td class="col-sentio check">URL入力だけで開始</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 500">問いを自動で生成</td>
+              <td class="cross">自分で聞く必要あり</td>
+              <td class="cross">ダッシュボードを見るだけ</td>
+              <td class="col-sentio check">毎週、問いが届く</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 500">矛盾・違和感の検出</td>
+              <td class="cross">単一ソース分析</td>
+              <td class="cross">数値の可視化のみ</td>
+              <td class="col-sentio check">複数データを交差分析</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 500">会話の蓄積</td>
+              <td class="cross">セッション単位で消える</td>
+              <td class="cross">分析は一方通行</td>
+              <td class="col-sentio check">対話が積み上がる</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 500">経営者の感情を読む</td>
+              <td class="cross">機能なし</td>
+              <td class="cross">機能なし</td>
+              <td class="col-sentio check">言葉の裏を検出</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="about-mission">
-        <p>
-          日本のブランドを、海外の方が特別なものとして感じられる世界を目指します。
-        </p>
-      </div>
-    </div>
+    </section>
 
-    <div class="promise">
-      <div class="sec-label">パートナーブランドへの約束</div>
-      <h2 class="sec-title">
-        貴社のリスクを、<br /><em>ゼロにするために。</em>
-      </h2>
-      <div class="promise-grid">
-        <div class="promise-card">
-          <div class="promise-val">¥0</div>
-          <div class="promise-label">掲載費用・初期費用</div>
-          <div class="promise-desc">
-            掲載費・セットアップ費・英語コンテンツ制作費、いずれも無料です。PAGUSの収益は、商品が売れたときだけ発生します。費用が先に出ることはありません。
+    <!-- DEMO -->
+    <section class="demo" id="demo">
+      <div class="container">
+        <div class="sec-label">DEMO</div>
+        <h2 class="sec-title">業種を選ぶと、Sentioの問いが変わります。</h2>
+        <div class="demo-card fi">
+          <div class="demo-header">
+            <div class="demo-header-left">
+              <div class="demo-dot active"></div>
+              <div class="demo-header-text">SENTIO — WEEKLY QUESTION</div>
+            </div>
+            <div class="industry-tabs">
+              <button class="industry-tab active" data-industry="retail">
+                小売・EC
+              </button>
+              <button class="industry-tab" data-industry="manufacturing">
+                製造業
+              </button>
+              <button class="industry-tab" data-industry="service">
+                サービス業
+              </button>
+              <button class="industry-tab" data-industry="it">IT・SaaS</button>
+            </div>
           </div>
-        </div>
-        <div class="promise-card">
-          <div class="promise-val" style="font-size: 32px; line-height: 1.5">
-            受注後<br />買い取り
-          </div>
-          <div class="promise-label">売れてから、動く仕組み</div>
-          <div class="promise-desc">
-            海外のお客様からご注文が入った段階で、PAGUSが貴社から商品を買い取ります。売れる前に在庫を動かす必要はありません。売れた分だけ、確実にお支払いします。
+          <div class="demo-body">
+            <div class="demo-input">
+              <div class="demo-label">検出されたシグナル</div>
+              <div class="demo-signal" id="demo-signal"></div>
+            </div>
+            <div class="demo-output">
+              <div class="demo-label ocean">SENTIO の問い</div>
+              <div class="demo-question" id="demo-question"></div>
+              <div class="demo-rationale" id="demo-rationale"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="faq">
-      <div class="sec-label">よくある質問</div>
-      <h2 class="sec-title" style="margin-bottom: 32px">
-        気になることは、まずここで。
-      </h2>
-      <div class="faq-list">
-        <div class="faq-item">
-          <div class="faq-q">
-            国際発送の手続きは自分でやる必要がありますか？
-          </div>
-          <div class="faq-a">
-            いいえ。国際発送・通関・追跡はすべてPAGUSが対応します。貴社は国際物流に関わる必要はありません。
-          </div>
+    <!-- PRICING -->
+    <section class="pricing" id="pricing">
+      <div class="container">
+        <div class="sec-label">PRICING</div>
+        <h2 class="sec-title">まず14日間、無料で試してください。</h2>
+        <div class="pricing-toggle">
+          <span id="label-monthly" class="active-label">月額</span>
+          <div
+            class="toggle-switch"
+            id="billing-toggle"
+            onclick="toggleBilling()"
+          ></div>
+          <span id="label-yearly">年額（2ヶ月分お得）</span>
         </div>
-        <div class="faq-item">
-          <div class="faq-q">在庫が売れなかった場合のリスクはありますか？</div>
-          <div class="faq-a">
-            ありません。PAGUSが買い取るのは、ご注文が入った時点からです。売れる前に在庫を動かす必要はなく、売れなかった分の負担は一切発生しません。
+        <div class="pricing-grid">
+          <div class="pricing-card fi">
+            <div class="pricing-plan">STARTER</div>
+            <div
+              class="pricing-price"
+              data-monthly="¥9,800"
+              data-yearly="¥98,000"
+            >
+              ¥9,800<span>/月</span>
+            </div>
+            <div class="pricing-desc">
+              小規模チームの経営判断を支援。まずはここから。
+            </div>
+            <ul class="pricing-features">
+              <li>週1回の問い配信</li>
+              <li>基本シグナル検出</li>
+              <li>会話履歴の蓄積</li>
+              <li>メールサポート</li>
+            </ul>
+            <a href="app.html#register" class="btn-outline">14日間無料で試す</a>
           </div>
-        </div>
-        <div class="faq-item">
-          <div class="faq-q">海外のお客様から苦情や返品が来たら？</div>
-          <div class="faq-a">
-            PAGUSがすべて英語で対応します。商品の品質に関わる問題が生じたときのみ、日本語でご連絡します。
+          <div class="pricing-card featured fi">
+            <div class="pricing-badge">RECOMMENDED</div>
+            <div class="pricing-plan">GROWTH</div>
+            <div
+              class="pricing-price"
+              data-monthly="¥29,800"
+              data-yearly="¥298,000"
+            >
+              ¥29,800<span>/月</span>
+            </div>
+            <div class="pricing-desc">
+              成長期の企業向け。競合分析と深い洞察を。
+            </div>
+            <ul class="pricing-features">
+              <li>週2〜3回の問い配信</li>
+              <li>競合モニタリング</li>
+              <li>高精度シグナル検出</li>
+              <li>会計ソフト連携</li>
+              <li>優先サポート</li>
+            </ul>
+            <a href="app.html#register" class="btn-primary">14日間無料で試す</a>
           </div>
-        </div>
-        <div class="faq-item">
-          <div class="faq-q">価格は自分で決められますか？</div>
-          <div class="faq-a">
-            はい。PAGUSは海外市場での相場をご提案しますが、最終決定はブランド側にあります。掲載前にすべての価格をご確認いただきます。
-          </div>
-        </div>
-        <div class="faq-item">
-          <div class="faq-q">どんな商品がPAGUSに向いていますか？</div>
-          <div class="faq-a">
-            産地・職人・時間にストーリーがあるもの。「なぜここでしか作れないか」が選定の軸です。カテゴリより、物語の強さを重視します。
-          </div>
-        </div>
-        <div class="faq-item">
-          <div class="faq-q">英語が話せなくても大丈夫ですか？</div>
-          <div class="faq-a">
-            もちろんです。PAGUSとのやりとりはすべて日本語で行います。英語が必要な場面はすべてPAGUSが代行します。
+          <div class="pricing-card fi">
+            <div class="pricing-plan">SCALE</div>
+            <div
+              class="pricing-price"
+              data-monthly="¥79,800"
+              data-yearly="¥798,000"
+            >
+              ¥79,800<span>/月</span>
+            </div>
+            <div class="pricing-desc">多拠点・多事業の経営を一元的に把握。</div>
+            <ul class="pricing-features">
+              <li>無制限の問い配信</li>
+              <li>業界横断パターン分析</li>
+              <li>API連携</li>
+              <li>専任サポート</li>
+              <li>カスタムレポート</li>
+            </ul>
+            <a href="app.html#register" class="btn-outline">14日間無料で試す</a>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="cta-final" id="contact">
-      <div class="cta-final-pagus">P<span>A</span>GUS</div>
-      <div class="cta-final-tagline">
-        Shaped by land. Kept by time. Made by hand.
+    <!-- FAQ -->
+    <section class="faq" id="faq">
+      <div class="container">
+        <div class="sec-label">FAQ</div>
+        <h2 class="sec-title">よくある不安への答え。</h2>
+        <div class="faq-list">
+          <div class="faq-item">
+            <div
+              class="faq-q"
+              onclick="this.parentElement.classList.toggle('open')"
+            >
+              決算書を入れることが怖いのですが。
+            </div>
+            <div class="faq-a">
+              決算書は不要です。Sentioは会社名とURLだけで始められます。会計ソフト連携は任意で、接続するとより深い洞察が得られますが、必須ではありません。データは暗号化され、他社と共有されることはありません。
+            </div>
+          </div>
+          <div class="faq-item">
+            <div
+              class="faq-q"
+              onclick="this.parentElement.classList.toggle('open')"
+            >
+              AIが経営判断に使えるのですか？
+            </div>
+            <div class="faq-a">
+              Sentioは経営判断を「する」のではなく、判断のための「問い」を届けます。答えを出すのは、常に経営者自身です。Sentioの役割は、見落としている矛盾やチャンスに気づかせること。判断の質を高めるパートナーです。
+            </div>
+          </div>
+          <div class="faq-item">
+            <div
+              class="faq-q"
+              onclick="this.parentElement.classList.toggle('open')"
+            >
+              税理士や顧問と何が違うのですか？
+            </div>
+            <div class="faq-a">
+              税理士は過去の数字を整理し、顧問は経験に基づく助言をします。Sentioは、複数のデータソースを交差分析して「今、表面化していない矛盾」を検出します。人間では気づきにくいパターンを24時間監視し、タイミングを逃しません。
+            </div>
+          </div>
+          <div class="faq-item">
+            <div
+              class="faq-q"
+              onclick="this.parentElement.classList.toggle('open')"
+            >
+              いつでも解約できますか？
+            </div>
+            <div class="faq-a">
+              はい、いつでも解約できます。トライアル期間中は一切課金されません。解約後180日間はデータを保持しますので、再開も簡単です。Stripeカスタマーポータルからワンクリックで解約手続きが完了します。
+            </div>
+          </div>
+        </div>
       </div>
-      <h2 class="cta-final-h">ぜひ、ご検討いただけますと幸いです。</h2>
-      <p class="cta-final-sub">
-        貴社のブランドをPAGUSでご紹介させていただきたく、ご連絡いたしました。
-      </p>
-      <a href="mailto:shotaro.kajitani@mdc-diseno.com" class="btn-solid"
-        >お問い合わせはこちら</a
-      >
-      <div class="cta-contact">
-        メール：<a href="mailto:shotaro.kajitani@mdc-diseno.com"
-          >shotaro.kajitani@mdc-diseno.com</a
-        >　／　 運営：<a
-          href="https://mdc-diseno.co.jp"
-          target="_blank"
-          rel="noopener"
-          >株式会社ディセーノ</a
+    </section>
+
+    <!-- CTA FINAL -->
+    <section class="cta-final" id="cta">
+      <div class="container">
+        <div class="cta-final-wordmark">S<span class="e">e</span>ntio</div>
+        <div class="cta-final-tagline">
+          sentire — to feel, to perceive, to judge
+        </div>
+        <h2>まず、14日間試してみてください。</h2>
+        <p>会社名とURLを入力するだけ。<br />明日、最初の問いが届きます。</p>
+        <a href="app.html#register" class="btn-primary"
+          >まず、会社名とURLだけで試してみる</a
         >
       </div>
-    </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <div class="footer-inner">
+        <span class="footer-brand">Sentio</span>
+        <ul class="footer-links">
+          <li>
+            <a href="https://mdc-diseno.co.jp" target="_blank" rel="noopener"
+              >株式会社ディセーノ</a
+            >
+          </li>
+          <li>
+            <a href="mailto:shotaro.kajitani@mdc-diseno.com">お問い合わせ</a>
+          </li>
+        </ul>
+        <span class="footer-copy">&copy; 2026 Diseno Inc.</span>
+      </div>
+    </footer>
+
+    <script>
+      // Fade-in on scroll
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add("v");
+              observer.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.15 },
+      );
+      document.querySelectorAll(".fi").forEach((el) => observer.observe(el));
+
+      // Demo card data
+      const demoData = {
+        retail: {
+          signal:
+            "Google口コミで「種類が少ない」という声が3ヶ月で2.4倍に増加。一方、Instagram広告のCPAは先月比で18%改善。既存顧客のリピート率は横ばい。",
+          question:
+            "新規顧客は増えているのに、なぜリピーターが増えないのか。商品ラインナップの問題か、それとも購入後の体験に課題があるか。",
+          rationale:
+            "パターン1（表と裏の矛盾）：広告効率の改善と口コミ評価の低下が同時に起きている。新規獲得と既存満足度の乖離を検出。",
+        },
+        manufacturing: {
+          signal:
+            "求人サイトに製造リーダー職を6ヶ月間掲載中、応募ゼロ。同時期に同業3社が同職種の求人を取り下げ。御社の売上は前年比+8%で推移。",
+          question:
+            "売上は伸びているのに、なぜ現場のキーパーソンが採れないのか。競合が求人を止めた理由と、御社の採用条件に見直すべき点はないか。",
+          rationale:
+            "パターン3（戦略と行動の矛盾）：成長に必要な人材投資と、実際の採用状況の乖離を検出。競合動向との交差分析。",
+        },
+        service: {
+          signal:
+            "月次売上は安定。しかし上位3社の取引先が売上の72%を占める。うち1社の業界で規制変更の動きあり。",
+          question:
+            "今の安定は、3社に支えられた安定。そのうち1社の業界が変わろうとしている。この依存構造を、いつ見直すか。",
+          rationale:
+            "パターン5（集中と分散の矛盾）：売上安定の裏にある取引先集中リスク。外部環境の変化との交差で緊急度が上昇。",
+        },
+        it: {
+          signal:
+            "MRRは順調に成長（月次+5%）。しかしチャーンレートが先月から1.2ポイント上昇。NPS回答率も低下傾向。カスタマーサクセス担当の求人を先月削除。",
+          question:
+            "MRRの成長が、解約率の上昇を隠していないか。カスタマーサクセスの体制を縮小したタイミングと、チャーン悪化の相関をどう見るか。",
+          rationale:
+            "パターン2（成長と実態の矛盾）：トップライン成長と顧客満足度低下の乖離を検出。人員配置の変化との交差分析。",
+        },
+      };
+
+      function updateDemo(industry) {
+        document
+          .querySelectorAll(".industry-tab")
+          .forEach((t) => t.classList.remove("active"));
+        document
+          .querySelector(`[data-industry="${industry}"]`)
+          .classList.add("active");
+        const d = demoData[industry];
+        document.getElementById("demo-signal").textContent = d.signal;
+        document.getElementById("demo-question").textContent = d.question;
+        document.getElementById("demo-rationale").textContent = d.rationale;
+      }
+
+      document.querySelectorAll(".industry-tab").forEach((tab) => {
+        tab.addEventListener("click", () => updateDemo(tab.dataset.industry));
+      });
+      updateDemo("retail");
+
+      // Pricing toggle
+      let isYearly = false;
+      function toggleBilling() {
+        isYearly = !isYearly;
+        document
+          .getElementById("billing-toggle")
+          .classList.toggle("on", isYearly);
+        document
+          .getElementById("label-monthly")
+          .classList.toggle("active-label", !isYearly);
+        document
+          .getElementById("label-yearly")
+          .classList.toggle("active-label", isYearly);
+        document.querySelectorAll(".pricing-price").forEach((el) => {
+          const price = isYearly ? el.dataset.yearly : el.dataset.monthly;
+          const suffix = isYearly ? "/年" : "/月";
+          el.innerHTML = price + "<span>" + suffix + "</span>";
+        });
+      }
+    </script>
   </body>
 </html>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>経営者と従業員の間にある、見えない溝の正体 — Sentio</title>
+    <meta
+      name="description"
+      content="経営者と従業員の間には、言葉にならないギャップが存在する。その溝の正体を探り、組織の中で問いを立てることの意味を考える。"
+    />
+    <meta name="keywords" content="経営者 従業員 コミュニケーション ギャップ" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/gap-between-exec-employee.html"
+    />
+    <meta
+      property="og:title"
+      content="経営者と従業員の間にある、見えない溝の正体"
+    />
+    <meta
+      property="og:description"
+      content="経営者と従業員の間には、言葉にならないギャップが存在する。その溝の正体を探り、問いを立てることの意味を考える。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/gap-between-exec-employee.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        経営者と従業員の間にある、<br />見えない溝の正体
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>同じ会社にいるのに、違う景色を見ている</h2>
+      <p>
+        朝礼で話した方針が、午後にはもう忘れられている。全体会議で共有したビジョンに、誰もうなずかない。経営者として、そういう瞬間に覚える孤独は深い。自分は全力で伝えているつもりなのに、なぜ届かないのか。
+      </p>
+      <p>
+        一方で、従業員の側にも言い分がある。「社長は現場を見ていない」「方針がころころ変わる」「数字の話ばかりで、自分たちの仕事がどう繋がっているのかわからない」。こうした声は、経営者の耳にはなかなか届かない。届いたとしても、それが本音かどうかはわからない。
+      </p>
+      <p>
+        この溝は、どちらかが悪いから生まれるものではない。経営者と従業員では、見ている時間軸が違う。経営者は3年後、5年後を見ている。従業員は今月の売上、今週の納期を見ている。同じ会社にいながら、まったく違う景色の中で仕事をしている。
+      </p>
+
+      <h2>言葉が通じないのではなく、前提が違う</h2>
+      <p>
+        「もっと主体的に動いてほしい」と経営者は言う。だが従業員にとって、主体的に動くとはどういうことなのか。判断基準が共有されていなければ、動きようがない。動いた結果が否定されるかもしれないという恐れもある。
+      </p>
+      <p>
+        「なぜ報告が上がってこないのか」と苛立つ経営者がいる。しかし従業員からすれば、何を報告すれば良いのかがわからない。あるいは、報告しても反応がないから、やめてしまったということもある。
+      </p>
+
+      <blockquote>
+        溝の正体は、情報量の差ではなく、「前提の共有」が欠けていることにある。同じ言葉を使っていても、その言葉が指すものが違っていれば、会話は成立しない。
+      </blockquote>
+
+      <p>
+        経営者が「利益率を上げたい」と言うとき、そこには会社の存続、従業員の雇用、次の投資への布石など、複数の意味が込められている。だが従業員が受け取るのは「コストを削れということか」「自分たちの給料が減るのか」という別の解釈かもしれない。
+      </p>
+
+      <h2>溝を埋めるのは、説明ではなく問いかもしれない</h2>
+      <p>
+        多くの経営者は、この溝を「説明不足」で片付けようとする。もっと丁寧に説明すれば伝わるはずだ、と。だが、説明を増やしても溝が埋まらないことは、すでに経験しているのではないだろうか。
+      </p>
+      <p>
+        溝を埋めるきっかけになるのは、説明ではなく、問いかもしれない。「自分は本当に、従業員が見ている景色を知っているだろうか」「伝えたつもりのことは、どう受け取られているだろうか」「主体性がないのは、本人の問題なのか、それとも判断基準を渡していない自分の問題なのか」。
+      </p>
+      <p>
+        こうした問いは、誰かに言われて初めて気づくことが多い。日々の業務に追われている経営者が、自分だけでこの問いにたどり着くのは難しい。だからこそ、外部からの視点が意味を持つ。
+      </p>
+
+      <h2>データが映し出す、言葉にならないギャップ</h2>
+      <p>
+        採用ページには「風通しの良い職場」と書いてあるのに、離職率が業界平均を超えている。求人を常に出し続けているのに、組織の規模が変わらない。こうした数字の矛盾は、経営者と従業員の間にある溝を、別の角度から映し出している。
+      </p>
+      <p>
+        Sentioは、こうしたデータの矛盾を読み取り、経営者に問いを届ける。答えを出すのではなく、「今、立ち止まって考えるべきこと」を一つだけ届ける。その問いが、溝の正体に気づくきっかけになるかもしれない。
+      </p>
+      <p>
+        溝は、一日では埋まらない。しかし、問いを受け取り、考え、自分の言葉で答えることを繰り返すうちに、少しずつ見える景色が変わっていく。それは従業員との関係だけでなく、経営そのものの質を変えていく。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>組織の溝に気づく問いを、<br />毎週届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

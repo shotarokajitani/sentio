@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中小企業にBIツールは必要か。導入前に考えること — Sentio</title>
+    <meta
+      name="description"
+      content="BIツールの導入を考える中小企業の経営者へ。データを見える化する前に、本当に問うべきことは何かを考える。"
+    />
+    <meta name="keywords" content="BIツール 中小企業 経営 必要" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/bi-tool-sme.html"
+    />
+    <meta
+      property="og:title"
+      content="中小企業にBIツールは必要か。導入前に考えること"
+    />
+    <meta
+      property="og:description"
+      content="BIツールの導入を考える中小企業の経営者へ。データの見える化の前に問うべきことを考える。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/bi-tool-sme.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        中小企業にBIツールは必要か。<br />導入前に考えること
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>「データを見える化すれば、経営が変わる」という期待</h2>
+      <p>
+        売上の推移、顧客の構成比、利益率の変動。こうした数字をダッシュボードで一覧できれば、もっと的確な判断ができるはず。そう考えてBIツールの導入を検討する中小企業の経営者は少なくない。
+      </p>
+      <p>
+        大企業ではTableauやPower
+        BIといったツールが当たり前のように使われている。「うちもそろそろ導入しないと遅れるのでは」という焦りもある。展示会やセミナーで見たデモ画面は美しく、導入すれば世界が変わるような気がする。
+      </p>
+      <p>
+        しかし、実際に導入した中小企業の多くが、半年後にはダッシュボードを開かなくなっている。なぜか。
+      </p>
+
+      <h2>データはあるが、問いがない</h2>
+      <p>
+        BIツールは、データを可視化する道具だ。しかし、可視化されたデータを前にして「だから何をするのか」を考えるのは人間の仕事だ。そして、この「だから何をするのか」を考えるためには、その前に「何を知りたいのか」という問いが立っていなければならない。
+      </p>
+      <p>
+        多くの中小企業でBIツールが使われなくなる理由は、この問いが最初から存在しないことにある。「データを見える化したい」という漠然とした動機だけでは、何を見ればいいのかがわからない。グラフは並ぶが、そこから何を読み取るのか、誰も教えてくれない。
+      </p>
+
+      <blockquote>
+        経営に足りていないのは、データの量でも、ダッシュボードの美しさでもない。「今、この数字の中で、何に注目すべきか」という問いだ。問いがなければ、どれだけデータを見える化しても、景色は変わらない。
+      </blockquote>
+
+      <h2>中小企業のデータは、そもそも整っていない</h2>
+      <p>
+        BIツールが力を発揮するためには、整理されたデータが前提になる。売上データ、顧客データ、在庫データが一つのデータベースに統合されていて、定期的に更新されている状態。大企業であれば、専任のデータエンジニアがこの環境を維持している。
+      </p>
+      <p>
+        しかし、従業員5名〜50名の企業では、売上はExcelに手入力、顧客情報は営業担当の頭の中、在庫は紙の台帳、という状態も珍しくない。この状態でBIツールを導入しても、データの入力と整備に膨大な時間がかかり、本業が圧迫される。
+      </p>
+      <p>
+        データ基盤の整備から始めれば正しいが、それには時間と費用がかかる。月額のツール利用料に加えて、導入コンサルティング費用、社内教育の時間。トータルで年間数百万円の投資になることも珍しくない。その投資に見合うリターンが得られるかどうかは、率直に言って不透明だ。
+      </p>
+
+      <h2>本当に欲しいのは、ダッシュボードではないかもしれない</h2>
+      <p>
+        経営者がBIツールに期待しているのは、本当にダッシュボードなのだろうか。おそらく違う。欲しいのは「今、何が起きているのか」を教えてくれる仕組みだ。そしてもっと言えば、「今、何に向き合うべきか」を教えてくれる存在だ。
+      </p>
+      <p>
+        それは、全データを網羅的に可視化することとは違う。むしろ、大量のデータの中から「今週、注目すべき一つのこと」を抽出してくれる方が、経営者にとっては実用的かもしれない。
+      </p>
+      <p>
+        Sentioは、会社の公開データ、財務データ、競合情報を静かに読み取り、そこから見える矛盾や変化を一つの問いに変換して届ける。ダッシュボードを毎朝チェックする時間がない経営者のために、週に一度、メールで届く。見るべきものを、Sentioが選ぶ。
+      </p>
+      <p>
+        BIツールが「すべてを見える化する」道具だとすれば、Sentioは「今週見るべきものだけを届ける」仕組みだ。どちらが自社に合っているか。その問いに向き合うことが、導入を考える前の最初の一歩になる。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>ダッシュボードの代わりに、<br />週に一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KPIを追っているのに、会社が良くなっている気がしない — Sentio</title>
+    <meta
+      name="description"
+      content="KPIは達成している。数字は悪くない。なのに、会社が前に進んでいる実感がない。その違和感の正体と、経営者が本当に見つめるべき問いについて。"
+    />
+    <meta name="keywords" content="KPI 経営 改善 実感" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/kpi-but-no-progress.html"
+    />
+    <meta
+      property="og:title"
+      content="KPIを追っているのに、会社が良くなっている気がしない"
+    />
+    <meta
+      property="og:description"
+      content="KPIは達成している。なのに会社が前に進んでいる実感がない。その違和感の正体と、経営者が見つめるべき問いについて。"
+    />
+    <meta property="og:type" content="article" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/kpi-but-no-progress.html"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
+      .nav-cta {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
+      }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
+      }
+      .article-meta time {
+        margin-right: 16px;
+      }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+      }
+      .article-body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0;
+        padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px;
+        padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e {
+        color: var(--ocean);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
+      @media (max-width: 768px) {
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-06">2026.04.06</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">
+        KPIを追っているのに、<br />会社が良くなっている気がしない
+      </h1>
+    </header>
+
+    <article class="article-body">
+      <h2>数字は青信号。でも、体感は黄信号</h2>
+      <p>
+        月次のKPIレポートを開く。売上目標は達成。顧客数も微増。解約率は許容範囲内。数字だけを見れば、会社は順調に見える。
+      </p>
+      <p>
+        しかし、経営者としての実感はどうだろうか。社員の表情に以前のような活気がない。新しい挑戦をしようという声が社内から聞こえてこない。売上は立っているが、同じ顧客に同じサービスを提供し続けているだけのような気がする。
+      </p>
+      <p>
+        KPIは青信号を示している。しかし、経営者の体感は黄信号だ。この乖離は、どこから来るのか。
+      </p>
+
+      <h2>KPIが映すのは「過去の設計図」</h2>
+      <p>
+        KPIを設定したのはいつだろうか。半年前か、1年前か、あるいはもっと前か。KPIは、設定した時点での「正しさ」を反映している。その時点で会社が向かうべき方向に対して、進捗を測る指標として機能していた。
+      </p>
+      <p>
+        しかし、市場は動いている。顧客の期待は変わっている。社内の状況も変化している。KPIだけが、過去の設計図のまま残り続ける。古い地図を手に歩いていれば、目的地に着いても「ここじゃない」と感じるのは当然だ。
+      </p>
+      <p>
+        KPIの達成と会社の前進が一致しなくなったとき、それはKPIそのものを問い直す時期に来ているサインだ。
+      </p>
+
+      <blockquote>
+        KPIを達成しているのに違和感がある。それは経営者の勘が鈍っているのではなく、指標の方が現実に追いついていないということだ。
+      </blockquote>
+
+      <h2>測れるものだけを追うと、測れないものが壊れる</h2>
+      <p>
+        KPIの本質的な限界は、測定可能なものしか追えないことにある。売上、利益率、顧客数、解約率。これらは測れる。しかし、会社の「勢い」は測れない。チームの「士気」は数値化しにくい。顧客との「信頼関係の深さ」はグラフにならない。
+      </p>
+      <p>
+        売上を追って値引きを繰り返した結果、ブランドの信頼が毀損される。顧客数を追って獲得コストを度外視した結果、利益が圧迫される。短期のKPIを追い続けた結果、長期的な競争力の源泉が失われる。
+      </p>
+      <p>
+        経営者が「良くなっている気がしない」と感じるとき、その感覚は往々にして、KPIでは捉えきれない領域の劣化を察知している。数字には表れない何かが、静かに失われつつあるのだ。
+      </p>
+
+      <h2>KPIの「外側」にある問い</h2>
+      <p>
+        KPIを否定する必要はない。指標がなければ経営は感覚だけの世界になる。しかし、KPIだけでは見えない問いが存在することも事実だ。
+      </p>
+      <p>
+        今の売上の中で、来年も続いている自信があるのはどれくらいか。社員が「この会社で挑戦したい」と思える環境は維持できているか。3年前と比べて、自社の提供価値は進化しているか、それとも同じことを繰り返しているだけか。
+      </p>
+      <p>
+        これらの問いは、KPIのダッシュボードには表示されない。しかし、経営者が本当に向き合うべきは、こうした問いの方ではないだろうか。
+      </p>
+
+      <h2>Sentioが届けるもの</h2>
+      <p>
+        Sentioは、御社のデータを読みながら、KPIの数字だけでは見えない矛盾や変化の兆しを捉え、「今週、考えるべき問い」を一つ届ける。数字が青信号なのに、なぜか前に進んでいる気がしない。その違和感に言葉を与えるための問いだ。
+      </p>
+      <p>
+        KPIは引き続き追えばいい。ただ、その外側に目を向ける時間が、週に一度だけあってもいい。その一つの問いが、経営者の視界を少しだけ広げてくれる。
+      </p>
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>KPIの外側にある問いを、週に一つ。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

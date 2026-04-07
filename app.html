@@ -1421,6 +1421,62 @@
               <label>業種</label>
               <input type="text" id="settings-industry" />
             </div>
+            <div class="settings-field">
+              <label>今、一番気になっていること</label>
+              <div
+                id="settings-concern-group"
+                style="display: flex; flex-direction: column; gap: 8px"
+              >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="もっと伸ばしたいことがある"
+                  />
+                  もっと伸ばしたいことがある</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="止めたいことがある"
+                  />
+                  止めたいことがある</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="始めたいことがある"
+                  />
+                  始めたいことがある</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="守りたいことがある"
+                  />
+                  守りたいことがある</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="決めなければいけないことがある"
+                  />
+                  決めなければいけないことがある</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="settings-concern"
+                    value="誰かに話したいことがある"
+                  />
+                  誰かに話したいことがある</label
+                >
+              </div>
+            </div>
             <button class="settings-save" onclick="saveSettings()">保存</button>
           </div>
 
@@ -1431,10 +1487,35 @@
                 freee
                 またはマネーフォワードと連携すると、財務データに基づいた深い問いが届きます。
               </div>
-              <button class="qa-btn">freee を連携する</button>
-              <button class="qa-btn" style="margin-left: 8px">
-                マネーフォワードを連携する
-              </button>
+              <div id="integration-freee-row" style="margin-bottom: 12px">
+                <button class="qa-btn" onclick="connectAccounting('freee')">
+                  freee を連携する
+                </button>
+                <span
+                  id="integration-freee-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
+              <div id="integration-mf-row">
+                <button
+                  class="qa-btn"
+                  onclick="connectAccounting('moneyforward')"
+                >
+                  マネーフォワードを連携する
+                </button>
+                <span
+                  id="integration-mf-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
             </div>
             <div class="card">
               <div class="card-label">カレンダー連携</div>
@@ -1559,6 +1640,7 @@
         const password = document.getElementById("auth-password").value;
         const errorEl = document.getElementById("auth-error");
         errorEl.style.display = "none";
+        errorEl.style.color = "";
 
         try {
           let result;
@@ -1568,17 +1650,36 @@
               password,
             });
           } else {
-            result = await supabase.auth.signUp({ email, password });
+            result = await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                emailRedirectTo: `${window.location.origin}/app.html`,
+              },
+            });
           }
           if (result.error) {
+            console.error("auth error:", result.error);
             errorEl.textContent = result.error.message;
             errorEl.style.display = "block";
             return;
           }
+
+          // 新規登録で session が無い場合 → メール確認待ち
+          if (authMode === "register" && !result.data.session) {
+            errorEl.style.color = "var(--ocean)";
+            errorEl.textContent =
+              "確認メールを送信しました。メール内のリンクをクリックして登録を完了してください。";
+            errorEl.style.display = "block";
+            return;
+          }
+
           currentUser = result.data.user;
           await checkUserState();
         } catch (err) {
-          errorEl.textContent = "エラーが発生しました。";
+          console.error("handleAuth exception:", err);
+          errorEl.textContent =
+            "エラーが発生しました：" + (err?.message || err);
           errorEl.style.display = "block";
         }
       }
@@ -1672,30 +1773,30 @@
         };
 
         try {
-          const { data: company, error } = await supabase
-            .from("companies")
-            .insert({
-              user_id: currentUser.id,
-              company_name: companyName,
-              url: companyUrl,
-              industry: industry || null,
-              initial_concern: concernLabels[selectedConcern],
-              onboarding_stage: "stage1",
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-          currentCompany = company;
-
-          await supabase.from("subscriptions").insert({
-            company_id: company.id,
-            plan: "starter",
-            status: "trialing",
-            current_period_end: new Date(
-              Date.now() + 14 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-          });
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/register-company`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                company_name: companyName,
+                url: companyUrl,
+                industry: industry || null,
+                initial_concern: concernLabels[selectedConcern],
+              }),
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || "register-company failed");
+          }
+          currentCompany = json.company;
         } catch (err) {
           console.error("Onboarding error:", err);
         }
@@ -1759,6 +1860,10 @@
               currentCompany.url || "";
             document.getElementById("settings-industry").value =
               currentCompany.industry || "";
+            const concernRadio = document.querySelector(
+              `input[name="settings-concern"][value="${currentCompany.initial_concern || ""}"]`,
+            );
+            if (concernRadio) concernRadio.checked = true;
           }
         }
 
@@ -1911,21 +2016,128 @@
       }
 
       // ===== SETTINGS =====
+      // ===== ACCOUNTING INTEGRATIONS =====
+      async function connectAccounting(provider) {
+        if (!currentCompany) return;
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const fn =
+            provider === "freee" ? "freee-oauth" : "moneyforward-oauth";
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/${fn}/authorize?company_id=${currentCompany.id}`,
+            {
+              method: "GET",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.authorize_url) {
+            throw new Error(json.error || "authorize failed");
+          }
+          window.location.href = json.authorize_url;
+        } catch (err) {
+          console.error("connectAccounting error:", err);
+          alert("連携に失敗しました：" + err.message);
+        }
+      }
+
+      async function loadIntegrationStatus() {
+        if (!currentCompany) return;
+        const { data: integrations } = await supabase
+          .from("integrations")
+          .select("type,status,last_synced_at")
+          .eq("company_id", currentCompany.id);
+        const labelMap = {
+          connected: "連携済み",
+          pending: "連携処理中",
+          error: "エラー",
+          disconnected: "未連携",
+        };
+        const renderStatus = (elId, integ) => {
+          const el = document.getElementById(elId);
+          if (!el) return;
+          if (!integ) {
+            el.textContent = "未連携";
+            el.style.color = "var(--mist)";
+            return;
+          }
+          const status = labelMap[integ.status] || integ.status;
+          const last = integ.last_synced_at
+            ? `（最終同期: ${new Date(integ.last_synced_at).toLocaleString("ja-JP")}）`
+            : "";
+          el.textContent = `${status}${last}`;
+          el.style.color =
+            integ.status === "error" ? "#c0392b" : "var(--stone)";
+        };
+        const freee = (integrations || []).find((i) => i.type === "freee");
+        const mf = (integrations || []).find((i) => i.type === "moneyforward");
+        renderStatus("integration-freee-status", freee);
+        renderStatus("integration-mf-status", mf);
+      }
+
+      // OAuthコールバック後の通知
+      (function handleIntegrationCallback() {
+        const params = new URLSearchParams(window.location.search);
+        const integration = params.get("integration");
+        const result = params.get("result");
+        if (integration && result) {
+          if (result === "success") {
+            alert(
+              `${integration === "freee" ? "freee" : "マネーフォワード"}の連携が完了しました。`,
+            );
+          } else {
+            alert(
+              `${integration}の連携に失敗しました：${params.get("reason") || ""}`,
+            );
+          }
+          // クエリを消す
+          const url = new URL(window.location.href);
+          url.searchParams.delete("integration");
+          url.searchParams.delete("result");
+          url.searchParams.delete("reason");
+          window.history.replaceState({}, "", url.toString());
+        }
+      })();
+
       async function saveSettings() {
         if (!currentCompany) return;
-        const { error } = await supabase
-          .from("companies")
-          .update({
-            company_name: document.getElementById("settings-company-name")
-              .value,
-            url: document.getElementById("settings-company-url").value,
-            industry: document.getElementById("settings-industry").value,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", currentCompany.id);
-
-        if (!error) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/update-company-settings`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                company_name: document.getElementById("settings-company-name")
+                  .value,
+                url: document.getElementById("settings-company-url").value,
+                industry: document.getElementById("settings-industry").value,
+                initial_concern:
+                  document.querySelector(
+                    'input[name="settings-concern"]:checked',
+                  )?.value ||
+                  currentCompany.initial_concern ||
+                  null,
+              }),
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || "update failed");
+          }
+          currentCompany = json.company;
           alert("保存しました。");
+        } catch (err) {
+          console.error("saveSettings error:", err);
+          alert("保存に失敗しました。");
         }
       }
 

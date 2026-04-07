@@ -2,26 +2,49 @@
 <html lang="ja">
   <head>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-744VLVHRDP");
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>中小企業のブランド構築。資本なしでできること — Sentio</title>
-    <meta name="description" content="広告予算がなくてもブランドは作れる。中小企業にとっての現実的なブランド構築を考えます。" />
+    <meta
+      name="description"
+      content="広告予算がなくてもブランドは作れる。中小企業にとっての現実的なブランド構築を考えます。"
+    />
     <meta name="keywords" content="ブランド 中小企業 経営 構築" />
-    <link rel="canonical" href="https://www.sentio-ai.jp/blog/brand-building.html" />
-    <meta property="og:title" content="中小企業のブランド構築。資本なしでできること" />
-    <meta property="og:description" content="広告予算がなくてもブランドは作れる。中小企業にとっての現実的なブランド構築を考えます。" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/brand-building.html"
+    />
+    <meta
+      property="og:title"
+      content="中小企業のブランド構築。資本なしでできること"
+    />
+    <meta
+      property="og:description"
+      content="広告予算がなくてもブランドは作れる。中小企業にとっての現実的なブランド構築を考えます。"
+    />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://www.sentio-ai.jp/blog/brand-building.html" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/brand-building.html"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       *,
       *::before,
@@ -43,7 +66,10 @@
         --border: #e5e0da;
         --parchment: #efeae3;
       }
-      html { scroll-behavior: smooth; font-size: 16px; }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
       body {
         font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
@@ -52,11 +78,21 @@
         line-height: 1.8;
         -webkit-font-smoothing: antialiased;
       }
-      a { color: inherit; text-decoration: none; }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
       .nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 56px; height: 60px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
         background: rgba(247, 245, 242, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -64,114 +100,213 @@
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
-        font-weight: 500; font-size: 22px;
-        letter-spacing: 0.12em; color: var(--earth);
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
       }
-      .logo .e { color: var(--ocean); }
-      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
-      .nav-links a:hover { color: var(--earth); }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
       .nav-cta {
-        font-size: 12px; font-weight: 500;
-        padding: 9px 24px; background: var(--ocean);
-        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
       }
-      .nav-cta:hover { opacity: 0.85; }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
       .article-header {
         padding: 140px 56px 60px;
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
       }
       .article-meta {
-        font-size: 12px; color: var(--stone);
-        letter-spacing: 0.06em; margin-bottom: 20px;
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
       }
-      .article-meta time { margin-right: 16px; }
+      .article-meta time {
+        margin-right: 16px;
+      }
       .article-title {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px; font-weight: 400;
-        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
       }
       .article-body {
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
         padding: 0 56px 80px;
       }
       .article-body h2 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400; color: var(--earth);
-        margin: 56px 0 24px; padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
         border-bottom: 0.5px solid var(--border);
       }
       .article-body p {
-        margin-bottom: 24px; font-size: 15px;
-        line-height: 2; color: var(--earth-soft);
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
       }
       .article-body blockquote {
         border-left: 2px solid var(--ocean);
-        margin: 32px 0; padding: 16px 24px;
+        margin: 32px 0;
+        padding: 16px 24px;
         background: var(--ocean-light);
         border-radius: 0 4px 4px 0;
         font-family: "Noto Serif JP", serif;
-        font-size: 15px; color: var(--earth); line-height: 1.9;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
       }
       .article-cta {
-        max-width: 760px; margin: 0 auto 80px;
-        padding: 48px 56px; text-align: center;
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
       }
       .article-cta .cta-box {
         background: var(--white);
         border: 0.5px solid var(--border);
-        border-radius: 8px; padding: 48px 40px;
+        border-radius: 8px;
+        padding: 48px 40px;
       }
       .article-cta .cta-label {
-        font-size: 10px; letter-spacing: 0.18em;
-        color: var(--ocean); margin-bottom: 16px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
       }
       .article-cta h3 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400;
-        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
       }
       .article-cta p {
-        font-size: 14px; color: var(--stone);
-        margin-bottom: 32px; line-height: 1.8;
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
       }
       .btn-primary {
-        display: inline-block; padding: 15px 36px;
-        background: var(--ocean); color: #fff;
-        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
-        border: none; border-radius: 4px; cursor: pointer;
-        transition: opacity 0.2s, transform 0.2s;
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
       }
-      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
       .footer {
         border-top: 0.5px solid var(--border);
         padding: 40px 56px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 11px; color: var(--mist);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
       }
       .footer-logo {
         font-family: "Cormorant Garamond", serif;
-        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         color: var(--stone);
       }
-      .footer-logo .e { color: var(--ocean); }
-      .footer-links { display: flex; gap: 24px; list-style: none; }
-      .footer-links a { color: var(--mist); transition: color 0.2s; }
-      .footer-links a:hover { color: var(--stone); }
-      .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      .footer-logo .e {
+        color: var(--ocean);
       }
-      .back-link:hover { color: var(--ocean); }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
       @media (max-width: 768px) {
-        .nav { padding: 0 20px; }
-        .nav-links { display: none; }
-        .article-header { padding: 100px 20px 40px; }
-        .article-title { font-size: 22px; }
-        .article-body { padding: 0 20px 60px; }
-        .article-cta { padding: 0 20px; }
-        .article-cta .cta-box { padding: 36px 24px; }
-        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
       }
     </style>
   </head>
@@ -190,44 +325,78 @@
         <time datetime="2026-04-07">2026.04.07</time>
         <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
       </div>
-      <h1 class="article-title">中小企業のブランド構築。<br />資本なしでできること</h1>
+      <h1 class="article-title">
+        中小企業のブランド構築。<br />資本なしでできること
+      </h1>
     </header>
 
     <article class="article-body">
       <h2>ブランドは、大企業のものではない</h2>
-      <p>ブランドという言葉を聞くと、大企業の話に聞こえる。広告予算、デザイン費、ブランドマネージャー。中小企業には縁のない世界に思える。</p>
-      <p>しかしブランドの本質は、お金ではない。</p>
-      <p>ブランドは大企業のものだという誤解は根強い。しかし本質はお金ではなく、約束の積み重ねだ。中小企業にもできる。</p>
-      <p>ブランドは大企業のものという誤解は根強い。しかし本質はお金ではなく、約束の積み重ねだ。中小企業にもできる。</p>
+      <p>
+        ブランドという言葉を聞くと、大企業の話に聞こえます。広告予算、デザイン費、ブランドマネージャー。中小企業には縁のない世界に思えます。
+      </p>
+      <p>しかしブランドの本質は、お金ではありません。</p>
+      <p>
+        ブランドは大企業のものだという誤解は根強い。しかし本質はお金ではなく、約束の積み重ねです。中小企業にもできます。
+      </p>
+      <p>
+        ブランドは大企業のものという誤解は根強い。しかし本質はお金ではなく、約束の積み重ねです。中小企業にもできます。
+      </p>
 
       <h2>ブランドは、約束の積み重ね</h2>
-      <p>ブランドとは「この会社はこういうことをする」という顧客の期待値だ。期待に応える行動を積み重ねた結果として、ブランドは生まれる。</p>
-      <p>つまり、お金より時間が大事だ。</p>
-      <p>ブランドは、何をやるかと同じくらい、何をやらないかで決まる。断る基準を持っている会社は、ブランドの輪郭が立ち上がる。</p>
-      <p>ブランドは何をやるかと同じくらい、何をやらないかで決まる。断る基準を持っている会社は、ブランドの輪郭が立ち上がる。</p>
+      <p>
+        ブランドとは「この会社はこういうことをする」という顧客の期待値です。期待に応える行動を積み重ねた結果として、ブランドは生まれます。
+      </p>
+      <p>つまり、お金より時間が大事です。</p>
+      <p>
+        ブランドは、何をやるかと同じくらい、何をやらないかで決まります。断る基準を持っている会社は、ブランドの輪郭が立ち上がります。
+      </p>
+      <p>
+        ブランドは何をやるかと同じくらい、何をやらないかで決まります。断る基準を持っている会社は、ブランドの輪郭が立ち上がります。
+      </p>
 
       <h2>「何を断るか」がブランドを作る</h2>
-      <p>中小企業は、何でもやろうとするとブランドが薄まる。何をやるかと同じくらい、何をやらないかが大事だ。</p>
-      <p>断ることは勇気が要る。しかし、断り続けた結果として、自社のブランドが立ち上がる。</p>
-      <p>断ることは勇気が要る。短期の売上を逃すからだ。しかし長期で見ると、断った数だけブランドは強くなる。</p>
-      <p>発信は量より一貫性が効く。同じトーンで言い続けると、記憶される。</p>
-      <blockquote>「断る基準を作ったときから、ブランドが言葉になり始めた。」<br />— ある経営者の言葉</blockquote>
+      <p>
+        中小企業は、何でもやろうとするとブランドが薄まる。何をやるかと同じくらい、何をやらないかが大事です。
+      </p>
+      <p>
+        断ることは勇気が要る。しかし、断り続けた結果として、自社のブランドが立ち上がります。
+      </p>
+      <p>
+        断ることは勇気が要る。短期の売上を逃すからです。しかし長期で見ると、断った数だけブランドは強くなります。
+      </p>
+      <p>発信は量より一貫性が効きます。同じトーンで言い続けると、記憶される。</p>
+      <blockquote>
+        「断る基準を作ったときから、ブランドが言葉になり始めた。」<br />—
+        ある経営者の言葉
+      </blockquote>
 
       <h2>発信は、量より一貫性</h2>
-      <p>SNSや記事で発信するときも、量より一貫性が効く。同じトーン、同じ価値観、同じスタンスを言い続けると、ブランドは記憶に残る。</p>
-      <p>一貫性は、お金で買えない資源だ。</p>
-      <p>発信は量より一貫性が効く。同じトーンで言い続けると、記憶される。</p>
-      <p>ブランドが立ち上がる瞬間は、自社が言っていることを顧客が同じ言葉で語り始めたときだ。</p>
+      <p>
+        SNSや記事で発信するときも、量より一貫性が効きます。同じトーン、同じ価値観、同じスタンスを言い続けると、ブランドは記憶に残ります。
+      </p>
+      <p>一貫性は、お金で買えない資源です。</p>
+      <p>発信は量より一貫性が効きます。同じトーンで言い続けると、記憶される。</p>
+      <p>
+        ブランドが立ち上がる瞬間は、自社が言っていることを顧客が同じ言葉で語り始めたときです。
+      </p>
 
       <h2>ブランドの前に、自分に問うこと</h2>
-      <p>ブランドを作る前に、「自社は何を約束する会社か」を問いたい。約束が言語化できれば、ブランドの輪郭は自然に見えてくる。</p>
-      <p>約束が曖昧なまま発信を増やすと、ブランドは混乱する。</p>
+      <p>
+        ブランドを作る前に、「自社は何を約束する会社か」を問いたい。約束が言語化できれば、ブランドの輪郭は自然に見えてきます。
+      </p>
+      <p>約束が曖昧なまま発信を増やすと、ブランドは混乱します。</p>
 
       <h2>ブランドが立ち上がる瞬間</h2>
-      <p>ブランドが立ち上がる瞬間は、自社が言っていることを、顧客が同じ言葉で語り始めたときだ。一致した瞬間に、ブランドは生まれる。</p>
-      <p>そのためには、自社の言葉を磨き続ける必要がある。曖昧な言葉は、誰も繰り返さない。</p>
-      <p>ブランド構築に近道はない。しかし方向さえ間違えなければ、時間が味方になってくれる。</p>
-
+      <p>
+        ブランドが立ち上がる瞬間は、自社が言っていることを、顧客が同じ言葉で語り始めたときです。一致した瞬間に、ブランドは生まれます。
+      </p>
+      <p>
+        そのためには、自社の言葉を磨き続ける必要があります。曖昧な言葉は、誰も繰り返さない。
+      </p>
+      <p>
+        ブランド構築に近道はない。しかし方向さえ間違えなければ、時間が味方になってくれる。
+      </p>
     </article>
 
     <section class="article-cta">

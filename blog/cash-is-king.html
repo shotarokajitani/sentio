@@ -2,26 +2,51 @@
 <html lang="ja">
   <head>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-744VLVHRDP");
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>売上より大事なキャッシュフロー。中小企業が知るべき現実 — Sentio</title>
-    <meta name="description" content="売上が伸びているのに会社が苦しい。その現象の正体と、経営者が日々持つべき問いを考えます。" />
+    <title>
+      売上より大事なキャッシュフロー。中小企業が知るべき現実 — Sentio
+    </title>
+    <meta
+      name="description"
+      content="売上が伸びているのに会社が苦しい。その現象の正体と、経営者が日々持つべき問いを考えます。"
+    />
     <meta name="keywords" content="キャッシュフロー 中小企業 経営 資金" />
-    <link rel="canonical" href="https://www.sentio-ai.jp/blog/cash-is-king.html" />
-    <meta property="og:title" content="売上より大事なキャッシュフロー。中小企業が知るべき現実" />
-    <meta property="og:description" content="売上が伸びているのに会社が苦しい。その現象の正体と、経営者が日々持つべき問いを考えます。" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/cash-is-king.html"
+    />
+    <meta
+      property="og:title"
+      content="売上より大事なキャッシュフロー。中小企業が知るべき現実"
+    />
+    <meta
+      property="og:description"
+      content="売上が伸びているのに会社が苦しい。その現象の正体と、経営者が日々持つべき問いを考えます。"
+    />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://www.sentio-ai.jp/blog/cash-is-king.html" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/cash-is-king.html"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       *,
       *::before,
@@ -43,7 +68,10 @@
         --border: #e5e0da;
         --parchment: #efeae3;
       }
-      html { scroll-behavior: smooth; font-size: 16px; }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
       body {
         font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
@@ -52,11 +80,21 @@
         line-height: 1.8;
         -webkit-font-smoothing: antialiased;
       }
-      a { color: inherit; text-decoration: none; }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
       .nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 56px; height: 60px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
         background: rgba(247, 245, 242, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -64,114 +102,213 @@
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
-        font-weight: 500; font-size: 22px;
-        letter-spacing: 0.12em; color: var(--earth);
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
       }
-      .logo .e { color: var(--ocean); }
-      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
-      .nav-links a:hover { color: var(--earth); }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
       .nav-cta {
-        font-size: 12px; font-weight: 500;
-        padding: 9px 24px; background: var(--ocean);
-        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
       }
-      .nav-cta:hover { opacity: 0.85; }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
       .article-header {
         padding: 140px 56px 60px;
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
       }
       .article-meta {
-        font-size: 12px; color: var(--stone);
-        letter-spacing: 0.06em; margin-bottom: 20px;
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
       }
-      .article-meta time { margin-right: 16px; }
+      .article-meta time {
+        margin-right: 16px;
+      }
       .article-title {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px; font-weight: 400;
-        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
       }
       .article-body {
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
         padding: 0 56px 80px;
       }
       .article-body h2 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400; color: var(--earth);
-        margin: 56px 0 24px; padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
         border-bottom: 0.5px solid var(--border);
       }
       .article-body p {
-        margin-bottom: 24px; font-size: 15px;
-        line-height: 2; color: var(--earth-soft);
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
       }
       .article-body blockquote {
         border-left: 2px solid var(--ocean);
-        margin: 32px 0; padding: 16px 24px;
+        margin: 32px 0;
+        padding: 16px 24px;
         background: var(--ocean-light);
         border-radius: 0 4px 4px 0;
         font-family: "Noto Serif JP", serif;
-        font-size: 15px; color: var(--earth); line-height: 1.9;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
       }
       .article-cta {
-        max-width: 760px; margin: 0 auto 80px;
-        padding: 48px 56px; text-align: center;
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
       }
       .article-cta .cta-box {
         background: var(--white);
         border: 0.5px solid var(--border);
-        border-radius: 8px; padding: 48px 40px;
+        border-radius: 8px;
+        padding: 48px 40px;
       }
       .article-cta .cta-label {
-        font-size: 10px; letter-spacing: 0.18em;
-        color: var(--ocean); margin-bottom: 16px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
       }
       .article-cta h3 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400;
-        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
       }
       .article-cta p {
-        font-size: 14px; color: var(--stone);
-        margin-bottom: 32px; line-height: 1.8;
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
       }
       .btn-primary {
-        display: inline-block; padding: 15px 36px;
-        background: var(--ocean); color: #fff;
-        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
-        border: none; border-radius: 4px; cursor: pointer;
-        transition: opacity 0.2s, transform 0.2s;
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
       }
-      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
       .footer {
         border-top: 0.5px solid var(--border);
         padding: 40px 56px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 11px; color: var(--mist);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
       }
       .footer-logo {
         font-family: "Cormorant Garamond", serif;
-        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         color: var(--stone);
       }
-      .footer-logo .e { color: var(--ocean); }
-      .footer-links { display: flex; gap: 24px; list-style: none; }
-      .footer-links a { color: var(--mist); transition: color 0.2s; }
-      .footer-links a:hover { color: var(--stone); }
-      .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      .footer-logo .e {
+        color: var(--ocean);
       }
-      .back-link:hover { color: var(--ocean); }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
       @media (max-width: 768px) {
-        .nav { padding: 0 20px; }
-        .nav-links { display: none; }
-        .article-header { padding: 100px 20px 40px; }
-        .article-title { font-size: 22px; }
-        .article-body { padding: 0 20px 60px; }
-        .article-cta { padding: 0 20px; }
-        .article-cta .cta-box { padding: 36px 24px; }
-        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
       }
     </style>
   </head>
@@ -190,44 +327,86 @@
         <time datetime="2026-04-07">2026.04.07</time>
         <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
       </div>
-      <h1 class="article-title">売上より大事なキャッシュフロー。<br />中小企業が知るべき現実</h1>
+      <h1 class="article-title">
+        売上より大事なキャッシュフロー。<br />中小企業が知るべき現実
+      </h1>
     </header>
 
     <article class="article-body">
       <h2>売上は過去最高。なのに資金繰りは苦しい</h2>
-      <p>決算は黒字、売上は前年比120%。それなのに来月の支払いを考えると胃が痛い。中小企業の経営者なら一度は経験する状況だ。</p>
-      <p>成長と資金繰りの苦しさは矛盾しない。むしろ成長期こそ、キャッシュは枯れやすい。</p>
-      <p>売上が伸びている時期の資金繰りは、停滞期よりも危険になることがある。仕入れや人件費の先払いが膨らむのに、回収は追いつかない。成長に殺される、という言葉は誇張ではない。</p>
-      <p>売上の伸びは祝祭になりやすい。社員も喜ぶ、銀行も評価する、自分も達成感を得る。しかし祝祭の裏側で、現金は静かに減っていることがある。</p>
+      <p>
+        決算は黒字、売上は前年比120%。それなのに来月の支払いを考えると胃が痛い。中小企業の経営者なら一度は経験する状況です。
+      </p>
+      <p>
+        成長と資金繰りの苦しさは矛盾しません。むしろ成長期こそ、キャッシュは枯れやすい。
+      </p>
+      <p>
+        売上が伸びている時期の資金繰りは、停滞期よりも危険になることがあります。仕入れや人件費の先払いが膨らむのに、回収は追いつかない。成長に殺される、という言葉は誇張ではありません。
+      </p>
+      <p>
+        売上の伸びは祝祭になりやすい。社員も喜ぶ、銀行も評価する、自分も達成感を得ます。しかし祝祭の裏側で、現金は静かに減っていることがあります。
+      </p>
 
       <h2>黒字倒産という言葉が意味すること</h2>
-      <p>会計上の利益と、銀行口座にある現金は別ものだ。売掛金は売上に計上されるが、入金は数か月後。仕入れや人件費は今すぐ出ていく。この時間差が大きくなるほど、会社は資金的に薄くなる。</p>
-      <p>黒字倒産という言葉は、経営の常識として知っているはずなのに、自分ごととして感じるのは難しい。</p>
-      <p>決算書だけ見ていると黒字に見える。しかし通帳を見ると残高が薄い。この乖離が起きている経営者は、まず資金繰り表の精度を上げる必要がある。</p>
-      <p>資金繰りを見るタイミングが月一回の経営者と、週一回の経営者では、判断のスピードが違う。週一回見ていれば、来月の不足は今動けば防げる。</p>
+      <p>
+        会計上の利益と、銀行口座にある現金は別ものです。売掛金は売上に計上されるが、入金は数か月後。仕入れや人件費は今すぐ出ていきます。この時間差が大きくなるほど、会社は資金的に薄くなります。
+      </p>
+      <p>
+        黒字倒産という言葉は、経営の常識として知っているはずなのに、自分ごととして感じるのは難しい。
+      </p>
+      <p>
+        決算書だけ見ていると黒字に見えます。しかし通帳を見ると残高が薄い。この乖離が起きている経営者は、まず資金繰り表の精度を上げる必要があります。
+      </p>
+      <p>
+        資金繰りを見るタイミングが月一回の経営者と、週一回の経営者では、判断のスピードが違います。週一回見ていれば、来月の不足は今動けば防げる。
+      </p>
 
       <h2>数字を見るタイミングが、結果を変える</h2>
-      <p>資金繰り表を月末に見る経営者と、毎週見る経営者では、判断のスピードが違う。週単位で見えていれば、来月の不足は今動けば防げる。月次で見ていると、気づいたときには手遅れになる。</p>
-      <p>頻度を上げるだけで、経営判断の自由度は変わる。</p>
-      <p>週次で資金繰りを把握している経営者は、月次の経営者より3か月先を見ている。見える時間軸が長いほど、選択肢は増える。</p>
-      <p>回収サイクルを1週間早めるだけで、運転資金の必要額は大きく変わる。これは交渉さえできれば、お金をかけずに実現できる改善だ。</p>
-      <blockquote>「キャッシュが減っていく感覚を知らない経営は、本当の経営ではない。」<br />— ある経営者の言葉</blockquote>
+      <p>
+        資金繰り表を月末に見る経営者と、毎週見る経営者では、判断のスピードが違います。週単位で見えていれば、来月の不足は今動けば防げる。月次で見ていると、気づいたときには手遅れになります。
+      </p>
+      <p>頻度を上げるだけで、経営判断の自由度は変わります。</p>
+      <p>
+        週次で資金繰りを把握している経営者は、月次の経営者より3か月先を見ています。見える時間軸が長いほど、選択肢は増えます。
+      </p>
+      <p>
+        回収サイクルを1週間早めるだけで、運転資金の必要額は大きく変わります。これは交渉さえできれば、お金をかけずに実現できる改善です。
+      </p>
+      <blockquote>
+        「キャッシュが減っていく感覚を知らない経営は、本当の経営ではありません。」<br />—
+        ある経営者の言葉
+      </blockquote>
 
       <h2>売上を追うか、回収を追うか</h2>
-      <p>売上を追う組織と、回収を追う組織では、文化が違ってくる。前者は受注を称え、後者は入金を称える。どちらが偉いという話ではない。中小企業では、両方を両立させないと続かない。</p>
-      <p>回収条件の交渉、与信管理、滞納の早期発見。地味だが効く。</p>
-      <p>回収条件の交渉は気まずい。しかし気まずさを避けて条件を放置すると、そのツケはすべて経営者の不眠に変わる。</p>
-      <p>キャッシュが薄くなると、選択肢が消える。選択肢のない経営は、感情的な経営になる。だから現金は心の余裕でもある。</p>
+      <p>
+        売上を追う組織と、回収を追う組織では、文化が違ってきます。前者は受注を称え、後者は入金を称える。どちらが偉いという話ではありません。中小企業では、両方を両立させないと続かない。
+      </p>
+      <p>回収条件の交渉、与信管理、滞納の早期発見。地味だが効きます。</p>
+      <p>
+        回収条件の交渉は気まずい。しかし気まずさを避けて条件を放置すると、そのツケはすべて経営者の不眠に変わります。
+      </p>
+      <p>
+        キャッシュが薄くなると、選択肢が消えます。選択肢のない経営は、感情的な経営になります。だから現金は心の余裕でもあります。
+      </p>
 
       <h2>キャッシュフローの数字の奥にある問い</h2>
-      <p>資金繰りが苦しいとき、経営者が本当に向き合うべきは数字そのものではない。「自分は何を恐れて、いつまで動かずにいるのか」という問いだ。</p>
-      <p>値上げ、与信締め、不採算の整理。やるべきと分かっていることを先送りしているとき、キャッシュは静かに減っていく。</p>
+      <p>
+        資金繰りが苦しいとき、経営者が本当に向き合うべきは数字そのものではありません。「自分は何を恐れて、いつまで動かずにいるのか」という問いです。
+      </p>
+      <p>
+        値上げ、与信締め、不採算の整理。やるべきと分かっていることを先送りしているとき、キャッシュは静かに減っていきます。
+      </p>
 
       <h2>キャッシュを守る習慣</h2>
-      <p>キャッシュフローを守るために、特別なツールは必要ない。Excelで十分だ。大事なのは、毎週決まった曜日に必ず開く、という習慣だ。</p>
-      <p>数字を週次で見るようになると、月初の不安が消える。来月の現金が予測できているからだ。予測できる経営は、感情的な経営から解放される。</p>
-      <p>そして、苦しいとき何を先送りしてはいけないかが見えてくる。値上げ、与信見直し、不採算撤退。これらは早く動くほどダメージが小さい。</p>
-
+      <p>
+        キャッシュフローを守るために、特別なツールは必要ない。Excelで十分です。大事なのは、毎週決まった曜日に必ず開く、という習慣です。
+      </p>
+      <p>
+        数字を週次で見るようになると、月初の不安が消えます。来月の現金が予測できているからです。予測できる経営は、感情的な経営から解放される。
+      </p>
+      <p>
+        そして、苦しいとき何を先送りしてはいけないかが見えてきます。値上げ、与信見直し、不採算撤退。これらは早く動くほどダメージが小さい。
+      </p>
     </article>
 
     <section class="article-cta">

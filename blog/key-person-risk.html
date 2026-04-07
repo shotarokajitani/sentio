@@ -2,26 +2,49 @@
 <html lang="ja">
   <head>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-744VLVHRDP");
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>キーマンリスクに気づいたとき、経営者がすべきこと — Sentio</title>
-    <meta name="description" content="特定の社員に業務が集中している状態。気づいてはいるが動けない経営者へ、最初の一歩を考えます。" />
+    <meta
+      name="description"
+      content="特定の社員に業務が集中している状態。気づいてはいるが動けない経営者へ、最初の一歩を考えます。"
+    />
     <meta name="keywords" content="キーマン リスク 経営 組織" />
-    <link rel="canonical" href="https://www.sentio-ai.jp/blog/key-person-risk.html" />
-    <meta property="og:title" content="キーマンリスクに気づいたとき、経営者がすべきこと" />
-    <meta property="og:description" content="特定の社員に業務が集中している状態。気づいてはいるが動けない経営者へ、最初の一歩を考えます。" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/key-person-risk.html"
+    />
+    <meta
+      property="og:title"
+      content="キーマンリスクに気づいたとき、経営者がすべきこと"
+    />
+    <meta
+      property="og:description"
+      content="特定の社員に業務が集中している状態。気づいてはいるが動けない経営者へ、最初の一歩を考えます。"
+    />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://www.sentio-ai.jp/blog/key-person-risk.html" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/key-person-risk.html"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       *,
       *::before,
@@ -43,7 +66,10 @@
         --border: #e5e0da;
         --parchment: #efeae3;
       }
-      html { scroll-behavior: smooth; font-size: 16px; }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
       body {
         font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
@@ -52,11 +78,21 @@
         line-height: 1.8;
         -webkit-font-smoothing: antialiased;
       }
-      a { color: inherit; text-decoration: none; }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
       .nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 56px; height: 60px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
         background: rgba(247, 245, 242, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -64,114 +100,213 @@
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
-        font-weight: 500; font-size: 22px;
-        letter-spacing: 0.12em; color: var(--earth);
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
       }
-      .logo .e { color: var(--ocean); }
-      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
-      .nav-links a:hover { color: var(--earth); }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
       .nav-cta {
-        font-size: 12px; font-weight: 500;
-        padding: 9px 24px; background: var(--ocean);
-        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
       }
-      .nav-cta:hover { opacity: 0.85; }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
       .article-header {
         padding: 140px 56px 60px;
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
       }
       .article-meta {
-        font-size: 12px; color: var(--stone);
-        letter-spacing: 0.06em; margin-bottom: 20px;
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
       }
-      .article-meta time { margin-right: 16px; }
+      .article-meta time {
+        margin-right: 16px;
+      }
       .article-title {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px; font-weight: 400;
-        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
       }
       .article-body {
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
         padding: 0 56px 80px;
       }
       .article-body h2 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400; color: var(--earth);
-        margin: 56px 0 24px; padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
         border-bottom: 0.5px solid var(--border);
       }
       .article-body p {
-        margin-bottom: 24px; font-size: 15px;
-        line-height: 2; color: var(--earth-soft);
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
       }
       .article-body blockquote {
         border-left: 2px solid var(--ocean);
-        margin: 32px 0; padding: 16px 24px;
+        margin: 32px 0;
+        padding: 16px 24px;
         background: var(--ocean-light);
         border-radius: 0 4px 4px 0;
         font-family: "Noto Serif JP", serif;
-        font-size: 15px; color: var(--earth); line-height: 1.9;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
       }
       .article-cta {
-        max-width: 760px; margin: 0 auto 80px;
-        padding: 48px 56px; text-align: center;
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
       }
       .article-cta .cta-box {
         background: var(--white);
         border: 0.5px solid var(--border);
-        border-radius: 8px; padding: 48px 40px;
+        border-radius: 8px;
+        padding: 48px 40px;
       }
       .article-cta .cta-label {
-        font-size: 10px; letter-spacing: 0.18em;
-        color: var(--ocean); margin-bottom: 16px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
       }
       .article-cta h3 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400;
-        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
       }
       .article-cta p {
-        font-size: 14px; color: var(--stone);
-        margin-bottom: 32px; line-height: 1.8;
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
       }
       .btn-primary {
-        display: inline-block; padding: 15px 36px;
-        background: var(--ocean); color: #fff;
-        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
-        border: none; border-radius: 4px; cursor: pointer;
-        transition: opacity 0.2s, transform 0.2s;
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
       }
-      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
       .footer {
         border-top: 0.5px solid var(--border);
         padding: 40px 56px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 11px; color: var(--mist);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
       }
       .footer-logo {
         font-family: "Cormorant Garamond", serif;
-        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         color: var(--stone);
       }
-      .footer-logo .e { color: var(--ocean); }
-      .footer-links { display: flex; gap: 24px; list-style: none; }
-      .footer-links a { color: var(--mist); transition: color 0.2s; }
-      .footer-links a:hover { color: var(--stone); }
-      .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      .footer-logo .e {
+        color: var(--ocean);
       }
-      .back-link:hover { color: var(--ocean); }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
       @media (max-width: 768px) {
-        .nav { padding: 0 20px; }
-        .nav-links { display: none; }
-        .article-header { padding: 100px 20px 40px; }
-        .article-title { font-size: 22px; }
-        .article-body { padding: 0 20px 60px; }
-        .article-cta { padding: 0 20px; }
-        .article-cta .cta-box { padding: 36px 24px; }
-        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
       }
     </style>
   </head>
@@ -190,44 +325,86 @@
         <time datetime="2026-04-07">2026.04.07</time>
         <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
       </div>
-      <h1 class="article-title">キーマンリスクに気づいたとき、<br />経営者がすべきこと</h1>
+      <h1 class="article-title">
+        キーマンリスクに気づいたとき、<br />経営者がすべきこと
+      </h1>
     </header>
 
     <article class="article-body">
       <h2>「あの人がいないと回らない」状態</h2>
-      <p>特定の社員が辞めると、業務が止まる。引き継ぎ資料はなく、属人化したノウハウがその人の頭の中だけにある。経営者はうすうす気づいている。しかし、その人が辞める気配はないから、対応を後回しにしている。</p>
-      <p>キーマンリスクは、起きてから気づく種類のリスクではない。気づいているのに動けないリスクだ。</p>
-      <p>キーマンが優秀であればあるほど、経営者は依存に気づきにくい。優秀さに支えられて目の前が回っているからだ。気づくのは、その人が体調を崩した時か、退職を切り出した時だ。</p>
-      <p>キーマンに依存していることを経営者が認めたくない理由の一つは、認めた瞬間に対処の責任が自分に降りかかるからだ。だから無意識に話題を避ける。</p>
+      <p>
+        特定の社員が辞めると、業務が止まります。引き継ぎ資料はなく、属人化したノウハウがその人の頭の中だけにあります。経営者はうすうす気づいています。しかし、その人が辞める気配はないから、対応を後回しにしています。
+      </p>
+      <p>
+        キーマンリスクは、起きてから気づく種類のリスクではありません。気づいているのに動けないリスクです。
+      </p>
+      <p>
+        キーマンが優秀であればあるほど、経営者は依存に気づきにくい。優秀さに支えられて目の前が回っているからです。気づくのは、その人が体調を崩した時か、退職を切り出した時です。
+      </p>
+      <p>
+        キーマンに依存していることを経営者が認めたくない理由の一つは、認めた瞬間に対処の責任が自分に降りかかるからです。だから無意識に話題を避けます。
+      </p>
 
       <h2>なぜキーマンが生まれてしまうのか</h2>
-      <p>キーマンが生まれるのは怠慢ではない。多くの場合、その人が優秀で、期待に応え続けてきた結果だ。任せれば確実にやってくれる。だから任せる。任せるほど、その人にしかできない仕事になる。</p>
-      <p>キーマンリスクは、組織の成果の副作用として生まれる。</p>
-      <p>属人化したノウハウは、本人にとっても重荷になっていることが多い。「自分が休めない」というプレッシャーは、いずれ離職の理由になる。</p>
-      <p>属人化は怠慢ではなく、優秀さの結果だ。だから責めるのではなく、構造を変える視点で向き合うべきだ。</p>
+      <p>
+        キーマンが生まれるのは怠慢ではありません。多くの場合、その人が優秀で、期待に応え続けてきた結果です。任せれば確実にやってくれる。だから任せます。任せるほど、その人にしかできない仕事になります。
+      </p>
+      <p>キーマンリスクは、組織の成果の副作用として生まれます。</p>
+      <p>
+        属人化したノウハウは、本人にとっても重荷になっていることが多い。「自分が休めない」というプレッシャーは、いずれ離職の理由になります。
+      </p>
+      <p>
+        属人化は怠慢ではなく、優秀さの結果です。だから責めるのではなく、構造を変える視点で向き合うべきです。
+      </p>
 
       <h2>標準化と属人化のあいだ</h2>
-      <p>すべての業務を標準化することはできない。属人的なスキルこそが、競争優位の源泉である場合もある。問題は、標準化と属人化の境界が経営者の中で曖昧なことだ。</p>
-      <p>「この仕事はこの人にしかできない」と「この仕事はこの人にしかさせていない」は別のものだ。</p>
-      <p>標準化と属人化の境界を曖昧にしておくと、組織はいつまでも個人の善意に依存し続ける。境界を引くのは経営者の仕事だ。</p>
-      <p>キーマンが「自分が休めない」と感じている状態は、本人にとってもストレスだ。標準化は本人を守る行為でもある。</p>
-      <blockquote>「キーマンを守るのではなく、キーマンが安心して休める組織を作るべきだった。」<br />— ある経営者の言葉</blockquote>
+      <p>
+        すべての業務を標準化することはできません。属人的なスキルこそが、競争優位の源泉である場合もあります。問題は、標準化と属人化の境界が経営者の中で曖昧なことです。
+      </p>
+      <p>
+        「この仕事はこの人にしかできない」と「この仕事はこの人にしかさせていない」は別のものです。
+      </p>
+      <p>
+        標準化と属人化の境界を曖昧にしておくと、組織はいつまでも個人の善意に依存し続けます。境界を引くのは経営者の仕事です。
+      </p>
+      <p>
+        キーマンが「自分が休めない」と感じている状態は、本人にとってもストレスです。標準化は本人を守る行為でもあります。
+      </p>
+      <blockquote>
+        「キーマンを守るのではなく、キーマンが安心して休める組織を作るべきでした。」<br />—
+        ある経営者の言葉
+      </blockquote>
 
       <h2>リスクに気づいた瞬間が、最も動けるタイミング</h2>
-      <p>キーマンリスクは、トラブルが起きてから対応すると最も高くつく。気づいた今が、最もコストの低いタイミングだ。</p>
-      <p>本人と話す、ペアで仕事をさせる、ドキュメント化する。動き出せば1か月で始められる。</p>
-      <p>リスクは見て見ぬふりをした瞬間に膨らむ。一方、向き合った瞬間から縮み始める。</p>
-      <p>リスクに気づいた瞬間が、最も低コストで動けるタイミングだ。トラブルが起きてから動くと、コストは10倍に跳ね上がる。</p>
+      <p>
+        キーマンリスクは、トラブルが起きてから対応すると最も高くつく。気づいた今が、最もコストの低いタイミングです。
+      </p>
+      <p>
+        本人と話す、ペアで仕事をさせる、ドキュメント化します。動き出せば1か月で始められる。
+      </p>
+      <p>
+        リスクは見て見ぬふりをした瞬間に膨らむ。一方、向き合った瞬間から縮み始めます。
+      </p>
+      <p>
+        リスクに気づいた瞬間が、最も低コストで動けるタイミングです。トラブルが起きてから動くと、コストは10倍に跳ね上がります。
+      </p>
 
       <h2>経営者が向き合うべき問い</h2>
-      <p>キーマンリスクに向き合う前に、経営者が自分に問うべきことがある。「自分はこのリスクを、いつから知っていたか」。答えが半年前なら、なぜ動かなかったのかを知る必要がある。</p>
-      <p>リスクの正体は人ではなく、自分の先送りの中にある。</p>
+      <p>
+        キーマンリスクに向き合う前に、経営者が自分に問うべきことがあります。「自分はこのリスクを、いつから知っていたか」。答えが半年前なら、なぜ動かなかったのかを知る必要があります。
+      </p>
+      <p>リスクの正体は人ではなく、自分の先送りの中にあります。</p>
 
       <h2>今日からできる第一歩</h2>
-      <p>キーマンリスクへの第一歩は、その人を呼んで「今、何に困っているか」を聞くことだ。改善策を立てるためではない。本人の抱えているものを言語化するためだ。</p>
-      <p>次に、その人の業務のうち1つだけでいいから、別の人とペアで進めるようにする。1か月続けるだけで、ノウハウは少しずつ移転する。</p>
-      <p>完璧な引き継ぎは目指さない。完璧を目指すと進まない。8割でいいから動かす、というスタンスが、属人化を緩めていく。</p>
-
+      <p>
+        キーマンリスクへの第一歩は、その人を呼んで「今、何に困っているか」を聞くことです。改善策を立てるためではありません。本人の抱えているものを言語化するためです。
+      </p>
+      <p>
+        次に、その人の業務のうち1つだけでいいから、別の人とペアで進めるようにします。1か月続けるだけで、ノウハウは少しずつ移転します。
+      </p>
+      <p>
+        完璧な引き継ぎは目指さない。完璧を目指すと進まない。8割でいいから動かす、というスタンスが、属人化を緩めていきます。
+      </p>
     </article>
 
     <section class="article-cta">

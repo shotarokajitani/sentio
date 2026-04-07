@@ -2,26 +2,46 @@
 <html lang="ja">
   <head>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-744VLVHRDP");
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>経営理念は必要か。作る前に考えること — Sentio</title>
-    <meta name="description" content="経営理念を作った方がいいのか。作る前に考えるべきことを整理します。" />
+    <meta
+      name="description"
+      content="経営理念を作った方がいいのか。作る前に考えるべきことを整理します。"
+    />
     <meta name="keywords" content="経営理念 ミッション 中小企業 経営" />
-    <link rel="canonical" href="https://www.sentio-ai.jp/blog/management-philosophy.html" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/management-philosophy.html"
+    />
     <meta property="og:title" content="経営理念は必要か。作る前に考えること" />
-    <meta property="og:description" content="経営理念を作った方がいいのか。作る前に考えるべきことを整理します。" />
+    <meta
+      property="og:description"
+      content="経営理念を作った方がいいのか。作る前に考えるべきことを整理します。"
+    />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://www.sentio-ai.jp/blog/management-philosophy.html" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/management-philosophy.html"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       *,
       *::before,
@@ -43,7 +63,10 @@
         --border: #e5e0da;
         --parchment: #efeae3;
       }
-      html { scroll-behavior: smooth; font-size: 16px; }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
       body {
         font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
@@ -52,11 +75,21 @@
         line-height: 1.8;
         -webkit-font-smoothing: antialiased;
       }
-      a { color: inherit; text-decoration: none; }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
       .nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 56px; height: 60px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
         background: rgba(247, 245, 242, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -64,114 +97,213 @@
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
-        font-weight: 500; font-size: 22px;
-        letter-spacing: 0.12em; color: var(--earth);
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
       }
-      .logo .e { color: var(--ocean); }
-      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
-      .nav-links a:hover { color: var(--earth); }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
       .nav-cta {
-        font-size: 12px; font-weight: 500;
-        padding: 9px 24px; background: var(--ocean);
-        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
       }
-      .nav-cta:hover { opacity: 0.85; }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
       .article-header {
         padding: 140px 56px 60px;
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
       }
       .article-meta {
-        font-size: 12px; color: var(--stone);
-        letter-spacing: 0.06em; margin-bottom: 20px;
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
       }
-      .article-meta time { margin-right: 16px; }
+      .article-meta time {
+        margin-right: 16px;
+      }
       .article-title {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px; font-weight: 400;
-        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
       }
       .article-body {
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
         padding: 0 56px 80px;
       }
       .article-body h2 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400; color: var(--earth);
-        margin: 56px 0 24px; padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
         border-bottom: 0.5px solid var(--border);
       }
       .article-body p {
-        margin-bottom: 24px; font-size: 15px;
-        line-height: 2; color: var(--earth-soft);
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
       }
       .article-body blockquote {
         border-left: 2px solid var(--ocean);
-        margin: 32px 0; padding: 16px 24px;
+        margin: 32px 0;
+        padding: 16px 24px;
         background: var(--ocean-light);
         border-radius: 0 4px 4px 0;
         font-family: "Noto Serif JP", serif;
-        font-size: 15px; color: var(--earth); line-height: 1.9;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
       }
       .article-cta {
-        max-width: 760px; margin: 0 auto 80px;
-        padding: 48px 56px; text-align: center;
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
       }
       .article-cta .cta-box {
         background: var(--white);
         border: 0.5px solid var(--border);
-        border-radius: 8px; padding: 48px 40px;
+        border-radius: 8px;
+        padding: 48px 40px;
       }
       .article-cta .cta-label {
-        font-size: 10px; letter-spacing: 0.18em;
-        color: var(--ocean); margin-bottom: 16px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
       }
       .article-cta h3 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400;
-        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
       }
       .article-cta p {
-        font-size: 14px; color: var(--stone);
-        margin-bottom: 32px; line-height: 1.8;
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
       }
       .btn-primary {
-        display: inline-block; padding: 15px 36px;
-        background: var(--ocean); color: #fff;
-        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
-        border: none; border-radius: 4px; cursor: pointer;
-        transition: opacity 0.2s, transform 0.2s;
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
       }
-      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
       .footer {
         border-top: 0.5px solid var(--border);
         padding: 40px 56px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 11px; color: var(--mist);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
       }
       .footer-logo {
         font-family: "Cormorant Garamond", serif;
-        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         color: var(--stone);
       }
-      .footer-logo .e { color: var(--ocean); }
-      .footer-links { display: flex; gap: 24px; list-style: none; }
-      .footer-links a { color: var(--mist); transition: color 0.2s; }
-      .footer-links a:hover { color: var(--stone); }
-      .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      .footer-logo .e {
+        color: var(--ocean);
       }
-      .back-link:hover { color: var(--ocean); }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
       @media (max-width: 768px) {
-        .nav { padding: 0 20px; }
-        .nav-links { display: none; }
-        .article-header { padding: 100px 20px 40px; }
-        .article-title { font-size: 22px; }
-        .article-body { padding: 0 20px 60px; }
-        .article-cta { padding: 0 20px; }
-        .article-cta .cta-box { padding: 36px 24px; }
-        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
       }
     </style>
   </head>
@@ -195,39 +327,77 @@
 
     <article class="article-body">
       <h2>理念があったほうがいい、と言われるが</h2>
-      <p>経営者の集まりに行くと、理念やミッションの話になる。みんな立派なことを書いたパネルを会社に飾っている。自分の会社にはそれがない。少し気後れする。</p>
-      <p>「うちも作ったほうがいいのか」と思う。しかし作ろうとすると、しっくりくる言葉が出てこない。</p>
-      <p>経営理念を作ろうとすると、しっくりくる言葉が出てこない経営者は多い。それは能力の問題ではなく、順番の問題だ。</p>
-      <p>経営理念を作ろうとして言葉が出てこないのは、能力ではなく順番の問題だ。理念は無から作るものではなく、歩みの中から見つけるものだ。</p>
+      <p>
+        経営者の集まりに行くと、理念やミッションの話になります。みんな立派なことを書いたパネルを会社に飾っています。自分の会社にはそれがない。少し気後れします。
+      </p>
+      <p>
+        「うちも作ったほうがいいのか」と思います。しかし作ろうとすると、しっくりくる言葉が出てきません。
+      </p>
+      <p>
+        経営理念を作ろうとすると、しっくりくる言葉が出てこない経営者は多い。それは能力の問題ではなく、順番の問題です。
+      </p>
+      <p>
+        経営理念を作ろうとして言葉が出てこないのは、能力ではなく順番の問題です。理念は無から作るものではなく、歩みの中から見つけるものです。
+      </p>
 
       <h2>理念は、作るものではなく、見つけるもの</h2>
-      <p>経営理念は無から作るものではない。創業からの歩みの中に、すでに自分が大事にしてきたものがある。それを言語化するのが理念だ。</p>
-      <p>見つけるプロセスを飛ばして、それらしい言葉を作っても、社員には響かない。</p>
-      <p>理念は無から作るものではなく、これまでの歩みの中から見つけるものだ。見つけるプロセスを飛ばすと、借り物の言葉になる。</p>
-      <p>他社の理念を真似ると、文脈がねじれる。理念はその会社の歴史と一体になっている。</p>
+      <p>
+        経営理念は無から作るものではありません。創業からの歩みの中に、すでに自分が大事にしてきたものがあります。それを言語化するのが理念です。
+      </p>
+      <p>
+        見つけるプロセスを飛ばして、それらしい言葉を作っても、社員には響かない。
+      </p>
+      <p>
+        理念は無から作るものではなく、これまでの歩みの中から見つけるものです。見つけるプロセスを飛ばすと、借り物の言葉になります。
+      </p>
+      <p>
+        他社の理念を真似ると、文脈がねじれる。理念はその会社の歴史と一体になっています。
+      </p>
 
       <h2>他社の理念を真似ると、ねじれが起きる</h2>
-      <p>他社の素敵な理念を見て、真似たくなることがある。しかし理念は、その会社の文脈と一体になっている。文脈を抜いて言葉だけを移すと、ねじれが起きる。</p>
-      <p>ねじれた理念は、誰も信じていない言葉として残る。</p>
-      <p>他社の理念を真似ると、文脈がねじれる。理念はその会社の歴史と一体になっている。</p>
-      <p>理念がなくても会社は回る。引け目に感じる必要はない。</p>
-      <blockquote>「理念は作った瞬間ではなく、社員が引用し始めた瞬間に生まれる。」<br />— ある経営者の言葉</blockquote>
+      <p>
+        他社の素敵な理念を見て、真似たくなることがあります。しかし理念は、その会社の文脈と一体になっています。文脈を抜いて言葉だけを移すと、ねじれが起きます。
+      </p>
+      <p>ねじれた理念は、誰も信じていない言葉として残ります。</p>
+      <p>
+        他社の理念を真似ると、文脈がねじれる。理念はその会社の歴史と一体になっています。
+      </p>
+      <p>理念がなくても会社は回ります。引け目に感じる必要はない。</p>
+      <blockquote>
+        「理念は作った瞬間ではなく、社員が引用し始めた瞬間に生まれます。」<br />—
+        ある経営者の言葉
+      </blockquote>
 
       <h2>理念がなくても、会社は動く</h2>
-      <p>理念がなくても、いい会社は存在する。逆に、立派な理念を掲げていても、現場と乖離していれば意味がない。</p>
-      <p>「理念を作らなければならない」という強迫観念から、自由になっていい。</p>
-      <p>理念がなくても会社は回る。理念がないことを引け目に感じる必要はない。</p>
-      <p>理念が生まれる瞬間は、社員が引用し始めた瞬間だ。文字にした瞬間ではない。</p>
+      <p>
+        理念がなくても、いい会社は存在します。逆に、立派な理念を掲げていても、現場と乖離していれば意味がない。
+      </p>
+      <p>
+        「理念を作らなければならない」という強迫観念から、自由になっていい。
+      </p>
+      <p>
+        理念がなくても会社は回ります。理念がないことを引け目に感じる必要はない。
+      </p>
+      <p>
+        理念が生まれる瞬間は、社員が引用し始めた瞬間です。文字にした瞬間ではありません。
+      </p>
 
       <h2>理念の前に、自分に問うこと</h2>
-      <p>理念を作ろうとする前に、「自分はこの会社で、何を残したいのか」を問いたい。残したいものが明確になったとき、理念の言葉は自然に出てくる。</p>
-      <p>順番を間違えると、理念は文字でしかなくなる。</p>
+      <p>
+        理念を作ろうとする前に、「自分はこの会社で、何を残したいのか」を問いたい。残したいものが明確になったとき、理念の言葉は自然に出てきます。
+      </p>
+      <p>順番を間違えると、理念は文字でしかなくなります。</p>
 
       <h2>理念を見つけるためのプロセス</h2>
-      <p>理念を見つけたいなら、まず自分の創業の動機を書き出す。「なぜ起業したか」を10個書き出すと、本当の動機が浮かび上がる。</p>
-      <p>次に、これまでの判断の中で「絶対に譲れなかった」ことを書き出す。譲れなかったことの中に、理念の種がある。</p>
-      <p>種を見つけたら、社員の前で一度語ってみる。社員の反応で、それが本物かどうか分かる。</p>
-
+      <p>
+        理念を見つけたいなら、まず自分の創業の動機を書き出します。「なぜ起業したか」を10個書き出すと、本当の動機が浮かび上がります。
+      </p>
+      <p>
+        次に、これまでの判断の中で「絶対に譲れなかった」ことを書き出します。譲れなかったことの中に、理念の種があります。
+      </p>
+      <p>
+        種を見つけたら、社員の前で一度語ってみる。社員の反応で、それが本物かどうか分かります。
+      </p>
     </article>
 
     <section class="article-cta">

@@ -2,26 +2,49 @@
 <html lang="ja">
   <head>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
+      function gtag() {
+        dataLayer.push(arguments);
+      }
       gtag("js", new Date());
       gtag("config", "G-744VLVHRDP");
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>経営者の直感は正しいのか。データと感覚の使い分け方 — Sentio</title>
-    <meta name="description" content="データ重視の時代、経営者の直感はどこまで信じていいのか。直感とデータの使い分けについて考えます。" />
+    <meta
+      name="description"
+      content="データ重視の時代、経営者の直感はどこまで信じていいのか。直感とデータの使い分けについて考えます。"
+    />
     <meta name="keywords" content="経営 直感 データ 判断" />
-    <link rel="canonical" href="https://www.sentio-ai.jp/blog/gut-feeling.html" />
-    <meta property="og:title" content="経営者の直感は正しいのか。データと感覚の使い分け方" />
-    <meta property="og:description" content="データ重視の時代、経営者の直感はどこまで信じていいのか。直感とデータの使い分けについて考えます。" />
+    <link
+      rel="canonical"
+      href="https://www.sentio-ai.jp/blog/gut-feeling.html"
+    />
+    <meta
+      property="og:title"
+      content="経営者の直感は正しいのか。データと感覚の使い分け方"
+    />
+    <meta
+      property="og:description"
+      content="データ重視の時代、経営者の直感はどこまで信じていいのか。直感とデータの使い分けについて考えます。"
+    />
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="https://www.sentio-ai.jp/blog/gut-feeling.html" />
+    <meta
+      property="og:url"
+      content="https://www.sentio-ai.jp/blog/gut-feeling.html"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       *,
       *::before,
@@ -43,7 +66,10 @@
         --border: #e5e0da;
         --parchment: #efeae3;
       }
-      html { scroll-behavior: smooth; font-size: 16px; }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
       body {
         font-family: "Inter", "Noto Sans JP", sans-serif;
         font-weight: 300;
@@ -52,11 +78,21 @@
         line-height: 1.8;
         -webkit-font-smoothing: antialiased;
       }
-      a { color: inherit; text-decoration: none; }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
       .nav {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 56px; height: 60px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
         background: rgba(247, 245, 242, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -64,114 +100,213 @@
       }
       .logo {
         font-family: "Cormorant Garamond", serif;
-        font-weight: 500; font-size: 22px;
-        letter-spacing: 0.12em; color: var(--earth);
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
       }
-      .logo .e { color: var(--ocean); }
-      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
-      .nav-links a:hover { color: var(--earth); }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: var(--earth);
+      }
       .nav-cta {
-        font-size: 12px; font-weight: 500;
-        padding: 9px 24px; background: var(--ocean);
-        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 9px 24px;
+        background: var(--ocean);
+        color: #fff;
+        border-radius: 4px;
+        transition: opacity 0.2s;
       }
-      .nav-cta:hover { opacity: 0.85; }
+      .nav-cta:hover {
+        opacity: 0.85;
+      }
       .article-header {
         padding: 140px 56px 60px;
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
       }
       .article-meta {
-        font-size: 12px; color: var(--stone);
-        letter-spacing: 0.06em; margin-bottom: 20px;
+        font-size: 12px;
+        color: var(--stone);
+        letter-spacing: 0.06em;
+        margin-bottom: 20px;
       }
-      .article-meta time { margin-right: 16px; }
+      .article-meta time {
+        margin-right: 16px;
+      }
       .article-title {
         font-family: "Noto Serif JP", serif;
-        font-size: 28px; font-weight: 400;
-        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.7;
+        color: var(--earth);
+        margin-bottom: 0;
       }
       .article-body {
-        max-width: 760px; margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto;
         padding: 0 56px 80px;
       }
       .article-body h2 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400; color: var(--earth);
-        margin: 56px 0 24px; padding-bottom: 12px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin: 56px 0 24px;
+        padding-bottom: 12px;
         border-bottom: 0.5px solid var(--border);
       }
       .article-body p {
-        margin-bottom: 24px; font-size: 15px;
-        line-height: 2; color: var(--earth-soft);
+        margin-bottom: 24px;
+        font-size: 15px;
+        line-height: 2;
+        color: var(--earth-soft);
       }
       .article-body blockquote {
         border-left: 2px solid var(--ocean);
-        margin: 32px 0; padding: 16px 24px;
+        margin: 32px 0;
+        padding: 16px 24px;
         background: var(--ocean-light);
         border-radius: 0 4px 4px 0;
         font-family: "Noto Serif JP", serif;
-        font-size: 15px; color: var(--earth); line-height: 1.9;
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 1.9;
       }
       .article-cta {
-        max-width: 760px; margin: 0 auto 80px;
-        padding: 48px 56px; text-align: center;
+        max-width: 760px;
+        margin: 0 auto 80px;
+        padding: 48px 56px;
+        text-align: center;
       }
       .article-cta .cta-box {
         background: var(--white);
         border: 0.5px solid var(--border);
-        border-radius: 8px; padding: 48px 40px;
+        border-radius: 8px;
+        padding: 48px 40px;
       }
       .article-cta .cta-label {
-        font-size: 10px; letter-spacing: 0.18em;
-        color: var(--ocean); margin-bottom: 16px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 16px;
       }
       .article-cta h3 {
         font-family: "Noto Serif JP", serif;
-        font-size: 20px; font-weight: 400;
-        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--earth);
+        margin-bottom: 16px;
+        line-height: 1.6;
       }
       .article-cta p {
-        font-size: 14px; color: var(--stone);
-        margin-bottom: 32px; line-height: 1.8;
+        font-size: 14px;
+        color: var(--stone);
+        margin-bottom: 32px;
+        line-height: 1.8;
       }
       .btn-primary {
-        display: inline-block; padding: 15px 36px;
-        background: var(--ocean); color: #fff;
-        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
-        border: none; border-radius: 4px; cursor: pointer;
-        transition: opacity 0.2s, transform 0.2s;
+        display: inline-block;
+        padding: 15px 36px;
+        background: var(--ocean);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
       }
-      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .btn-primary:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
       .footer {
         border-top: 0.5px solid var(--border);
         padding: 40px 56px;
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 11px; color: var(--mist);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mist);
       }
       .footer-logo {
         font-family: "Cormorant Garamond", serif;
-        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        font-size: 16px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
         color: var(--stone);
       }
-      .footer-logo .e { color: var(--ocean); }
-      .footer-links { display: flex; gap: 24px; list-style: none; }
-      .footer-links a { color: var(--mist); transition: color 0.2s; }
-      .footer-links a:hover { color: var(--stone); }
-      .back-link {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      .footer-logo .e {
+        color: var(--ocean);
       }
-      .back-link:hover { color: var(--ocean); }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      .footer-links a {
+        color: var(--mist);
+        transition: color 0.2s;
+      }
+      .footer-links a:hover {
+        color: var(--stone);
+      }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .back-link:hover {
+        color: var(--ocean);
+      }
       @media (max-width: 768px) {
-        .nav { padding: 0 20px; }
-        .nav-links { display: none; }
-        .article-header { padding: 100px 20px 40px; }
-        .article-title { font-size: 22px; }
-        .article-body { padding: 0 20px 60px; }
-        .article-cta { padding: 0 20px; }
-        .article-cta .cta-box { padding: 36px 24px; }
-        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+        .nav {
+          padding: 0 20px;
+        }
+        .nav-links {
+          display: none;
+        }
+        .article-header {
+          padding: 100px 20px 40px;
+        }
+        .article-title {
+          font-size: 22px;
+        }
+        .article-body {
+          padding: 0 20px 60px;
+        }
+        .article-cta {
+          padding: 0 20px;
+        }
+        .article-cta .cta-box {
+          padding: 36px 24px;
+        }
+        .footer {
+          padding: 32px 20px;
+          flex-direction: column;
+          gap: 16px;
+        }
       }
     </style>
   </head>
@@ -190,44 +325,90 @@
         <time datetime="2026-04-07">2026.04.07</time>
         <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
       </div>
-      <h1 class="article-title">経営者の直感は正しいのか。<br />データと感覚の使い分け方</h1>
+      <h1 class="article-title">
+        経営者の直感は正しいのか。<br />データと感覚の使い分け方
+      </h1>
     </header>
 
     <article class="article-body">
       <h2>「なんとなく嫌な予感がする」を、どう扱うか</h2>
-      <p>数字上は問題ない。計画通り進んでいる。それでも経営者の中に「なんとなく嫌な予感」がある。この感覚を、合理的でないからと無視するか、それとも何かの兆しとして受け止めるか。</p>
-      <p>経験のある経営者ほど、この種の予感が当たることを知っている。しかし周囲には「データに根拠がない」と説明できない。</p>
-      <p>直感を信じすぎる経営者と、データに頼りすぎる経営者がいる。どちらも極端だ。重要なのは、自分が今どちらに偏っているかを自覚することだ。</p>
-      <p>経営者の直感は、本人が気づかないうちに無数の情報を統合した結果として現れる。会議中の小さな違和感、数字の微妙な変動、取引先の表情。</p>
+      <p>
+        数字上は問題ない。計画通り進んでいます。それでも経営者の中に「なんとなく嫌な予感」があります。この感覚を、合理的でないからと無視するか、それとも何かの兆しとして受け止めるか。
+      </p>
+      <p>
+        経験のある経営者ほど、この種の予感が当たることを知っています。しかし周囲には「データに根拠がない」と説明できません。
+      </p>
+      <p>
+        直感を信じすぎる経営者と、データに頼りすぎる経営者がいます。どちらも極端です。重要なのは、自分が今どちらに偏っているかを自覚することです。
+      </p>
+      <p>
+        経営者の直感は、本人が気づかないうちに無数の情報を統合した結果として現れる。会議中の小さな違和感、数字の微妙な変動、取引先の表情。
+      </p>
 
       <h2>直感とは、無自覚な情報処理の結果</h2>
-      <p>直感は神秘的なものではない。長年蓄積された経験パターンの中から、意識に上る前にパターンマッチが起きている結果だ。だから直感は、経験豊富な領域では驚くほど正確に働く。</p>
-      <p>ただし、領域外では直感は外れる。新規事業、未経験の業界、初めての規模拡大。経験のない場所では直感は機能しない。</p>
-      <p>直感は経験の蓄積だ、という考え方は正しい。だからこそ、経験のない領域では直感は役に立たない。新しい挑戦をするときに直感だけで動くのは危険だ。</p>
-      <p>ただし、直感が正しく働くのは「経験のある領域」だけだ。これを忘れて、未経験の領域でも直感に頼ると、しばしば判断を誤る。</p>
+      <p>
+        直感は神秘的なものではありません。長年蓄積された経験パターンの中から、意識に上る前にパターンマッチが起きている結果です。だから直感は、経験豊富な領域では驚くほど正確に働きます。
+      </p>
+      <p>
+        ただし、領域外では直感は外れる。新規事業、未経験の業界、初めての規模拡大。経験のない場所では直感は機能しません。
+      </p>
+      <p>
+        直感は経験の蓄積だ、という考え方は正しい。だからこそ、経験のない領域では直感は役に立たない。新しい挑戦をするときに直感だけで動くのは危険です。
+      </p>
+      <p>
+        ただし、直感が正しく働くのは「経験のある領域」だけです。これを忘れて、未経験の領域でも直感に頼ると、しばしば判断を誤る。
+      </p>
 
       <h2>データは過去、直感は今この瞬間</h2>
-      <p>データの本質は過去の記録だ。どれだけリアルタイムに見えても、計測した時点で過去になる。一方、直感は今この瞬間に発生している違和感そのものだ。</p>
-      <p>両者は時間軸が違う。データで過去のパターンを確認し、直感で今の変化を捉える。組み合わせて初めて、未来に向けた判断ができる。</p>
-      <p>リアルタイムに見えるダッシュボードでも、計測した瞬間に過去になる。過去の延長で未来を語ることには限界がある。</p>
-      <p>直感を否定する経営者もいれば、直感を絶対視する経営者もいる。どちらも極端だ。直感は道具の一つにすぎない。</p>
-      <blockquote>「データを信じて直感を抑え込んだ判断ほど、後悔している。」<br />— ある経営者の言葉</blockquote>
+      <p>
+        データの本質は過去の記録です。どれだけリアルタイムに見えても、計測した時点で過去になります。一方、直感は今この瞬間に発生している違和感そのものです。
+      </p>
+      <p>
+        両者は時間軸が違います。データで過去のパターンを確認し、直感で今の変化を捉えます。組み合わせて初めて、未来に向けた判断ができます。
+      </p>
+      <p>
+        リアルタイムに見えるダッシュボードでも、計測した瞬間に過去になります。過去の延長で未来を語ることには限界があります。
+      </p>
+      <p>
+        直感を否定する経営者もいれば、直感を絶対視する経営者もいます。どちらも極端です。直感は道具の一つにすぎない。
+      </p>
+      <blockquote>
+        「データを信じて直感を抑え込んだ判断ほど、後悔しています。」<br />—
+        ある経営者の言葉
+      </blockquote>
 
       <h2>直感を言語化する習慣が、判断を磨く</h2>
-      <p>直感は言語化すると弱まる、と思われがちだが、逆だ。言語化された直感は検証可能になる。「なぜそう感じたか」を一度書き出すと、その背後にあった微細な情報に気づける。</p>
-      <p>言語化されない直感は、当たっても外れても次に活かせない。経験が経験のまま消えていく。</p>
-      <p>言語化された直感は、後で振り返れる。なぜ正しかったのか、なぜ外れたのか、検証できる。直感を言語化する習慣が、判断の精度を上げる唯一の道だ。</p>
-      <p>言語化された直感は、検証できる。検証できる直感は、経験の蓄積として組織に残る。組織の知恵は、こうやって作られていく。</p>
+      <p>
+        直感は言語化すると弱まる、と思われがちだが、逆です。言語化された直感は検証可能になります。「なぜそう感じたか」を一度書き出すと、その背後にあった微細な情報に気づける。
+      </p>
+      <p>
+        言語化されない直感は、当たっても外れても次に活かせない。経験が経験のまま消えていきます。
+      </p>
+      <p>
+        言語化された直感は、後で振り返れる。なぜ正しかったのか、なぜ外れたのか、検証できます。直感を言語化する習慣が、判断の精度を上げる唯一の道です。
+      </p>
+      <p>
+        言語化された直感は、検証できます。検証できる直感は、経験の蓄積として組織に残ります。組織の知恵は、こうやって作られていきます。
+      </p>
 
       <h2>問いがあれば、直感とデータは対立しない</h2>
-      <p>直感が告げているのは「ここを見ろ」というシグナルだ。データは「そこに何があるか」を示すツールだ。両者は対立するものではなく、問いを介して結びつく。</p>
-      <p>経営者に必要なのは、直感を信じる勇気でも、データを信じる規律でもない。両方を結びつける問いを持つことだ。</p>
+      <p>
+        直感が告げているのは「ここを見ろ」というシグナルです。データは「そこに何があるか」を示すツールです。両者は対立するものではなく、問いを介して結びつく。
+      </p>
+      <p>
+        経営者に必要なのは、直感を信じる勇気でも、データを信じる規律でもない。両方を結びつける問いを持つことです。
+      </p>
 
       <h2>直感を磨く問い</h2>
-      <p>直感を磨きたい経営者は、毎週一つだけでいいから「自分が今週、どんな違和感を感じたか」を書き留めてみるといい。書くこと自体が訓練になる。</p>
-      <p>書き留めた違和感を、1か月後に振り返る。当たっていたか、外れていたか。当たっていたなら、なぜ気づけたかを考える。外れていたなら、なぜ思い込んだかを考える。</p>
-      <p>この往復を続けると、直感は神秘ではなく、再現可能な技術になる。経験を経験のままで終わらせない経営者は、必ずこの種の習慣を持っている。</p>
-
+      <p>
+        直感を磨きたい経営者は、毎週一つだけでいいから「自分が今週、どんな違和感を感じたか」を書き留めてみるといい。書くこと自体が訓練になります。
+      </p>
+      <p>
+        書き留めた違和感を、1か月後に振り返ります。当たっていたか、外れていたか。当たっていたなら、なぜ気づけたかを考えます。外れていたなら、なぜ思い込んだかを考えます。
+      </p>
+      <p>
+        この往復を続けると、直感は神秘ではなく、再現可能な技術になります。経験を経験のままで終わらせない経営者は、必ずこの種の習慣を持っています。
+      </p>
     </article>
 
     <section class="article-cta">

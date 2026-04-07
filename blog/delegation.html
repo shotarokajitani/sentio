@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>任せられない経営者が陥るパターンと、その抜け出し方 — Sentio</title>
+    <meta name="description" content="任せたい。でも任せられない。多くの経営者が陥るパターンを言語化し、抜け出すための問いを考えます。" />
+    <meta name="keywords" content="委任 経営者 組織 マネジメント" />
+    <link rel="canonical" href="https://www.sentio-ai.jp/blog/delegation.html" />
+    <meta property="og:title" content="任せられない経営者が陥るパターンと、その抜け出し方" />
+    <meta property="og:description" content="任せたい。でも任せられない。多くの経営者が陥るパターンを言語化し、抜け出すための問いを考えます。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sentio-ai.jp/blog/delegation.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html { scroll-behavior: smooth; font-size: 16px; }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 56px; height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500; font-size: 22px;
+        letter-spacing: 0.12em; color: var(--earth);
+      }
+      .logo .e { color: var(--ocean); }
+      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
+      .nav-links a:hover { color: var(--earth); }
+      .nav-cta {
+        font-size: 12px; font-weight: 500;
+        padding: 9px 24px; background: var(--ocean);
+        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+      }
+      .nav-cta:hover { opacity: 0.85; }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px; margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px; color: var(--stone);
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .article-meta time { margin-right: 16px; }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px; font-weight: 400;
+        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px; margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400; color: var(--earth);
+        margin: 56px 0 24px; padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px; font-size: 15px;
+        line-height: 2; color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0; padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px; color: var(--earth); line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px; margin: 0 auto 80px;
+        padding: 48px 56px; text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px; padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px; letter-spacing: 0.18em;
+        color: var(--ocean); margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400;
+        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px; color: var(--stone);
+        margin-bottom: 32px; line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block; padding: 15px 36px;
+        background: var(--ocean); color: #fff;
+        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+        border: none; border-radius: 4px; cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e { color: var(--ocean); }
+      .footer-links { display: flex; gap: 24px; list-style: none; }
+      .footer-links a { color: var(--mist); transition: color 0.2s; }
+      .footer-links a:hover { color: var(--stone); }
+      .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      }
+      .back-link:hover { color: var(--ocean); }
+      @media (max-width: 768px) {
+        .nav { padding: 0 20px; }
+        .nav-links { display: none; }
+        .article-header { padding: 100px 20px 40px; }
+        .article-title { font-size: 22px; }
+        .article-body { padding: 0 20px 60px; }
+        .article-cta { padding: 0 20px; }
+        .article-cta .cta-box { padding: 36px 24px; }
+        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-07">2026.04.07</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">任せられない経営者が陥るパターンと、<br />その抜け出し方</h1>
+    </header>
+
+    <article class="article-body">
+      <h2>任せたつもりが、任せていない</h2>
+      <p>「君に任せた」と言いながら、進捗を細かく確認している。提案が上がってくれば修正を入れる。最終決定は自分でしている。社員から見れば、任されたのか、ただ作業をしているのか分からない。</p>
+      <p>任せたつもりと、任せた事実は違う。</p>
+      <p>「任せた」と言いながら細かく口を出す経営者を、社員はよく見ている。言葉と行動が一致しないと、信頼は積み上がらない。</p>
+      <p>任せられない経営者の心の中には、ほぼ必ず「任せた相手が失敗したときの恐怖」がある。失敗の責任を負うのは自分だ、という感覚だ。</p>
+
+      <h2>任せられない経営者の三つのパターン</h2>
+      <p>ひとつは「自分のほうが速い」型。任せるより自分でやったほうが早い、と感じてしまう。ふたつめは「品質が下がる」型。任せると基準が下がる、という不安が先に立つ。みっつめは「最終責任を負うのは自分」型。責任を負うなら、判断も自分でしたい。</p>
+      <p>どれも真実を含んでいる。だからこそ抜け出せない。</p>
+      <p>「自分のほうが速い」は事実だが、長期的には組織を弱くする。速さを優先した結果、誰も育たないという代償を払っている。</p>
+      <p>失敗の許容範囲を経営者自身が言語化できていないと、すべての失敗が許せなくなる。線引きを先にする必要がある。</p>
+
+      <h2>任せるとは、決定権を渡すこと</h2>
+      <p>任せるとは、作業を渡すことではなく、決定権を渡すことだ。決定権を渡さない限り、それは作業の依頼であって、委任ではない。</p>
+      <p>決定権を渡すと、最初は失敗する。失敗のたびに口を出したくなる。そこで耐えられるかどうかで、組織は変わる。</p>
+      <p>決定権を渡すことの怖さは、責任を一人で負い続けてきた経営者ほど強い。怖さは消えないが、慣れることはできる。</p>
+      <p>任せるとは、決定権を渡すことだ。作業を渡すだけでは委任にならない。決定権を渡した瞬間から、相手は育ち始める。</p>
+      <blockquote>「任せた瞬間に組織が止まると思っていた。実際には、止まったのは自分の中の何かだった。」<br />— ある経営者の言葉</blockquote>
+
+      <h2>失敗を許容する基準を、自分の中に作る</h2>
+      <p>任せた結果、失敗が起きる。それが許容できる失敗なのか、許容できない失敗なのか、その線引きを経営者自身が持っていないと、すべての失敗が許せなくなる。</p>
+      <p>「ここまでの失敗は許す」を決めておくと、任せやすくなる。</p>
+      <p>失敗の許容範囲を経営者自身が決めておかないと、すべての失敗が許せなくなる。許容範囲は組織に伝わるまで言葉にする。</p>
+      <p>任せた直後は、自分のやり方とは違う進め方を見せられる。そこで口を出すと、委任は崩れる。耐える時間が必要だ。</p>
+
+      <h2>抜け出すために、自分に問うこと</h2>
+      <p>任せられない自分に向き合うとき、必要な問いは「相手は何ができるか」ではなく「自分は何を恐れているか」だ。</p>
+      <p>恐れの正体が見えれば、任せる行為そのものが軽くなる。</p>
+
+      <h2>任せた後に経営者がやるべきこと</h2>
+      <p>任せたら、見守る。介入したくなる衝動は、経営者にとって最も練習が必要なことだ。介入を1回我慢するごとに、相手の判断力は1段育つ。</p>
+      <p>ただし、放置とは違う。週に一度、「困っていることはあるか」と聞く時間を作る。聞くだけで、相手は安心する。</p>
+      <p>任せる勇気は、失敗を許容する自分の容量を作ることでしか生まれない。任せる前に、自分の容量を広げる。</p>
+
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

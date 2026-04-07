@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>固定費が重くなってきた。削るべきか、耐えるべきか — Sentio</title>
+    <meta name="description" content="固定費の重さが気になり始めた経営者へ。削減判断の前に確認すべきことを整理します。" />
+    <meta name="keywords" content="固定費 経営 コスト削減 判断" />
+    <link rel="canonical" href="https://www.sentio-ai.jp/blog/fixed-cost.html" />
+    <meta property="og:title" content="固定費が重くなってきた。削るべきか、耐えるべきか" />
+    <meta property="og:description" content="固定費の重さが気になり始めた経営者へ。削減判断の前に確認すべきことを整理します。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sentio-ai.jp/blog/fixed-cost.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html { scroll-behavior: smooth; font-size: 16px; }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 56px; height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500; font-size: 22px;
+        letter-spacing: 0.12em; color: var(--earth);
+      }
+      .logo .e { color: var(--ocean); }
+      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
+      .nav-links a:hover { color: var(--earth); }
+      .nav-cta {
+        font-size: 12px; font-weight: 500;
+        padding: 9px 24px; background: var(--ocean);
+        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+      }
+      .nav-cta:hover { opacity: 0.85; }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px; margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px; color: var(--stone);
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .article-meta time { margin-right: 16px; }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px; font-weight: 400;
+        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px; margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400; color: var(--earth);
+        margin: 56px 0 24px; padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px; font-size: 15px;
+        line-height: 2; color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0; padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px; color: var(--earth); line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px; margin: 0 auto 80px;
+        padding: 48px 56px; text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px; padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px; letter-spacing: 0.18em;
+        color: var(--ocean); margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400;
+        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px; color: var(--stone);
+        margin-bottom: 32px; line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block; padding: 15px 36px;
+        background: var(--ocean); color: #fff;
+        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+        border: none; border-radius: 4px; cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e { color: var(--ocean); }
+      .footer-links { display: flex; gap: 24px; list-style: none; }
+      .footer-links a { color: var(--mist); transition: color 0.2s; }
+      .footer-links a:hover { color: var(--stone); }
+      .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      }
+      .back-link:hover { color: var(--ocean); }
+      @media (max-width: 768px) {
+        .nav { padding: 0 20px; }
+        .nav-links { display: none; }
+        .article-header { padding: 100px 20px 40px; }
+        .article-title { font-size: 22px; }
+        .article-body { padding: 0 20px 60px; }
+        .article-cta { padding: 0 20px; }
+        .article-cta .cta-box { padding: 36px 24px; }
+        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-07">2026.04.07</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">固定費が重くなってきた。<br />削るべきか、耐えるべきか</h1>
+    </header>
+
+    <article class="article-body">
+      <h2>数字を見るたび、ため息が出る</h2>
+      <p>家賃、人件費、システム費、リース料。月初に支払いが続くと、自由に使える現金がほとんど残らない。固定費は積み上げているうちに、気づけば動かしにくい重さになる。</p>
+      <p>削るべきだ、という思いと、削れない、という現実のあいだで経営者は揺れる。</p>
+      <p>固定費は、見えやすい数字なのに、向き合うのが最も心理的に重い数字だ。一つひとつに過去の意思決定の重みがあるからだ。</p>
+      <p>固定費を削る議論は、過去の自分を否定する議論にもなる。だから多くの経営者は、削減の話を先送りしたくなる。</p>
+
+      <h2>固定費は、過去の意思決定の総和</h2>
+      <p>今ある固定費は、すべて過去の経営者の意思決定の結果だ。あの時オフィスを広げた。あの時人を採用した。あの時このシステムを契約した。一つひとつには理由があった。</p>
+      <p>今、その理由はまだ生きているか。それを問い直すことが、固定費の見直しの第一歩だ。</p>
+      <p>削減の議論を始めると、経営者は自分の過去の判断を否定するような気持ちになる。だから無意識に話題を避ける。</p>
+      <p>削減と縮小は混同されがちだが、まったく違う。削減は同じ規模で効率を上げる、縮小は規模そのものを下げる。</p>
+
+      <h2>削減と縮小は別もの</h2>
+      <p>固定費を削るとき、削減と縮小を混同しないことが大事だ。削減は同じ規模で効率を上げる動き、縮小は規模そのものを下げる動きだ。</p>
+      <p>両者が必要なときもあれば、片方だけでいいときもある。判断を誤ると、必要なものまで失う。</p>
+      <p>削減と縮小を混同すると、必要なものまで削ってしまう。同じ規模で効率を上げるのか、規模そのものを下げるのか、最初に決める。</p>
+      <p>削る順番を間違えると、消耗だけして何も変わらない。小さな固定費から動かして、勢いをつける方が効く。</p>
+      <blockquote>「固定費を削るとき、いちばん怖かったのは、自分の判断を否定することだった。」<br />— ある経営者の言葉</blockquote>
+
+      <h2>削るより前に、収益構造を疑う</h2>
+      <p>固定費が重く感じる本当の理由は、固定費そのものではなく、それに見合う収益が出ていないことかもしれない。</p>
+      <p>削減の前に、値上げや単価アップ、不採算事業の整理を検討する余地はあるか。</p>
+      <p>固定費の重さの本当の正体は、収益とのバランスだ。固定費が重いのではなく、収益が薄いのだ、という見方もできる。</p>
+      <p>重さを感じたら、削ることより先に「自分は何を続けたいのか」を問う。答えが見えれば、削るべきものが見える。</p>
+
+      <h2>重さを感じたときの問い</h2>
+      <p>固定費の重さを感じたら、「何を削るか」より先に「自分は何を続けたいか」を問いたい。続けたいものが明確なら、その邪魔をしているものは何か、自然に見えてくる。</p>
+      <p>削減は手段だ。目的を見失った削減は、組織を弱くする。</p>
+
+      <h2>固定費を見直す順番</h2>
+      <p>固定費を見直す順番は、家賃や人件費のような大物からではない。サブスクリプション、不要な保険、使われていないツール、そういった小さな固定費からだ。</p>
+      <p>小さなものを整理すると、見直しの感覚と勢いがつく。その勢いで、大きな固定費にも向き合えるようになる。</p>
+      <p>順番を間違えると、大物から削ろうとして消耗し、結局何も動かないという結果になりがちだ。</p>
+
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

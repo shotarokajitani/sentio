@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>会議で誰も発言しない。その沈黙が意味していること — Sentio</title>
+    <meta name="description" content="経営会議で誰も発言しない。その沈黙の正体を経営者の視点から言語化します。" />
+    <meta name="keywords" content="会議 発言しない 組織 経営" />
+    <link rel="canonical" href="https://www.sentio-ai.jp/blog/silent-team.html" />
+    <meta property="og:title" content="会議で誰も発言しない。その沈黙が意味していること" />
+    <meta property="og:description" content="経営会議で誰も発言しない。その沈黙の正体を経営者の視点から言語化します。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sentio-ai.jp/blog/silent-team.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html { scroll-behavior: smooth; font-size: 16px; }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 56px; height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500; font-size: 22px;
+        letter-spacing: 0.12em; color: var(--earth);
+      }
+      .logo .e { color: var(--ocean); }
+      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
+      .nav-links a:hover { color: var(--earth); }
+      .nav-cta {
+        font-size: 12px; font-weight: 500;
+        padding: 9px 24px; background: var(--ocean);
+        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+      }
+      .nav-cta:hover { opacity: 0.85; }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px; margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px; color: var(--stone);
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .article-meta time { margin-right: 16px; }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px; font-weight: 400;
+        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px; margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400; color: var(--earth);
+        margin: 56px 0 24px; padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px; font-size: 15px;
+        line-height: 2; color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0; padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px; color: var(--earth); line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px; margin: 0 auto 80px;
+        padding: 48px 56px; text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px; padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px; letter-spacing: 0.18em;
+        color: var(--ocean); margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400;
+        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px; color: var(--stone);
+        margin-bottom: 32px; line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block; padding: 15px 36px;
+        background: var(--ocean); color: #fff;
+        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+        border: none; border-radius: 4px; cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e { color: var(--ocean); }
+      .footer-links { display: flex; gap: 24px; list-style: none; }
+      .footer-links a { color: var(--mist); transition: color 0.2s; }
+      .footer-links a:hover { color: var(--stone); }
+      .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      }
+      .back-link:hover { color: var(--ocean); }
+      @media (max-width: 768px) {
+        .nav { padding: 0 20px; }
+        .nav-links { display: none; }
+        .article-header { padding: 100px 20px 40px; }
+        .article-title { font-size: 22px; }
+        .article-body { padding: 0 20px 60px; }
+        .article-cta { padding: 0 20px; }
+        .article-cta .cta-box { padding: 36px 24px; }
+        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-07">2026.04.07</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">会議で誰も発言しない。<br />その沈黙が意味していること</h1>
+    </header>
+
+    <article class="article-body">
+      <h2>「何かありますか」のあとの、5秒の沈黙</h2>
+      <p>経営会議の終盤。ひと通りの議題が終わって、経営者が「何かありますか」と問いかける。しかし誰も口を開かない。5秒、10秒。気まずい沈黙のあと、誰かが小さくうなずいて会議は終わる。</p>
+      <p>経営者は思う。本当に何もないのか、それとも言えないだけなのか。</p>
+      <p>発言しない社員を責めても、沈黙は深まる。なぜ責めると深まるのか。それは責められた経験そのものが、新しい沈黙の理由になるからだ。</p>
+      <p>会議で誰も発言しない状況は、組織にとって重大なシグナルだ。発言が出ないのではなく、発言を出さない方が安全だと組織が学習している、ということだからだ。</p>
+
+      <h2>沈黙にはいくつかの種類がある</h2>
+      <p>沈黙はすべて同じではない。「考えがまとまっていない沈黙」「意見はあるが言えない沈黙」「興味を失った沈黙」「経営者の意向を読んでいる沈黙」。それぞれ意味がまったく違う。</p>
+      <p>経営者がこの沈黙を一括りにして扱うと、対応を誤る。「もっと発言しろ」と言えば言うほど、別の種類の沈黙が深まることがある。</p>
+      <p>沈黙の種類を見分けるには、会議の前後を観察するといい。会議前にざわざわしていたメンバーが、会議では黙る。それは「興味がない沈黙」ではなく「言えない沈黙」だ。</p>
+      <p>経営者は「もっと意見を言え」と言いたくなる。しかし指示で発言は生まれない。発言を出しても損をしないという経験の積み重ねでしか、沈黙は崩れない。</p>
+
+      <h2>沈黙は、安全でないことのサイン</h2>
+      <p>心理的安全性という言葉が広まったが、要点は単純だ。「ここで発言して損をしない」と感じられる場になっているかどうか。</p>
+      <p>経営者がいい意見にだけ反応し、的外れな意見を一蹴していれば、社員は早晩学習する。「黙っていた方が損が少ない」と。沈黙は組織が学習した結果だ。</p>
+      <p>心理的安全性は理想論ではなく、業績に直結する組織能力だ。発言が出る組織は、ミスの早期発見も改善のスピードも段違いに速い。</p>
+      <p>発言した社員の意見を一蹴した経験はないか。あるいは、発言を「使えない」と判断した経験はないか。それらが組織の学習素材になっている。</p>
+      <blockquote>「みんなの沈黙に気づきながら、自分も同じことを誰かにしていた。」<br />— ある経営者の言葉</blockquote>
+
+      <h2>経営者自身が、最も沈黙している場合もある</h2>
+      <p>面白いことに、社員に「もっと話せ」と言いたい経営者ほど、自分自身が会議で本音を話していないことがある。「この会社をどう思っているか」「何が怖いか」を社員の前で語っていない。</p>
+      <p>経営者の沈黙は、社員の沈黙より静かで強い。</p>
+      <p>経営者の沈黙は、会議の沈黙より重い。経営者が本音を語らない場所で、社員に本音を求めるのは難しい。</p>
+      <p>心理的安全性は理想ではなく、業績に直結する組織能力だ。発言が出る組織と、出ない組織では、5年後の景色がまったく違ってくる。</p>
+
+      <h2>発言を引き出すのではなく、問いを変える</h2>
+      <p>「もっと発言しろ」では沈黙は崩れない。崩れるのは、問いそのものが変わったときだ。「この施策に反対意見はありますか」より「この施策のどこが、明日の自分の仕事に影響しますか」のほうが、口を開きやすい。</p>
+      <p>問いの質が、沈黙の質を変える。</p>
+
+      <h2>沈黙が崩れる問いの作り方</h2>
+      <p>発言を引き出す問いは、抽象的な「意見はありますか」ではなく、具体的な「来週の自分の仕事に、この決定はどう影響しますか」のような問いだ。具体的になればなるほど、人は答えやすくなる。</p>
+      <p>もう一つは、間違ってもいい問いだ。「正解を当てる」ではなく「思いつきでいいから言ってみる」を歓迎する文化が、沈黙を崩す。</p>
+      <p>経営者がまず自分の弱さや迷いを開示することで、場の安全性は一気に高まる。問いを変える前に、自分の発言を変える方が、効くことも多い。</p>
+
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

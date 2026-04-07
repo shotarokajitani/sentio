@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数字は嘘をつかない。でも数字だけでは判断できない理由 — Sentio</title>
+    <meta name="description" content="数字は揃っている。なのに動けない。経営判断において、数字と数字以外の情報をどう扱えばいいのか考えます。" />
+    <meta name="keywords" content="経営 数字 判断 データ" />
+    <link rel="canonical" href="https://www.sentio-ai.jp/blog/numbers-lie.html" />
+    <meta property="og:title" content="数字は嘘をつかない。でも数字だけでは判断できない理由" />
+    <meta property="og:description" content="数字は揃っている。なのに動けない。経営判断において、数字と数字以外の情報をどう扱えばいいのか考えます。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sentio-ai.jp/blog/numbers-lie.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html { scroll-behavior: smooth; font-size: 16px; }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 56px; height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500; font-size: 22px;
+        letter-spacing: 0.12em; color: var(--earth);
+      }
+      .logo .e { color: var(--ocean); }
+      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
+      .nav-links a:hover { color: var(--earth); }
+      .nav-cta {
+        font-size: 12px; font-weight: 500;
+        padding: 9px 24px; background: var(--ocean);
+        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+      }
+      .nav-cta:hover { opacity: 0.85; }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px; margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px; color: var(--stone);
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .article-meta time { margin-right: 16px; }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px; font-weight: 400;
+        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px; margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400; color: var(--earth);
+        margin: 56px 0 24px; padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px; font-size: 15px;
+        line-height: 2; color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0; padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px; color: var(--earth); line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px; margin: 0 auto 80px;
+        padding: 48px 56px; text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px; padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px; letter-spacing: 0.18em;
+        color: var(--ocean); margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400;
+        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px; color: var(--stone);
+        margin-bottom: 32px; line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block; padding: 15px 36px;
+        background: var(--ocean); color: #fff;
+        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+        border: none; border-radius: 4px; cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e { color: var(--ocean); }
+      .footer-links { display: flex; gap: 24px; list-style: none; }
+      .footer-links a { color: var(--mist); transition: color 0.2s; }
+      .footer-links a:hover { color: var(--stone); }
+      .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      }
+      .back-link:hover { color: var(--ocean); }
+      @media (max-width: 768px) {
+        .nav { padding: 0 20px; }
+        .nav-links { display: none; }
+        .article-header { padding: 100px 20px 40px; }
+        .article-title { font-size: 22px; }
+        .article-body { padding: 0 20px 60px; }
+        .article-cta { padding: 0 20px; }
+        .article-cta .cta-box { padding: 36px 24px; }
+        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-07">2026.04.07</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">数字は嘘をつかない。<br />でも数字だけでは判断できない理由</h1>
+    </header>
+
+    <article class="article-body">
+      <h2>数字は揃った。なのに動けない</h2>
+      <p>売上、粗利、人件費、広告費、CVR。経営者の前にはあらゆる数字が並んでいる。BIツールも入れた。月次レポートも整っている。数字の取得には困っていない。</p>
+      <p>それでも、いざ判断するとなると手が止まる。数字は見えているのに、どう動けばいいのか分からない。情報が足りないのか、いや、足りているはずだ。</p>
+      <p>経営者がBIツールを導入する動機の多くは「数字を見れば判断できるようになる」という期待だ。しかし実際にダッシュボードが整備されたあとも、判断のスピードはあまり変わらない、という声が多い。</p>
+      <p>経営者が数字に向き合うとき、しばしば「正解の数字」を探そうとする。しかし数字に正解はない。あるのは解釈だけだ。解釈は読み手の問いによって変わる。</p>
+
+      <h2>数字は事実だが、文脈ではない</h2>
+      <p>数字が示すのは「何が起きたか」だ。しかし経営者が知りたいのは「なぜそれが起きたのか」「これから何が起きるのか」という文脈の方だ。</p>
+      <p>売上が10%下がった、という数字の事実から、その理由を説明できる文脈は無限にある。市場の変化かもしれない、競合の動きかもしれない、自社の何かが変わったのかもしれない。数字だけでは選べない。</p>
+      <p>数字には、書かれていることと書かれていないことがある。書かれていない部分こそが、文脈であり、判断の鍵だ。</p>
+      <p>同じ売上グラフを二人の経営者が見て、片方は安心し、片方は危機感を覚える。その違いは、グラフの中ではなく、二人の頭の中にある問いの違いから来る。</p>
+
+      <h2>同じ数字を、誰が見ているかで意味が変わる</h2>
+      <p>同じ売上推移グラフを、財務担当者と営業担当者と経営者が見ると、まったく違うものが見える。財務担当者は資金繰りを心配し、営業担当者は来月の数字を心配し、経営者は半年後の戦略を心配する。</p>
+      <p>数字は中立だが、数字を読む人間は中立ではない。だから数字だけを見て会議をしても、議論がかみ合わないことがある。</p>
+      <p>数字が中立であるという信念は、ときに危険ですらある。同じ数字が部署ごと、立場ごとにまったく違う物語を生む現実を、経営者は知っておく必要がある。</p>
+      <p>数字を増やしても判断ができないなら、必要なのは新しいデータソースではない。今ある数字に向ける問いを変えることだ。</p>
+      <blockquote>「数字を増やすほど、判断が遅くなった気がする。」<br />— ある経営者の言葉</blockquote>
+
+      <h2>数字の「外側」にある情報を読む</h2>
+      <p>数字の外側には、数字に現れない情報が必ずある。社員の表情、取引先の反応の遅さ、業界の空気。それらは数値化されないが、判断には欠かせない。</p>
+      <p>経営判断の質は、数字を読む力ではなく、数字と数字以外の情報を組み合わせて文脈を作る力で決まる。</p>
+      <p>現場の人間の小さな違和感や、取引先の何気ない一言。これらは数値化できないが、会社の未来を左右する情報だ。経営者だけがこれらを束ねて文脈を作れる。</p>
+      <p>経営判断において、数字は地図だ。地図は便利だが、地図を見て歩くのは人間だ。歩く方向は地図には書かれていない。</p>
+
+      <h2>判断に必要なのは、数字＋問い</h2>
+      <p>数字を眺めて判断できないとき、足りないのはもう一つの数字ではない。その数字に向ける「問い」だ。</p>
+      <p>「この数字は何を意味しているか」ではなく「この数字を見て自分が感じた違和感は何か」と問い直したとき、判断が動き始める。</p>
+
+      <h2>数字と直感を、問いで結ぶ</h2>
+      <p>数字を見ても判断できないとき、必要なのは「この数字を見て、自分は何を感じたか」を一度書き留めることだ。感じたことを言葉にすると、数字の意味が変わって見える。</p>
+      <p>感じたことの裏にある仮説を、また別の数字で検証する。数字 → 違和感 → 仮説 → 数字、というループが回り始めると、判断は加速する。</p>
+      <p>経営判断の質は、数字の量ではなく、数字に向ける問いの質で決まる。問いを持たない経営者にとって、数字は永遠に増え続ける情報の山でしかない。</p>
+
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

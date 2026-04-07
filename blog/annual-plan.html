@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-744VLVHRDP"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag("js", new Date());
+      gtag("config", "G-744VLVHRDP");
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>年間計画が絵に描いた餅になる理由と、機能させる方法 — Sentio</title>
+    <meta name="description" content="年初に作った計画が4月には誰も見ていない。なぜそうなるのかを構造的に考えます。" />
+    <meta name="keywords" content="年間計画 経営 実行 中小企業" />
+    <link rel="canonical" href="https://www.sentio-ai.jp/blog/annual-plan.html" />
+    <meta property="og:title" content="年間計画が絵に描いた餅になる理由と、機能させる方法" />
+    <meta property="og:description" content="年初に作った計画が4月には誰も見ていない。なぜそうなるのかを構造的に考えます。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sentio-ai.jp/blog/annual-plan.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --cream: #f7f5f2;
+        --white: #ffffff;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --earth-soft: #2d2d2d;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+        --parchment: #efeae3;
+      }
+      html { scroll-behavior: smooth; font-size: 16px; }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.8;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; text-decoration: none; }
+      .nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 56px; height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500; font-size: 22px;
+        letter-spacing: 0.12em; color: var(--earth);
+      }
+      .logo .e { color: var(--ocean); }
+      .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+      .nav-links a { font-size: 13px; color: var(--stone); transition: color 0.2s; }
+      .nav-links a:hover { color: var(--earth); }
+      .nav-cta {
+        font-size: 12px; font-weight: 500;
+        padding: 9px 24px; background: var(--ocean);
+        color: #fff; border-radius: 4px; transition: opacity 0.2s;
+      }
+      .nav-cta:hover { opacity: 0.85; }
+      .article-header {
+        padding: 140px 56px 60px;
+        max-width: 760px; margin: 0 auto;
+      }
+      .article-meta {
+        font-size: 12px; color: var(--stone);
+        letter-spacing: 0.06em; margin-bottom: 20px;
+      }
+      .article-meta time { margin-right: 16px; }
+      .article-title {
+        font-family: "Noto Serif JP", serif;
+        font-size: 28px; font-weight: 400;
+        line-height: 1.7; color: var(--earth); margin-bottom: 0;
+      }
+      .article-body {
+        max-width: 760px; margin: 0 auto;
+        padding: 0 56px 80px;
+      }
+      .article-body h2 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400; color: var(--earth);
+        margin: 56px 0 24px; padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      .article-body p {
+        margin-bottom: 24px; font-size: 15px;
+        line-height: 2; color: var(--earth-soft);
+      }
+      .article-body blockquote {
+        border-left: 2px solid var(--ocean);
+        margin: 32px 0; padding: 16px 24px;
+        background: var(--ocean-light);
+        border-radius: 0 4px 4px 0;
+        font-family: "Noto Serif JP", serif;
+        font-size: 15px; color: var(--earth); line-height: 1.9;
+      }
+      .article-cta {
+        max-width: 760px; margin: 0 auto 80px;
+        padding: 48px 56px; text-align: center;
+      }
+      .article-cta .cta-box {
+        background: var(--white);
+        border: 0.5px solid var(--border);
+        border-radius: 8px; padding: 48px 40px;
+      }
+      .article-cta .cta-label {
+        font-size: 10px; letter-spacing: 0.18em;
+        color: var(--ocean); margin-bottom: 16px;
+      }
+      .article-cta h3 {
+        font-family: "Noto Serif JP", serif;
+        font-size: 20px; font-weight: 400;
+        color: var(--earth); margin-bottom: 16px; line-height: 1.6;
+      }
+      .article-cta p {
+        font-size: 14px; color: var(--stone);
+        margin-bottom: 32px; line-height: 1.8;
+      }
+      .btn-primary {
+        display: inline-block; padding: 15px 36px;
+        background: var(--ocean); color: #fff;
+        font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+        border: none; border-radius: 4px; cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+      .footer {
+        border-top: 0.5px solid var(--border);
+        padding: 40px 56px;
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; color: var(--mist);
+      }
+      .footer-logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 16px; font-weight: 500; letter-spacing: 0.12em;
+        color: var(--stone);
+      }
+      .footer-logo .e { color: var(--ocean); }
+      .footer-links { display: flex; gap: 24px; list-style: none; }
+      .footer-links a { color: var(--mist); transition: color 0.2s; }
+      .footer-links a:hover { color: var(--stone); }
+      .back-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 13px; color: var(--stone); transition: color 0.2s;
+      }
+      .back-link:hover { color: var(--ocean); }
+      @media (max-width: 768px) {
+        .nav { padding: 0 20px; }
+        .nav-links { display: none; }
+        .article-header { padding: 100px 20px 40px; }
+        .article-title { font-size: 22px; }
+        .article-body { padding: 0 20px 60px; }
+        .article-cta { padding: 0 20px; }
+        .article-cta .cta-box { padding: 36px 24px; }
+        .footer { padding: 32px 20px; flex-direction: column; gap: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <ul class="nav-links">
+        <li><a href="/blog/">ブログ</a></li>
+        <li><a href="/#pricing">料金</a></li>
+        <li><a href="/app.html" class="nav-cta">ログイン</a></li>
+      </ul>
+    </nav>
+
+    <header class="article-header">
+      <div class="article-meta">
+        <time datetime="2026-04-07">2026.04.07</time>
+        <a href="/blog/" class="back-link">&larr; ブログ一覧</a>
+      </div>
+      <h1 class="article-title">年間計画が絵に描いた餅になる理由と、<br />機能させる方法</h1>
+    </header>
+
+    <article class="article-body">
+      <h2>1月に作った計画が、3月には机の中</h2>
+      <p>年末年始に時間をかけて作った経営計画。役員と議論し、数字を詰め、PDFにしてみんなに配った。しかし2月の中ごろになると、誰もそれを見ていない。</p>
+      <p>経営者自身も、気づけば年間計画を開いていない。</p>
+      <p>年間計画が機能しない最大の理由は、作って終わりになっているからだ。作る作業に時間をかけても、見直す習慣がなければ意味がない。</p>
+      <p>年間計画は作る作業に時間がかかるが、見直す習慣がなければ意味がない。作って終わりが、計画を絵に描いた餅にする。</p>
+
+      <h2>計画は、作る瞬間が一番輝いている</h2>
+      <p>計画を作る作業は楽しい。未来を描き、数字を組み立て、施策を並べる。完成した瞬間は達成感がある。しかしその達成感が、計画の役目を終わらせる。</p>
+      <p>作ること自体が目的化すると、実行されなくなる。</p>
+      <p>計画と現実のズレを月次で可視化する仕組みがあると、計画は道具になる。可視化されないと、計画は紙の上の理想で終わる。</p>
+      <p>計画と現実のズレを月次で可視化する仕組みを持つだけで、計画は道具になる。可視化されないと、計画は紙の理想で終わる。</p>
+
+      <h2>現実と計画のズレが、見える化されていない</h2>
+      <p>計画が機能しない最大の理由は、現実とのズレが見える化されていないからだ。月次の数字は見ていても、それを計画と並べて比較していない。</p>
+      <p>ズレが見えなければ、修正もできない。修正されない計画は、やがて忘れられる。</p>
+      <p>計画を変えることを「敗北」と感じる経営者は多い。しかし変えない計画ほど、無責任なものはない。</p>
+      <p>計画を変えることを「敗北」と感じる経営者は多い。しかし変えない計画ほど、無責任なものはない。</p>
+      <blockquote>「計画を作るより、計画を毎月見直す習慣のほうが、何倍も価値があった。」<br />— ある経営者の言葉</blockquote>
+
+      <h2>計画は、変えるために作る</h2>
+      <p>計画は守るために作るのではなく、変えるために作るものだ。現実が変われば計画を変える。それが正常な姿だ。</p>
+      <p>「計画を変えるのは敗北」という感覚を捨てると、計画は道具として使える。</p>
+      <p>計画は守るためではなく、変えるために作るものだ、と腹落ちした経営者は強い。</p>
+      <p>計画は守るためではなく、変えるために作るものだ。腹落ちした経営者は強い。</p>
+
+      <h2>実行を生むのは、目標ではなく問い</h2>
+      <p>計画を機能させたいなら、目標数字を増やすより、毎月「先月、何が計画と違ったか」を問う習慣を作る。</p>
+      <p>問いが続けば、計画は生き続ける。</p>
+
+      <h2>計画を生かす月次レビュー</h2>
+      <p>計画を生かすために必要なのは、毎月決まった時間にレビューする習慣だ。時間を決めないと、優先度が下がる。</p>
+      <p>レビューでは「何が予定通りか」より「何が予定と違ったか」に焦点を当てる。違いの中にこそ、次の判断の種がある。</p>
+      <p>違いの理由を一行で書き留める。書くだけでいい。書き留めた言葉が、次の計画の精度を上げる。</p>
+
+    </article>
+
+    <section class="article-cta">
+      <div class="cta-box">
+        <div class="cta-label">SENTIO</div>
+        <h3>御社のデータを読み、<br />今週動くべき一つの問いを届けます。</h3>
+        <p>会社名とURLだけで始められます。14日間無料。</p>
+        <a href="/" class="btn-primary">まず、会社名とURLだけで試してみる</a>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="footer-logo">S<span class="e">e</span>ntio</span>
+      <ul class="footer-links">
+        <li><a href="/">トップ</a></li>
+        <li><a href="/blog/">ブログ</a></li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

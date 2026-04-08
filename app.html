@@ -1609,10 +1609,7 @@
       const SUPABASE_URL = "https://kwpldqbnkraftaahnpev.supabase.co";
       const SUPABASE_ANON_KEY =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3cGxkcWJua3JhZnRhYWhucGV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM0OTMxOTIsImV4cCI6MjA1OTA2OTE5Mn0.8DTXZ_BoNERBEfGdU5Im9CSJ_mSEAbMxfnxvJqXOKEQ";
-      const supabase = window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY,
-      );
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       let currentUser = null;
       let currentCompany = null;

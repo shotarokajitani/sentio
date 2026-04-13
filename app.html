@@ -531,6 +531,7 @@
         border: 0.5px solid var(--border);
         background: var(--cream);
         color: var(--earth);
+        cursor: pointer;
         transition: all 0.2s;
       }
       .qa-btn:hover {
@@ -1510,9 +1511,62 @@
               <div class="card-label">カレンダー連携</div>
               <div class="card-body" style="margin-bottom: 16px">
                 Google
-                カレンダーを連携すると、ミーティングの頻度や空き時間の傾向を分析に活用します。
+                カレンダーを連携すると、ミーティングの頻度や外部企業との接触頻度を分析に活用します。
               </div>
-              <button class="qa-btn">Google カレンダーを連携する</button>
+              <div id="integration-gcal-row">
+                <button
+                  class="qa-btn"
+                  onclick="connectAccounting('google_calendar')"
+                >
+                  Google カレンダーを連携する
+                </button>
+                <span
+                  id="integration-gcal-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-label">Slack連携</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                Slackを連携すると、社内コミュニケーションの活発度や深夜帯の偏りを問いに反映します。
+              </div>
+              <div id="integration-slack-row">
+                <button class="qa-btn" onclick="connectAccounting('slack')">
+                  Slack を連携する
+                </button>
+                <span
+                  id="integration-slack-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-label">Chatwork連携</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                Chatworkを連携すると、ルーム別の動きや未読の蓄積を問いに反映します。
+              </div>
+              <div id="integration-chatwork-row">
+                <button class="qa-btn" onclick="connectAccounting('chatwork')">
+                  Chatwork を連携する
+                </button>
+                <span
+                  id="integration-chatwork-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
             </div>
           </div>
 
@@ -1887,6 +1941,8 @@
             renderSignals(signals);
           }
         }
+
+        loadIntegrationStatus();
       }
 
       function renderSignals(signals) {
@@ -2009,8 +2065,15 @@
           const {
             data: { session },
           } = await supabase.auth.getSession();
-          const fn =
-            provider === "freee" ? "freee-oauth" : "moneyforward-oauth";
+          const fnMap = {
+            freee: "freee-oauth",
+            moneyforward: "moneyforward-oauth",
+            google_calendar: "google-calendar-oauth",
+            slack: "slack-oauth",
+            chatwork: "chatwork-oauth",
+          };
+          const fn = fnMap[provider];
+          if (!fn) throw new Error("unknown provider: " + provider);
           const res = await fetch(
             `${SUPABASE_URL}/functions/v1/${fn}/authorize?company_id=${currentCompany.id}`,
             {
@@ -2059,8 +2122,18 @@
         };
         const freee = (integrations || []).find((i) => i.type === "freee");
         const mf = (integrations || []).find((i) => i.type === "moneyforward");
+        const gcal = (integrations || []).find(
+          (i) => i.type === "google_calendar",
+        );
+        const slack = (integrations || []).find((i) => i.type === "slack");
+        const chatwork = (integrations || []).find(
+          (i) => i.type === "chatwork",
+        );
         renderStatus("integration-freee-status", freee);
         renderStatus("integration-mf-status", mf);
+        renderStatus("integration-gcal-status", gcal);
+        renderStatus("integration-slack-status", slack);
+        renderStatus("integration-chatwork-status", chatwork);
       }
 
       // OAuthコールバック後の通知
@@ -2069,10 +2142,16 @@
         const integration = params.get("integration");
         const result = params.get("result");
         if (integration && result) {
+          const nameMap = {
+            freee: "freee",
+            moneyforward: "マネーフォワード",
+            google_calendar: "Google カレンダー",
+            slack: "Slack",
+            chatwork: "Chatwork",
+          };
+          const providerName = nameMap[integration] || integration;
           if (result === "success") {
-            alert(
-              `${integration === "freee" ? "freee" : "マネーフォワード"}の連携が完了しました。`,
-            );
+            alert(`${providerName}の連携が完了しました。`);
           } else {
             alert(
               `${integration}の連携に失敗しました：${params.get("reason") || ""}`,

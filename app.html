@@ -2237,6 +2237,7 @@
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
               },
               body: JSON.stringify({
                 company_name: document.getElementById("settings-company-name")
@@ -2277,6 +2278,7 @@
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
               },
               body: JSON.stringify({ plan, billing: "monthly" }),
             },
@@ -2304,6 +2306,7 @@
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
               },
             },
           );

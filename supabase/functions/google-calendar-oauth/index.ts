@@ -80,15 +80,28 @@ serve(async (req) => {
   const action = url.pathname.split("/").pop();
 
   try {
-    // ---- /authorize: JWT必須 ----
+    // ---- /authorize: JWT手動検証（--no-verify-jwt でデプロイ） ----
+    // Supabaseゲートウェイは /callback に JWT を要求できないため関数全体を
+    // --no-verify-jwt で運用し、authorize 側のみここで手動検証する。
     if (action === "authorize") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) return jsonResp({ error: "認証が必要です" }, 401);
+
+      const jwt = authHeader.replace(/^Bearer\s+/i, "");
+      if (!jwt) return jsonResp({ error: "JWTが不正です" }, 401);
+
       const userClient = getUserClient(authHeader);
       const {
         data: { user },
-      } = await userClient.auth.getUser();
-      if (!user) return jsonResp({ error: "認証が必要です" }, 401);
+        error: authError,
+      } = await userClient.auth.getUser(jwt);
+      if (authError || !user) {
+        console.error("[google-calendar-oauth] auth failed:", authError);
+        return jsonResp(
+          { error: "認証が必要です", detail: authError?.message },
+          401,
+        );
+      }
 
       const company_id = url.searchParams.get("company_id");
       if (!company_id) return jsonResp({ error: "company_id が必要です" }, 400);

@@ -221,57 +221,6 @@ serve(async (req) => {
       await delay(1000);
     }
 
-    // D2. Indeed / 求人ボックス RSS
-    // 【8】会社名で求人検索。求人数と更新傾向を集計して 7日間保存。
-    if (company.company_name) {
-      try {
-        const query = encodeURIComponent(company.company_name);
-        const indeedUrl = `https://jp.indeed.com/rss?q=${query}&l=`;
-        const kyujinBoxUrl = `https://xn--pckua2a7gp15o89zb.com/rss?q=${query}`;
-
-        const [indeedRes, kbRes] = await Promise.all([
-          fetch(indeedUrl, { headers: { "User-Agent": "Sentio/1.0" } }).catch(
-            () => null,
-          ),
-          fetch(kyujinBoxUrl, {
-            headers: { "User-Agent": "Sentio/1.0" },
-          }).catch(() => null),
-        ]);
-
-        const summary: {
-          indeed: RssStats;
-          kyujin_box: RssStats;
-        } = {
-          indeed: await summarizeRss(indeedRes),
-          kyujin_box: await summarizeRss(kbRes),
-        };
-
-        await supabase.from("external_data").insert({
-          company_id,
-          source: "job_posting",
-          data_type: "json",
-          content: JSON.stringify({
-            sub_source: "rss",
-            query: company.company_name,
-            ...summary,
-            fetched_at: new Date().toISOString(),
-          }),
-          // 求人の鮮度は短いので +7日
-          expires_at: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
-        });
-        results.job_posting_rss = "ok";
-      } catch (e) {
-        captureError(e as Error, {
-          company_id,
-          extra: { source: "job_posting_rss" },
-        });
-        results.job_posting_rss = "error";
-      }
-      await delay(1000);
-    }
-
     // E. 業界統計（事前キャッシュ済みデータ）
     if (company.industry) {
       try {
@@ -824,24 +773,6 @@ function parseCsvLine(line: string): string[] {
   }
   out.push(cur);
   return out;
-}
-
-// RSS集計（タイトル数・初出日）
-interface RssStats {
-  fetched: boolean;
-  count: number;
-  latest_title?: string;
-}
-async function summarizeRss(res: Response | null): Promise<RssStats> {
-  if (!res || !res.ok) return { fetched: false, count: 0 };
-  const text = await res.text();
-  const items = text.match(/<item[\s\S]*?<\/item>/gi) ?? [];
-  const firstTitle = items[0]?.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? "";
-  return {
-    fetched: true,
-    count: items.length,
-    latest_title: firstTitle.replace(/<!\[CDATA\[|\]\]>/g, "").slice(0, 120),
-  };
 }
 
 // 日銀短観シリーズコード簡易マッピング。

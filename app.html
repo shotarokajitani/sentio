@@ -1695,6 +1695,62 @@
                 </div>
               </div>
             </div>
+            <div class="card">
+              <div class="card-label">Google広告連携</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                Google広告を連携すると、広告費・クリック・コンバージョン・CPAの週次推移を問いに反映します。
+              </div>
+              <div id="integration-google-ads-row" style="margin-bottom: 12px">
+                <button
+                  class="qa-btn"
+                  onclick="connectAccounting('google_ads')"
+                >
+                  Google広告を連携する
+                </button>
+                <span
+                  id="integration-google-ads-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
+              <div id="integration-google-ads-customer" style="display: none">
+                <label
+                  style="
+                    font-size: 12px;
+                    color: var(--stone);
+                    display: block;
+                    margin-bottom: 6px;
+                  "
+                  >Google Ads カスタマーID（例: 123-456-7890）</label
+                >
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input
+                    type="text"
+                    id="google-ads-customer-id"
+                    placeholder="123-456-7890"
+                    style="
+                      flex: 1;
+                      padding: 8px 12px;
+                      border: 0.5px solid var(--border);
+                      border-radius: 4px;
+                      font-size: 13px;
+                    "
+                  />
+                  <button class="qa-btn" onclick="saveGoogleAdsCustomerId()">
+                    保存
+                  </button>
+                </div>
+                <div
+                  style="font-size: 11px; color: var(--stone); margin-top: 6px"
+                >
+                  Google広告管理画面
+                  右上のアカウント番号（10桁）を入力してください。
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="settings-panel" id="settings-competitors">
@@ -2257,6 +2313,7 @@
             slack: "slack-oauth",
             chatwork: "chatwork-oauth",
             ga4: "ga4-oauth",
+            google_ads: "google-ads-oauth",
           };
           const fn = fnMap[provider];
           if (!fn) throw new Error("unknown provider: " + provider);
@@ -2331,12 +2388,16 @@
           (i) => i.type === "chatwork",
         );
         const ga4 = (integrations || []).find((i) => i.type === "ga4");
+        const googleAds = (integrations || []).find(
+          (i) => i.type === "google_ads",
+        );
         renderStatus("integration-freee-status", freee);
         renderStatus("integration-mf-status", mf);
         renderStatus("integration-gcal-status", gcal);
         renderStatus("integration-slack-status", slack);
         renderStatus("integration-chatwork-status", chatwork);
         renderStatus("integration-ga4-status", ga4);
+        renderStatus("integration-google-ads-status", googleAds);
 
         // 連携後のみプロパティID入力欄を表示
         const ga4Property = document.getElementById("integration-ga4-property");
@@ -2349,6 +2410,25 @@
             }
           } else {
             ga4Property.style.display = "none";
+          }
+        }
+
+        // Google広告も同様にカスタマーID入力欄を表示
+        const adsCustomer = document.getElementById(
+          "integration-google-ads-customer",
+        );
+        if (adsCustomer) {
+          if (
+            googleAds &&
+            (googleAds.status === "connected" || googleAds.status === "pending")
+          ) {
+            adsCustomer.style.display = "block";
+            const input = document.getElementById("google-ads-customer-id");
+            if (input && googleAds.metadata?.customer_id) {
+              input.value = googleAds.metadata.customer_id;
+            }
+          } else {
+            adsCustomer.style.display = "none";
           }
         }
       }
@@ -2388,6 +2468,43 @@
         }
       }
 
+      async function saveGoogleAdsCustomerId() {
+        if (!currentCompany) return;
+        const input = document.getElementById("google-ads-customer-id");
+        const raw = (input?.value || "").trim();
+        const normalized = raw.replace(/-/g, "");
+        if (!/^\d{10}$/.test(normalized)) {
+          alert("カスタマーIDは10桁の数字で入力してください（ハイフン可）。");
+          return;
+        }
+        try {
+          const { data: integ, error: fetchErr } = await supabase
+            .from("integrations")
+            .select("id,metadata")
+            .eq("company_id", currentCompany.id)
+            .eq("type", "google_ads")
+            .single();
+          if (fetchErr || !integ)
+            throw new Error("Google広告連携が見つかりません。");
+          const nextMetadata = {
+            ...(integ.metadata || {}),
+            customer_id: normalized,
+          };
+          const { error: upErr } = await supabase
+            .from("integrations")
+            .update({ metadata: nextMetadata, status: "connected" })
+            .eq("id", integ.id);
+          if (upErr) throw upErr;
+          alert(
+            "Google広告カスタマーIDを保存しました。明日の同期から有効になります。",
+          );
+          loadIntegrationStatus();
+        } catch (err) {
+          console.error("saveGoogleAdsCustomerId error:", err);
+          alert("保存に失敗しました：" + (err?.message || err));
+        }
+      }
+
       // OAuthコールバック後の通知
       (function handleIntegrationCallback() {
         const params = new URLSearchParams(window.location.search);
@@ -2401,6 +2518,7 @@
             slack: "Slack",
             chatwork: "Chatwork",
             ga4: "Google Analytics（GA4）",
+            google_ads: "Google広告",
           };
           const providerName = nameMap[integration] || integration;
           if (result === "success") {

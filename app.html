@@ -1751,6 +1751,114 @@
                 </div>
               </div>
             </div>
+            <div class="card">
+              <div class="card-label">Semrush（オプション）</div>
+              <div class="card-body" style="margin-bottom: 12px">
+                Businessプランをお持ちの場合、競合の検索順位・キーワード流入データをSentioに取り込めます。
+              </div>
+              <ul
+                style="
+                  font-size: 12px;
+                  color: var(--stone);
+                  margin: 0 0 16px 18px;
+                  line-height: 1.8;
+                "
+              >
+                <li>競合サイトのオーガニック流入推移</li>
+                <li>競合が上位表示しているキーワード</li>
+                <li>自社vs競合のキーワード重複率</li>
+              </ul>
+              <label
+                style="
+                  font-size: 12px;
+                  color: var(--stone);
+                  display: block;
+                  margin-bottom: 6px;
+                "
+                >APIキー</label
+              >
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  type="password"
+                  id="semrush-api-key"
+                  placeholder="Semrush APIキー"
+                  autocomplete="off"
+                  style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border: 0.5px solid var(--border);
+                    border-radius: 4px;
+                    font-size: 13px;
+                  "
+                />
+                <button class="qa-btn" onclick="saveSemrushApiKey()">
+                  保存する
+                </button>
+              </div>
+              <span
+                id="integration-semrush-status"
+                style="
+                  display: block;
+                  margin-top: 8px;
+                  font-size: 12px;
+                  color: var(--stone);
+                "
+              ></span>
+            </div>
+            <div class="card">
+              <div class="card-label">Ahrefs（オプション）</div>
+              <div class="card-body" style="margin-bottom: 12px">
+                Enterpriseプランをお持ちの場合、競合のバックリンク・ドメイン評価データをSentioに取り込めます。
+              </div>
+              <ul
+                style="
+                  font-size: 12px;
+                  color: var(--stone);
+                  margin: 0 0 16px 18px;
+                  line-height: 1.8;
+                "
+              >
+                <li>競合のドメインレーティング推移</li>
+                <li>新規獲得バックリンクの変化</li>
+                <li>自社vs競合のバックリンク比較</li>
+              </ul>
+              <label
+                style="
+                  font-size: 12px;
+                  color: var(--stone);
+                  display: block;
+                  margin-bottom: 6px;
+                "
+                >APIキー</label
+              >
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  type="password"
+                  id="ahrefs-api-key"
+                  placeholder="Ahrefs APIキー"
+                  autocomplete="off"
+                  style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border: 0.5px solid var(--border);
+                    border-radius: 4px;
+                    font-size: 13px;
+                  "
+                />
+                <button class="qa-btn" onclick="saveAhrefsApiKey()">
+                  保存する
+                </button>
+              </div>
+              <span
+                id="integration-ahrefs-status"
+                style="
+                  display: block;
+                  margin-top: 8px;
+                  font-size: 12px;
+                  color: var(--stone);
+                "
+              ></span>
+            </div>
           </div>
 
           <div class="settings-panel" id="settings-competitors">
@@ -2391,6 +2499,8 @@
         const googleAds = (integrations || []).find(
           (i) => i.type === "google_ads",
         );
+        const semrush = (integrations || []).find((i) => i.type === "semrush");
+        const ahrefs = (integrations || []).find((i) => i.type === "ahrefs");
         renderStatus("integration-freee-status", freee);
         renderStatus("integration-mf-status", mf);
         renderStatus("integration-gcal-status", gcal);
@@ -2398,6 +2508,18 @@
         renderStatus("integration-chatwork-status", chatwork);
         renderStatus("integration-ga4-status", ga4);
         renderStatus("integration-google-ads-status", googleAds);
+        renderStatus("integration-semrush-status", semrush);
+        renderStatus("integration-ahrefs-status", ahrefs);
+
+        // APIキー入力欄は既に保存済みの場合、プレースホルダーで明示するだけ（キーは取得しない）
+        const semrushInput = document.getElementById("semrush-api-key");
+        if (semrushInput && semrush?.status === "connected") {
+          semrushInput.placeholder = "保存済み（変更する場合のみ入力）";
+        }
+        const ahrefsInput = document.getElementById("ahrefs-api-key");
+        if (ahrefsInput && ahrefs?.status === "connected") {
+          ahrefsInput.placeholder = "保存済み（変更する場合のみ入力）";
+        }
 
         // 連携後のみプロパティID入力欄を表示
         const ga4Property = document.getElementById("integration-ga4-property");
@@ -2503,6 +2625,51 @@
           console.error("saveGoogleAdsCustomerId error:", err);
           alert("保存に失敗しました：" + (err?.message || err));
         }
+      }
+
+      // SEO系（Semrush / Ahrefs）はOAuthではなくAPIキー入力方式。
+      // 整合性のため共通ヘルパーでupsertする。APIキーは access_token カラムに格納する。
+      async function saveApiKeyIntegration(provider, labelName, apiKey) {
+        if (!currentCompany) return;
+        if (!apiKey) {
+          alert("APIキーを入力してください。");
+          return;
+        }
+        try {
+          const { error } = await supabase.from("integrations").upsert(
+            {
+              company_id: currentCompany.id,
+              type: provider,
+              status: "connected",
+              access_token: apiKey,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,type" },
+          );
+          if (error) throw error;
+          // 保存後にキー欄をクリア（画面に残さない）
+          const input = document.getElementById(`${provider}-api-key`);
+          if (input) input.value = "";
+          alert(`${labelName}のAPIキーを保存しました。`);
+          loadIntegrationStatus();
+        } catch (err) {
+          console.error(`save${provider}ApiKey error:`, err);
+          alert("保存に失敗しました：" + (err?.message || err));
+        }
+      }
+
+      async function saveSemrushApiKey() {
+        const apiKey = (
+          document.getElementById("semrush-api-key")?.value || ""
+        ).trim();
+        await saveApiKeyIntegration("semrush", "Semrush", apiKey);
+      }
+
+      async function saveAhrefsApiKey() {
+        const apiKey = (
+          document.getElementById("ahrefs-api-key")?.value || ""
+        ).trim();
+        await saveApiKeyIntegration("ahrefs", "Ahrefs", apiKey);
       }
 
       // OAuthコールバック後の通知

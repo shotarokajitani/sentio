@@ -1834,6 +1834,9 @@
           }
           // Supabase Edge Functions のゲートウェイは apikey ヘッダーを必須要求する。
           // Authorization のみだと 401 になるため、apikey に anon key を付与。
+          console.log("session:", session);
+          console.log("access_token:", session?.access_token);
+          console.log("anon_key:", typeof SUPABASE_ANON_KEY);
           const res = await fetch(
             `${SUPABASE_URL}/functions/v1/register-company`,
             {

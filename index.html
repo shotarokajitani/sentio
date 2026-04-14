@@ -19,7 +19,7 @@
     <title>Sentio — 決断が生まれる組織をデザインする。</title>
     <meta
       name="description"
-      content="Sentioは、御社のデータを読み、今週動くべき一つの問いを届けます。従業員5名〜50名の経営者へ。"
+      content="Sentioは、御社のデータを読み、今週動くべき一つの問いを届けます。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -107,17 +107,29 @@
       .nav-links a:hover {
         color: var(--earth);
       }
+      .nav-login {
+        font-size: 13px;
+        color: var(--ocean) !important;
+        font-weight: 500;
+      }
+      .nav-login:hover {
+        opacity: 0.7;
+      }
       .nav-cta {
         font-size: 12px;
         font-weight: 500;
         padding: 9px 24px;
-        background: var(--ocean);
-        color: #fff;
+        background: #fff;
+        color: var(--ocean);
+        border: 1px solid var(--ocean);
         border-radius: 4px;
-        transition: opacity 0.2s;
+        transition:
+          background 0.2s,
+          color 0.2s;
       }
       .nav-cta:hover {
-        opacity: 0.85;
+        background: var(--ocean);
+        color: #fff;
       }
       .nav-hamburger {
         display: none;
@@ -169,21 +181,23 @@
       }
       .btn-primary {
         display: inline-block;
-        padding: 15px 36px;
-        background: var(--ocean);
-        color: #fff;
+        padding: 14px 36px;
+        background: #fff;
+        color: var(--ocean);
         font-size: 13px;
         font-weight: 500;
         letter-spacing: 0.04em;
-        border: none;
+        border: 1px solid var(--ocean);
         border-radius: 4px;
         cursor: pointer;
         transition:
-          opacity 0.2s,
+          background 0.2s,
+          color 0.2s,
           transform 0.2s;
       }
       .btn-primary:hover {
-        opacity: 0.85;
+        background: var(--ocean);
+        color: #fff;
         transform: translateY(-1px);
       }
       .btn-outline {
@@ -880,6 +894,11 @@
         <li><a href="#demo">デモ</a></li>
         <li><a href="#pricing">料金</a></li>
         <li><a href="#faq">よくある質問</a></li>
+        <li>
+          <a href="https://www.sentio-ai.jp/app.html" class="nav-login"
+            >ログイン</a
+          >
+        </li>
         <li><a href="app.html" class="nav-cta">無料で始める</a></li>
       </ul>
       <button
@@ -900,7 +919,6 @@
     <section class="hero">
       <div class="container">
         <div class="hero-inner">
-          <div class="hero-eyebrow">従業員5名〜50名の経営者へ。</div>
           <div class="hero-wordmark">S<span class="e">e</span>ntio</div>
           <h1>決断が生まれる組織を<br />デザインする。</h1>
           <p class="hero-sub">

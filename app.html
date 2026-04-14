@@ -331,6 +331,41 @@
         flex-direction: column;
       }
 
+      /* Minimal footer (全画面共通：auth/onboarding/app) */
+      .app-footer {
+        padding: 16px 32px;
+        border-top: 0.5px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--stone);
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .app-footer ul {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .app-footer a {
+        color: var(--stone);
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .app-footer a:hover {
+        color: var(--earth);
+      }
+      @media (max-width: 640px) {
+        .app-footer {
+          padding: 16px 20px;
+          font-size: 10px;
+        }
+        .app-footer ul {
+          gap: 14px;
+        }
+      }
+
       /* Header */
       .app-header {
         display: flex;
@@ -1640,6 +1675,17 @@
         </div>
       </main>
     </div>
+
+    <footer class="app-footer">
+      <span>&copy; 2026 Diseno Inc.</span>
+      <ul>
+        <li><a href="/privacy.html">プライバシーポリシー</a></li>
+        <li><a href="/">トップ</a></li>
+        <li>
+          <a href="mailto:shotaro.kajitani@mdc-diseno.com">お問い合わせ</a>
+        </li>
+      </ul>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js?v=20260408"></script>
     <script>

@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>プライバシーポリシー — Sentio</title>
+    <meta
+      name="description"
+      content="Sentioが取得するデータ、取得しないデータ、データの取り扱いについて。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500;600&family=Noto+Sans+JP:wght@300;400;500&family=Noto+Serif+JP:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --cream: #f7f5f2;
+        --ocean: #0e5070;
+        --ocean-light: rgba(14, 80, 112, 0.08);
+        --ocean-mid: rgba(14, 80, 112, 0.5);
+        --earth: #1a1a1a;
+        --stone: #6b6560;
+        --mist: #c8c3bc;
+        --border: #e5e0da;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html {
+        font-size: 16px;
+      }
+      body {
+        font-family: "Inter", "Noto Sans JP", sans-serif;
+        font-weight: 300;
+        color: var(--earth);
+        background: var(--cream);
+        line-height: 1.9;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      /* Nav */
+      .nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 56px;
+        height: 60px;
+        background: rgba(247, 245, 242, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 0.5px solid var(--border);
+      }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      .logo .e {
+        color: var(--ocean);
+      }
+      .nav-back {
+        font-size: 12px;
+        color: var(--stone);
+        transition: color 0.2s;
+      }
+      .nav-back:hover {
+        color: var(--earth);
+      }
+
+      /* Layout */
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 140px 32px 120px;
+      }
+
+      .eyebrow {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--ocean);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .eyebrow::before {
+        content: "";
+        width: 20px;
+        height: 0.5px;
+        background: var(--ocean-mid);
+      }
+
+      h1 {
+        font-family: "Cormorant Garamond", "Noto Serif JP", serif;
+        font-weight: 400;
+        font-size: 44px;
+        letter-spacing: 0.02em;
+        color: var(--earth);
+        line-height: 1.3;
+        margin-bottom: 16px;
+      }
+      .updated {
+        font-size: 12px;
+        color: var(--stone);
+        margin-bottom: 64px;
+      }
+
+      h2 {
+        font-family: "Noto Serif JP", serif;
+        font-weight: 400;
+        font-size: 22px;
+        color: var(--earth);
+        letter-spacing: 0.02em;
+        line-height: 1.6;
+        margin: 56px 0 20px;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid var(--border);
+      }
+      h2 em {
+        font-style: normal;
+        color: var(--ocean);
+      }
+
+      h3 {
+        font-family: "Noto Serif JP", serif;
+        font-weight: 500;
+        font-size: 15px;
+        color: var(--earth);
+        margin: 32px 0 12px;
+      }
+
+      p {
+        font-size: 14px;
+        color: var(--earth);
+        margin-bottom: 16px;
+      }
+
+      ul.plain {
+        list-style: none;
+        margin: 12px 0 24px;
+      }
+      ul.plain li {
+        font-size: 14px;
+        color: var(--earth);
+        padding: 10px 0 10px 22px;
+        position: relative;
+        border-bottom: 0.5px dashed var(--border);
+      }
+      ul.plain li:last-child {
+        border-bottom: none;
+      }
+      ul.plain li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 22px;
+        width: 10px;
+        height: 0.5px;
+        background: var(--ocean-mid);
+      }
+      ul.plain li em {
+        font-style: normal;
+        color: var(--stone);
+        font-size: 12px;
+        display: block;
+        margin-top: 4px;
+      }
+
+      .intro {
+        font-size: 15px;
+        color: var(--earth);
+        line-height: 2;
+        margin-bottom: 40px;
+        padding: 28px 32px;
+        background: rgba(255, 255, 255, 0.6);
+        border-left: 1.5px solid var(--ocean);
+      }
+
+      .contact-box {
+        margin-top: 64px;
+        padding: 32px;
+        background: rgba(255, 255, 255, 0.6);
+        border: 0.5px solid var(--border);
+        border-radius: 4px;
+      }
+      .contact-box h3 {
+        margin-top: 0;
+      }
+      .contact-box a {
+        color: var(--ocean);
+        border-bottom: 0.5px solid var(--ocean-mid);
+      }
+
+      /* Footer */
+      footer {
+        border-top: 0.5px solid var(--border);
+        padding: 32px 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--stone);
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .footer-brand {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 16px;
+        letter-spacing: 0.12em;
+        color: var(--earth);
+      }
+      footer ul {
+        display: flex;
+        gap: 24px;
+        list-style: none;
+      }
+      footer a:hover {
+        color: var(--earth);
+      }
+
+      @media (max-width: 640px) {
+        .nav {
+          padding: 0 24px;
+        }
+        main {
+          padding: 110px 24px 80px;
+        }
+        h1 {
+          font-size: 32px;
+        }
+        h2 {
+          font-size: 18px;
+        }
+        footer {
+          padding: 24px;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a href="/" class="logo">S<span class="e">e</span>ntio</a>
+      <a href="/" class="nav-back">← トップへ戻る</a>
+    </nav>
+
+    <main>
+      <div class="eyebrow">PRIVACY POLICY</div>
+      <h1>プライバシーポリシー</h1>
+      <div class="updated">最終更新日：2026年4月14日</div>
+
+      <div class="intro">
+        Sentioは、経営者の意思決定を支える問いを届けるために、
+        必要最小限のデータだけを取得し、目的に沿って厳格に取り扱います。<br />
+        取得するデータ、取得しないデータ、その扱いについて明記します。
+      </div>
+
+      <h2><em>取得する</em>データ</h2>
+      <p>Sentioは分析と問い生成のために、以下のデータを取得します。</p>
+      <ul class="plain">
+        <li>
+          会社名・URL（登録時）
+          <em>オンボーディングで入力いただく基本情報</em>
+        </li>
+        <li>
+          Googleカレンダーの予定データ（件数・頻度・参加者ドメイン）
+          <em>ミーティングの量や外部企業との接触傾向を分析</em>
+        </li>
+        <li>
+          Slackのメッセージ数・チャンネルアクティビティ
+          <em>社内コミュニケーションの活発度と時間帯の偏り</em>
+        </li>
+        <li>
+          Chatworkのメッセージ数・ルームアクティビティ
+          <em>ルーム別の動きと未読の蓄積</em>
+        </li>
+        <li>
+          freeeの財務データ（月次損益・キャッシュフロー）
+          <em>数字の変化から経営のシグナルを検出</em>
+        </li>
+        <li>
+          公開情報（Webサイト・口コミ・求人情報）
+          <em>検索可能な公開情報から外形的な状況を把握</em>
+        </li>
+      </ul>
+
+      <h2><em>取得しない</em>データ</h2>
+      <p>以下のデータは、Sentioが取得・保存することはありません。</p>
+      <ul class="plain">
+        <li>
+          メッセージの本文・内容
+          <em>Slack / Chatworkの本文は一切取得しません</em>
+        </li>
+        <li>
+          個人名・個人のメールアドレス
+          <em>従業員・取引先の個人情報は収集・保存しません</em>
+        </li>
+        <li>
+          財務の生データ（構造化データのみ保存）
+          <em>仕訳や取引明細などの生データは保存せず、集計値のみを利用</em>
+        </li>
+      </ul>
+
+      <h2>データの<em>取り扱い</em></h2>
+
+      <h3>1. 他社との共有</h3>
+      <p>
+        取得したデータを、第三者に販売・提供・共有することはありません。
+        法令に基づく開示請求がある場合を除き、Sentioの運営目的以外には使用しません。
+      </p>
+
+      <h3>2. 暗号化保存</h3>
+      <p>
+        すべてのデータは通信時（TLS）および保存時（AES-256）に暗号化されます。
+        データベースはSupabase上で運用し、アクセスは厳密に制限されています。
+      </p>
+
+      <h3>3. 退会後の削除</h3>
+      <p>
+        退会いただいた後、180日以内にすべてのデータを完全削除します。
+        削除後は復元できません。バックアップからも削除されます。
+      </p>
+
+      <h3>4. Claude APIへの送信前のPIIマスキング</h3>
+      <p>
+        AIによる分析のためにデータの一部をAnthropic社のClaude APIに送信する際、
+        氏名・メールアドレス・電話番号などの個人を識別しうる情報（PII）は、
+        送信前に自動でマスキングを行います。Anthropic社には学習目的での使用を許可していません。
+      </p>
+
+      <h2>お客様の<em>権利</em></h2>
+      <p>
+        お客様はご自身のデータに関して、以下の権利をいつでも行使いただけます。
+      </p>
+      <ul class="plain">
+        <li>
+          取得しているデータの確認<em
+            >登録メールアドレスへお問い合わせください</em
+          >
+        </li>
+        <li>
+          データの訂正・削除
+          <em>設定画面から直接編集、または問い合わせ窓口から依頼可能</em>
+        </li>
+        <li>
+          連携サービスの解除
+          <em
+            >各連携（Googleカレンダー・Slack等）は設定画面から個別に解除可能</em
+          >
+        </li>
+        <li>
+          退会（アカウント削除）
+          <em>解約後180日で全データ完全削除</em>
+        </li>
+      </ul>
+
+      <h2>Cookieおよび<em>トラッキング</em></h2>
+      <p>
+        Sentioはログイン状態の維持に必要な最小限のCookieのみを使用します。
+        メール配信ではトラッキングピクセルを使用せず、クリック型リンクトークンのみを利用します。
+      </p>
+
+      <h2><em>変更</em>について</h2>
+      <p>
+        本ポリシーは、サービスの変更や法令の改正等に応じて更新することがあります。
+        重要な変更がある場合は、登録メールアドレス宛にお知らせします。
+      </p>
+
+      <div class="contact-box">
+        <h3>お問い合わせ窓口</h3>
+        <p>
+          本プライバシーポリシー、データの取り扱い、その他ご質問は以下までお願いします。
+        </p>
+        <p>
+          運営会社：株式会社ディセーノ<br />
+          所在地：〒150-0043 東京都渋谷区道玄坂1-10-8 渋谷道玄坂東急ビル 2F-C<br />
+          メール：<a href="mailto:shotaro.kajitani@mdc-diseno.com"
+            >shotaro.kajitani@mdc-diseno.com</a
+          >
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <span class="footer-brand">Sentio</span>
+      <ul>
+        <li><a href="/">トップ</a></li>
+        <li><a href="/privacy.html">プライバシーポリシー</a></li>
+        <li>
+          <a href="https://mdc-diseno.co.jp" target="_blank" rel="noopener"
+            >株式会社ディセーノ</a
+          >
+        </li>
+      </ul>
+      <span>&copy; 2026 Diseno Inc.</span>
+    </footer>
+  </body>
+</html>

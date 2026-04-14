@@ -82,11 +82,22 @@ serve(async (req) => {
     if (action === "authorize") {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) return jsonResp({ error: "認証が必要です" }, 401);
+
+      const jwt = authHeader.replace(/^Bearer\s+/i, "");
+      if (!jwt) return jsonResp({ error: "JWTが不正です" }, 401);
+
       const userClient = getUserClient(authHeader);
       const {
         data: { user },
-      } = await userClient.auth.getUser();
-      if (!user) return jsonResp({ error: "認証が必要です" }, 401);
+        error: authError,
+      } = await userClient.auth.getUser(jwt);
+      if (authError || !user) {
+        console.error("[moneyforward-oauth] auth failed:", authError);
+        return jsonResp(
+          { error: "認証が必要です", detail: authError?.message },
+          401,
+        );
+      }
 
       const company_id = url.searchParams.get("company_id");
       if (!company_id) return jsonResp({ error: "company_id が必要です" }, 400);

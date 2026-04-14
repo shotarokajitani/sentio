@@ -502,44 +502,92 @@
         border-color: var(--ocean);
       }
       .demo-body {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-      }
-      .demo-input,
-      .demo-output {
-        padding: 32px;
-      }
-      .demo-input {
-        border-right: 0.5px solid var(--border);
+        padding: 40px 44px 32px;
       }
       .demo-label {
         font-size: 10px;
         letter-spacing: 0.16em;
         color: var(--stone);
-        margin-bottom: 16px;
+        margin-bottom: 18px;
       }
       .demo-label.ocean {
         color: var(--ocean);
       }
-      .demo-signal {
+      .demo-signals {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 36px;
+      }
+      .demo-signal-card {
+        background: #f0f4f7;
+        border-left: 3px solid #0e5070;
+        border-radius: 3px;
+        padding: 14px 18px;
         font-size: 13px;
+        line-height: 1.7;
         color: var(--earth-soft);
-        line-height: 2;
+      }
+      .demo-question-wrap {
+        background: #f0f4f7;
+        border: 1px solid #0e5070;
+        border-radius: 6px;
+        padding: 40px 32px;
+        text-align: center;
+        margin-bottom: 20px;
       }
       .demo-question {
         font-family: "Noto Serif JP", serif;
-        font-size: 17px;
+        font-size: 22px;
         font-weight: 400;
         line-height: 1.9;
         color: var(--earth);
-        margin-bottom: 20px;
+        position: relative;
+        display: inline-block;
+        padding: 0 24px;
       }
-      .demo-rationale {
-        font-size: 12px;
+      .demo-question::before,
+      .demo-question::after {
+        content: '"';
+        font-family: "Cormorant Garamond", serif;
+        font-size: 48px;
+        color: #0e5070;
+        line-height: 1;
+        position: absolute;
+        opacity: 0.5;
+      }
+      .demo-question::before {
+        left: -8px;
+        top: -8px;
+      }
+      .demo-question::after {
+        right: -8px;
+        bottom: -32px;
+      }
+      .demo-note {
+        font-size: 11px;
         color: var(--stone);
-        line-height: 1.9;
-        padding-top: 16px;
-        border-top: 0.5px solid var(--border);
+        text-align: center;
+        letter-spacing: 0.08em;
+        margin-top: 18px;
+      }
+      .demo-note::before {
+        content: "● ";
+        color: #0e5070;
+        font-size: 8px;
+      }
+      .demo-fade {
+        animation: demoFadeIn 0.3s ease-out;
+      }
+      @keyframes demoFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       /* ===== PRICING ===== */
@@ -854,11 +902,14 @@
           padding: 12px 10px;
         }
         .demo-body {
-          grid-template-columns: 1fr;
+          padding: 28px 20px 24px;
         }
-        .demo-input {
-          border-right: none;
-          border-bottom: 0.5px solid var(--border);
+        .demo-question {
+          font-size: 17px;
+          padding: 0 16px;
+        }
+        .demo-question-wrap {
+          padding: 28px 20px;
         }
         .industry-tabs {
           flex-wrap: wrap;
@@ -1085,16 +1136,14 @@
               <button class="industry-tab" data-industry="it">IT・SaaS</button>
             </div>
           </div>
-          <div class="demo-body">
-            <div class="demo-input">
-              <div class="demo-label">検出されたシグナル</div>
-              <div class="demo-signal" id="demo-signal"></div>
-            </div>
-            <div class="demo-output">
-              <div class="demo-label ocean">SENTIO の問い</div>
+          <div class="demo-body" id="demo-body">
+            <div class="demo-label">検出されたシグナル</div>
+            <div class="demo-signals" id="demo-signals"></div>
+            <div class="demo-label ocean">SENTIO の問い</div>
+            <div class="demo-question-wrap">
               <div class="demo-question" id="demo-question"></div>
-              <div class="demo-rationale" id="demo-rationale"></div>
             </div>
+            <div class="demo-note">このシグナルはSentioが自動検出します</div>
           </div>
         </div>
       </div>
@@ -1286,36 +1335,40 @@
       // Demo card data
       const demoData = {
         retail: {
-          signal:
-            "Google口コミで「種類が少ない」という声が3ヶ月で2.4倍に増加。一方、Instagram広告のCPAは先月比で18%改善。既存顧客のリピート率は横ばい。",
+          signals: [
+            "競合A社が先月から採用を急増（エンジニア3名）",
+            "Googleマップ評点が3.8→3.6に下落",
+            "業種全体の景況感が前期比-8pt",
+          ],
           question:
-            "新規顧客は増えているのに、なぜリピーターが増えないのか。商品ラインナップの問題か、それとも購入後の体験に課題があるか。",
-          rationale:
-            "パターン1（表と裏の矛盾）：広告効率の改善と口コミ評価の低下が同時に起きている。新規獲得と既存満足度の乖離を検出。",
+            "競合が技術投資を加速しています。あなたの会社の強みは、半年後も同じですか？",
         },
         manufacturing: {
-          signal:
-            "求人サイトに製造リーダー職を6ヶ月間掲載中、応募ゼロ。同時期に同業3社が同職種の求人を取り下げ。御社の売上は前年比+8%で推移。",
+          signals: [
+            "日銀短観で同業の景況感が2期連続悪化",
+            "求人数が前月比+40%（設備投資の兆候）",
+            "競合B社の口コミに「品質が上がった」が急増",
+          ],
           question:
-            "売上は伸びているのに、なぜ現場のキーパーソンが採れないのか。競合が求人を止めた理由と、御社の採用条件に見直すべき点はないか。",
-          rationale:
-            "パターン3（戦略と行動の矛盾）：成長に必要な人材投資と、実際の採用状況の乖離を検出。競合動向との交差分析。",
+            "同業他社が設備投資を加速しています。この半年、あなたの会社は何に投資しましたか？",
         },
         service: {
-          signal:
-            "月次売上は安定。しかし上位3社の取引先が売上の72%を占める。うち1社の業界で規制変更の動きあり。",
+          signals: [
+            "口コミに「スタッフの対応」ネガが3週連続増加",
+            "競合の求人票に「未経験歓迎」が消えた",
+            "業種別の消費者物価が+2.1%上昇",
+          ],
           question:
-            "今の安定は、3社に支えられた安定。そのうち1社の業界が変わろうとしている。この依存構造を、いつ見直すか。",
-          rationale:
-            "パターン5（集中と分散の矛盾）：売上安定の裏にある取引先集中リスク。外部環境の変化との交差で緊急度が上昇。",
+            "現場の声が、数字に出る前に変化しています。今週、誰かと話しましたか？",
         },
         it: {
-          signal:
-            "MRRは順調に成長（月次+5%）。しかしチャーンレートが先月から1.2ポイント上昇。NPS回答率も低下傾向。カスタマーサクセス担当の求人を先月削除。",
+          signals: [
+            "競合C社がプレスリリースを3本連続で出した",
+            "業種の有効求人倍率が前年比+0.4",
+            "Slackの深夜メッセージ比率が先月比+12%",
+          ],
           question:
-            "MRRの成長が、解約率の上昇を隠していないか。カスタマーサクセスの体制を縮小したタイミングと、チャーン悪化の相関をどう見るか。",
-          rationale:
-            "パターン2（成長と実態の矛盾）：トップライン成長と顧客満足度低下の乖離を検出。人員配置の変化との交差分析。",
+            "チームが静かに限界に近づいています。この忙しさは、成長ですか。それとも消耗ですか？",
         },
       };
 
@@ -1327,9 +1380,15 @@
           .querySelector(`[data-industry="${industry}"]`)
           .classList.add("active");
         const d = demoData[industry];
-        document.getElementById("demo-signal").textContent = d.signal;
+        const body = document.getElementById("demo-body");
+        const signalsEl = document.getElementById("demo-signals");
+        signalsEl.innerHTML = d.signals
+          .map((s) => `<div class="demo-signal-card">${s}</div>`)
+          .join("");
         document.getElementById("demo-question").textContent = d.question;
-        document.getElementById("demo-rationale").textContent = d.rationale;
+        body.classList.remove("demo-fade");
+        void body.offsetWidth;
+        body.classList.add("demo-fade");
       }
 
       document.querySelectorAll(".industry-tab").forEach((tab) => {

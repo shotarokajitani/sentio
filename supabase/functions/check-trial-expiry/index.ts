@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { startCronLog, finishCronLog } from "../_shared/cron-logger.ts";
 
 initSentry("check-trial-expiry");
 
@@ -12,6 +13,7 @@ serve(async (req) => {
   }
 
   const supabase = getServiceClient();
+  const cronLog = await startCronLog(supabase, "check-trial-expiry");
 
   try {
     const now = new Date();
@@ -24,6 +26,10 @@ serve(async (req) => {
       .in("status", ["trialing", "trial_expired"]);
 
     if (!trials || trials.length === 0) {
+      await finishCronLog(supabase, cronLog, {
+        status: "success",
+        recordsProcessed: 0,
+      });
       return new Response(JSON.stringify({ success: true, results }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -132,12 +138,25 @@ serve(async (req) => {
       }
     }
 
+    const total =
+      results.reminded_3d +
+      results.reminded_1d +
+      results.expired +
+      results.canceled;
+    await finishCronLog(supabase, cronLog, {
+      status: "success",
+      recordsProcessed: total,
+    });
     return new Response(JSON.stringify({ success: true, results }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     captureError(error as Error);
+    await finishCronLog(supabase, cronLog, {
+      status: "error",
+      errorMessage: (error as Error).message,
+    });
     return new Response(
       JSON.stringify({ error: "トライアル期限チェックに失敗しました" }),
       {

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { startCronLog, finishCronLog } from "../_shared/cron-logger.ts";
 
 initSentry("deliver-question");
 
@@ -18,6 +19,7 @@ serve(async (req) => {
   }
 
   const supabase = getServiceClient();
+  const cronLog = await startCronLog(supabase, "deliver-question");
 
   try {
     const { question_id, company_id } = await req.json();
@@ -159,6 +161,10 @@ serve(async (req) => {
       })
       .eq("id", question_id);
 
+    await finishCronLog(supabase, cronLog, {
+      status: "success",
+      recordsProcessed: 1,
+    });
     return new Response(
       JSON.stringify({ success: true, email_id: emailResult.id }),
       {
@@ -168,6 +174,10 @@ serve(async (req) => {
     );
   } catch (error) {
     captureError(error as Error);
+    await finishCronLog(supabase, cronLog, {
+      status: "error",
+      errorMessage: (error as Error).message,
+    });
     return new Response(JSON.stringify({ error: "問い配信に失敗しました" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

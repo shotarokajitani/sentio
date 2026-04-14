@@ -3,6 +3,7 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
 import { sanitizePII } from "../_shared/sanitize.ts";
+import { startCronLog, finishCronLog } from "../_shared/cron-logger.ts";
 
 initSentry("detect-signals");
 
@@ -14,6 +15,7 @@ serve(async (req) => {
   }
 
   const supabase = getServiceClient();
+  const cronLog = await startCronLog(supabase, "detect-signals");
 
   try {
     const { company_id } = await req.json();
@@ -178,12 +180,20 @@ JSON配列で出力（0〜3件）:
       }
     }
 
+    await finishCronLog(supabase, cronLog, {
+      status: "success",
+      recordsProcessed: Array.isArray(inserted) ? inserted.length : 0,
+    });
     return new Response(JSON.stringify({ success: true, signals: inserted }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     captureError(error as Error);
+    await finishCronLog(supabase, cronLog, {
+      status: "error",
+      errorMessage: (error as Error).message,
+    });
     return new Response(
       JSON.stringify({ error: "シグナル検出に失敗しました" }),
       {

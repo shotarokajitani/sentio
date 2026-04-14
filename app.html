@@ -473,6 +473,34 @@
         border-bottom: 1px solid rgba(14, 80, 112, 0.3);
       }
 
+      /* Rate limit banner (429) */
+      .rate-limit-banner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        padding: 12px 20px;
+        background: #fff8e6;
+        border-bottom: 1px solid #e5d090;
+        font-size: 13px;
+        color: var(--earth);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        text-align: center;
+      }
+      .rate-limit-banner strong {
+        color: var(--ocean);
+        font-weight: 600;
+      }
+      .rate-limit-banner .countdown {
+        font-variant-numeric: tabular-nums;
+        color: var(--ocean);
+        font-weight: 600;
+      }
+
       /* Cards */
       .card {
         background: var(--white);
@@ -1067,6 +1095,16 @@
     </style>
   </head>
   <body>
+    <!-- ===== RATE LIMIT BANNER ===== -->
+    <div class="rate-limit-banner" id="rate-limit-banner">
+      <span
+        >しばらくお待ちください（残り<span class="countdown" id="rl-seconds"
+          >--</span
+        >秒）</span
+      >
+      <span id="rl-message"></span>
+    </div>
+
     <!-- ===== AUTH SCREEN ===== -->
     <div class="auth-screen" id="auth-screen">
       <div class="auth-box">
@@ -2368,6 +2406,54 @@
           window.location.href = url;
         } catch (err) {
           alert("ポータルの表示に失敗しました。");
+        }
+      }
+
+      // ===== RATE LIMIT (429) HANDLER =====
+      // Edge Functionが 429 を返した場合にカウントダウン表示＋自動リトライ
+      let rlInterval = null;
+      function showRateLimit(seconds, extraMsg) {
+        const banner = document.getElementById("rate-limit-banner");
+        const sec = document.getElementById("rl-seconds");
+        const msg = document.getElementById("rl-message");
+        sec.textContent = String(seconds);
+        msg.textContent = extraMsg || "";
+        banner.style.display = "flex";
+        if (rlInterval) clearInterval(rlInterval);
+        return new Promise((resolve) => {
+          rlInterval = setInterval(() => {
+            seconds--;
+            if (seconds <= 0) {
+              clearInterval(rlInterval);
+              rlInterval = null;
+              banner.style.display = "none";
+              resolve();
+            } else {
+              sec.textContent = String(seconds);
+            }
+          }, 1000);
+        });
+      }
+
+      // 429を含むJSONレスポンスを自動リトライする汎用fetchラッパ
+      async function fetchWithRateLimit(url, options, retryCount = 1) {
+        for (let attempt = 0; attempt <= retryCount; attempt++) {
+          const res = await fetch(url, options);
+          if (res.status !== 429) return res;
+          let json;
+          try {
+            json = await res.clone().json();
+          } catch {
+            json = {};
+          }
+          // 上限が月次の場合はリトライ不能。UIで案内のみ。
+          if (json.limit && json.plan) {
+            const extra = `（${json.plan}プランの月次上限 ${json.limit}回に達しました）`;
+            await showRateLimit(10, extra);
+            return res; // 呼び出し元にも 429 を返す
+          }
+          // その他の短期レート制限は 30秒待ってリトライ
+          await showRateLimit(30);
         }
       }
 

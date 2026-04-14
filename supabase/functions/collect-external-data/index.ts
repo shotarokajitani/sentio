@@ -1,16 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { startCronLog, finishCronLog } from "../_shared/cron-logger.ts";
 
 initSentry("collect-external-data");
 
 const GOOGLE_PLACES_API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
 const ESTAT_API_KEY = Deno.env.get("ESTAT_API_KEY");
 // e-Stat 経済センサス‐活動調査 デフォルトdataset（事業所数・従業者数 産業別×都道府県別）。
-// 年度更新で変わる可能性があるため、環境変数 ESTAT_STATS_DATA_ID で上書き可能。
 const ESTAT_STATS_DATA_ID = Deno.env.get("ESTAT_STATS_DATA_ID") ?? "0003411117";
 const ESTAT_ENDPOINT =
   "https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData";
+
+// 国税庁 法人番号API（application id 必須）
+const HOUJIN_BANGOU_APP_ID = Deno.env.get("HOUJIN_BANGOU_APP_ID");
+// 日銀 統計データ検索API
+const BOJ_STATS_ENDPOINT = "https://www.stat-search.boj.or.jp/api/";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,6 +23,7 @@ serve(async (req) => {
   }
 
   const supabase = getServiceClient();
+  const cronLog = await startCronLog(supabase, "collect-external-data");
 
   try {
     const { company_id, trigger } = (await req.json()) as {
@@ -177,33 +183,93 @@ serve(async (req) => {
       await delay(1000);
     }
 
-    // D. 登記情報（国税庁法人番号公表サイトAPI）
-    if (company.company_name) {
+    // D. 登記情報（国税庁法人番号公表サイトAPI v4）
+    // 【3】設立年・所在地・業種コード等の構造化データを12ヶ月保存
+    if (company.company_name && HOUJIN_BANGOU_APP_ID) {
       try {
         const name = encodeURIComponent(company.company_name);
         const regRes = await fetch(
-          `https://api.houjin-bangou.nta.go.jp/4/name?id=your_app_id&name=${name}&type=12&mode=2&kind=01`,
+          `https://api.houjin-bangou.nta.go.jp/4/name?id=${HOUJIN_BANGOU_APP_ID}&name=${name}&type=12&mode=2&kind=01`,
         );
         if (regRes.ok) {
           const regText = await regRes.text();
+          const parsed = parseHoujinBangouCsv(regText);
           await supabase.from("external_data").insert({
             company_id,
-            source: "registration",
-            data_type: "text",
-            content: JSON.stringify({ raw: regText.slice(0, 2000) }),
+            source: "corporate_registry",
+            data_type: "json",
+            content: JSON.stringify({
+              sub_source: "houjin_bangou_nta",
+              query: company.company_name,
+              top_match: parsed[0] ?? null,
+              candidates: parsed.slice(0, 3),
+              fetched_at: new Date().toISOString(),
+            }),
             expires_at: new Date(
               Date.now() + 365 * 24 * 60 * 60 * 1000,
             ).toISOString(),
           });
-          results.registration = "ok";
+          results.corporate_registry = "ok";
         }
       } catch (e) {
         captureError(e as Error, {
           company_id,
-          extra: { source: "registration" },
+          extra: { source: "corporate_registry" },
         });
-        results.registration = "error";
+        results.corporate_registry = "error";
       }
+      await delay(1000);
+    }
+
+    // D2. Indeed / 求人ボックス RSS
+    // 【8】会社名で求人検索。求人数と更新傾向を集計して 7日間保存。
+    if (company.company_name) {
+      try {
+        const query = encodeURIComponent(company.company_name);
+        const indeedUrl = `https://jp.indeed.com/rss?q=${query}&l=`;
+        const kyujinBoxUrl = `https://xn--pckua2a7gp15o89zb.com/rss?q=${query}`;
+
+        const [indeedRes, kbRes] = await Promise.all([
+          fetch(indeedUrl, { headers: { "User-Agent": "Sentio/1.0" } }).catch(
+            () => null,
+          ),
+          fetch(kyujinBoxUrl, {
+            headers: { "User-Agent": "Sentio/1.0" },
+          }).catch(() => null),
+        ]);
+
+        const summary: {
+          indeed: RssStats;
+          kyujin_box: RssStats;
+        } = {
+          indeed: await summarizeRss(indeedRes),
+          kyujin_box: await summarizeRss(kbRes),
+        };
+
+        await supabase.from("external_data").insert({
+          company_id,
+          source: "job_posting",
+          data_type: "json",
+          content: JSON.stringify({
+            sub_source: "rss",
+            query: company.company_name,
+            ...summary,
+            fetched_at: new Date().toISOString(),
+          }),
+          // 求人の鮮度は短いので +7日
+          expires_at: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+        });
+        results.job_posting_rss = "ok";
+      } catch (e) {
+        captureError(e as Error, {
+          company_id,
+          extra: { source: "job_posting_rss" },
+        });
+        results.job_posting_rss = "error";
+      }
+      await delay(1000);
     }
 
     // E. 業界統計（事前キャッシュ済みデータ）
@@ -309,6 +375,59 @@ serve(async (req) => {
       }
     }
 
+    // E3. 日銀短観API（業種別景況感）
+    // 【4】業種別の景況感指数を取得。四半期更新のため +90日 キャッシュ。
+    if (company.industry) {
+      try {
+        const bojSeriesCode = resolveBojTankanSeries(company.industry);
+        if (bojSeriesCode) {
+          const bojRes = await fetch(
+            `${BOJ_STATS_ENDPOINT}?code=${encodeURIComponent(bojSeriesCode)}&format=json`,
+            { headers: { "User-Agent": "Sentio/1.0" } },
+          );
+          if (bojRes.ok) {
+            const raw = await bojRes.text();
+            let parsedJson: unknown = null;
+            try {
+              parsedJson = JSON.parse(raw);
+            } catch {
+              // APIはCSV返却の場合があるため、生データをスライスして保存
+              parsedJson = { raw: raw.slice(0, 3000) };
+            }
+            await supabase.from("external_data").insert({
+              company_id,
+              source: "boj_tankan",
+              data_type: "json",
+              content: JSON.stringify({
+                series_code: bojSeriesCode,
+                industry: company.industry,
+                fetched_at: new Date().toISOString(),
+                payload: parsedJson,
+              }),
+              // 四半期更新のため +90日
+              expires_at: new Date(
+                Date.now() + 90 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            });
+            results.boj_tankan = "ok";
+          } else {
+            console.error(
+              "[collect-external-data] BOJ HTTP error:",
+              bojRes.status,
+            );
+            results.boj_tankan = "error";
+          }
+        }
+      } catch (e) {
+        captureError(e as Error, {
+          company_id,
+          extra: { source: "boj_tankan" },
+        });
+        results.boj_tankan = "error";
+      }
+      await delay(1000);
+    }
+
     // F. 競合情報（confirmed=trueのみ）
     try {
       const { data: competitors } = await supabase
@@ -386,12 +505,21 @@ serve(async (req) => {
       });
     }
 
+    const okCount = Object.values(results).filter((v) => v === "ok").length;
+    await finishCronLog(supabase, cronLog, {
+      status: "success",
+      recordsProcessed: okCount,
+    });
     return new Response(JSON.stringify({ success: true, results }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     captureError(error as Error);
+    await finishCronLog(supabase, cronLog, {
+      status: "error",
+      errorMessage: (error as Error).message,
+    });
     return new Response(JSON.stringify({ error: "データ収集に失敗しました" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -498,5 +626,88 @@ function prefectureToCode(pref: string | null | undefined): string | null {
   for (const [name, code] of Object.entries(PREFECTURE_CODES)) {
     if (trimmed.startsWith(name)) return code;
   }
+  return null;
+}
+
+// 国税庁法人番号APIはCSV返却のため最低限のパース。
+// フィールド：連番, 法人番号, 処理区分, 訂正区分, 更新日, 変更日, 商号, ..., 所在地, 所在地都道府県, 所在地市区町村, 設立日, ...
+interface HoujinBangouRecord {
+  corporate_number?: string;
+  name?: string;
+  prefecture?: string;
+  city?: string;
+  address?: string;
+  established_on?: string;
+}
+function parseHoujinBangouCsv(csv: string): HoujinBangouRecord[] {
+  const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const records: HoujinBangouRecord[] = [];
+  for (const line of lines.slice(0, 10)) {
+    // CSVは引用符付き。簡易パース（カンマを引用符外でのみ分割）。
+    const fields = parseCsvLine(line);
+    if (fields.length < 10) continue;
+    records.push({
+      corporate_number: fields[1],
+      name: fields[6],
+      prefecture: fields[9],
+      city: fields[10],
+      address: fields[11],
+      // 公開APIの設立日相当カラム（バージョンにより位置が変わる）
+      established_on: fields[17] ?? fields[16] ?? undefined,
+    });
+  }
+  return records;
+}
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === "," && !inQuotes) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+// RSS集計（タイトル数・初出日）
+interface RssStats {
+  fetched: boolean;
+  count: number;
+  latest_title?: string;
+}
+async function summarizeRss(res: Response | null): Promise<RssStats> {
+  if (!res || !res.ok) return { fetched: false, count: 0 };
+  const text = await res.text();
+  const items = text.match(/<item[\s\S]*?<\/item>/gi) ?? [];
+  const firstTitle = items[0]?.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? "";
+  return {
+    fetched: true,
+    count: items.length,
+    latest_title: firstTitle.replace(/<!\[CDATA\[|\]\]>/g, "").slice(0, 120),
+  };
+}
+
+// 日銀短観シリーズコード簡易マッピング。
+// 業種テキストから短観の代表的なDIコード（業況判断DI, 全規模）へ解決。
+// 本格対応には業種マスタが必要だが、MVPでは主要業種のみカバー。
+function resolveBojTankanSeries(industry: string | null): string | null {
+  if (!industry) return null;
+  const t = industry;
+  // 製造業
+  if (/製造|メーカー|工場/.test(t)) return "CO'MA1SM@CPTK";
+  if (/小売|物販|EC|eコマース/.test(t)) return "CO'MA1SS@CPTK";
+  if (/卸|商社/.test(t)) return "CO'MA1SW@CPTK";
+  if (/サービス|飲食|宿泊|観光/.test(t)) return "CO'MA1SV@CPTK";
+  if (/建設|建築|土木/.test(t)) return "CO'MA1SC@CPTK";
+  if (/不動産/.test(t)) return "CO'MA1SR@CPTK";
+  if (/IT|情報|ソフト|SaaS|システム/.test(t)) return "CO'MA1SV@CPTK";
   return null;
 }

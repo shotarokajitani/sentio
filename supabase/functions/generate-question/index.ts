@@ -3,6 +3,8 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
 import { sanitizePII } from "../_shared/sanitize.ts";
+import { startCronLog, finishCronLog } from "../_shared/cron-logger.ts";
+import { buildSeasonalPreamble } from "../_shared/season.ts";
 
 initSentry("generate-question");
 
@@ -51,6 +53,7 @@ serve(async (req) => {
   }
 
   const supabase = getServiceClient();
+  const cronLog = await startCronLog(supabase, "generate-question");
 
   try {
     const { company_id, signal_id } = await req.json();
@@ -105,6 +108,11 @@ serve(async (req) => {
             captureError(e as Error, { company_id });
           }
         }
+        await finishCronLog(supabase, cronLog, {
+          status: "success",
+          errorMessage: `rate_limited: plan=${plan} limit=${monthlyLimit}`,
+          recordsProcessed: 0,
+        });
         return jsonResp(
           {
             error: "月次の問い生成上限に達しました",
@@ -155,7 +163,7 @@ serve(async (req) => {
             content:
               sanitizePII(`あなたはSentioの問い生成エンジンです。経営者に届ける「問い」を一つ生成してください。
 
-【会社情報】
+${buildSeasonalPreamble()}【会社情報】
 会社名: ${company.company_name}
 業種: ${company.industry || "不明"}
 関心事: ${company.initial_concern || "不明"}
@@ -303,12 +311,20 @@ JSON以外は出力しないでください。`),
       });
     }
 
+    await finishCronLog(supabase, cronLog, {
+      status: "success",
+      recordsProcessed: 1,
+    });
     return new Response(JSON.stringify({ success: true, question }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     captureError(error as Error);
+    await finishCronLog(supabase, cronLog, {
+      status: "error",
+      errorMessage: (error as Error).message,
+    });
     return new Response(JSON.stringify({ error: "問い生成に失敗しました" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

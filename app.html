@@ -1641,6 +1641,60 @@
                 ></span>
               </div>
             </div>
+            <div class="card">
+              <div class="card-label">Google Analytics（GA4）連携</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                GA4を連携すると、セッション推移・チャネル別集客・直帰率・コンバージョン率を問いに反映します。
+              </div>
+              <div id="integration-ga4-row" style="margin-bottom: 12px">
+                <button class="qa-btn" onclick="connectAccounting('ga4')">
+                  Google Analytics（GA4）を連携する
+                </button>
+                <span
+                  id="integration-ga4-status"
+                  style="
+                    margin-left: 12px;
+                    font-size: 12px;
+                    color: var(--stone);
+                  "
+                ></span>
+              </div>
+              <div id="integration-ga4-property" style="display: none">
+                <label
+                  style="
+                    font-size: 12px;
+                    color: var(--stone);
+                    display: block;
+                    margin-bottom: 6px;
+                  "
+                  >GA4 プロパティID（数字のみ・例: 123456789）</label
+                >
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input
+                    type="text"
+                    id="ga4-property-id"
+                    placeholder="123456789"
+                    style="
+                      flex: 1;
+                      padding: 8px 12px;
+                      border: 0.5px solid var(--border);
+                      border-radius: 4px;
+                      font-size: 13px;
+                    "
+                  />
+                  <button class="qa-btn" onclick="saveGa4PropertyId()">
+                    保存
+                  </button>
+                </div>
+                <div
+                  id="ga4-property-hint"
+                  style="font-size: 11px; color: var(--stone); margin-top: 6px"
+                >
+                  GA4管理画面 → プロパティ設定 → プロパティID
+                  を入力してください。
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="settings-panel" id="settings-competitors">
@@ -2202,6 +2256,7 @@
             google_calendar: "google-calendar-oauth",
             slack: "slack-oauth",
             chatwork: "chatwork-oauth",
+            ga4: "ga4-oauth",
           };
           const fn = fnMap[provider];
           if (!fn) throw new Error("unknown provider: " + provider);
@@ -2242,7 +2297,7 @@
         if (!currentCompany) return;
         const { data: integrations } = await supabase
           .from("integrations")
-          .select("type,status,last_synced_at")
+          .select("type,status,last_synced_at,metadata")
           .eq("company_id", currentCompany.id);
         const labelMap = {
           connected: "連携済み",
@@ -2275,11 +2330,62 @@
         const chatwork = (integrations || []).find(
           (i) => i.type === "chatwork",
         );
+        const ga4 = (integrations || []).find((i) => i.type === "ga4");
         renderStatus("integration-freee-status", freee);
         renderStatus("integration-mf-status", mf);
         renderStatus("integration-gcal-status", gcal);
         renderStatus("integration-slack-status", slack);
         renderStatus("integration-chatwork-status", chatwork);
+        renderStatus("integration-ga4-status", ga4);
+
+        // 連携後のみプロパティID入力欄を表示
+        const ga4Property = document.getElementById("integration-ga4-property");
+        if (ga4Property) {
+          if (ga4 && (ga4.status === "connected" || ga4.status === "pending")) {
+            ga4Property.style.display = "block";
+            const input = document.getElementById("ga4-property-id");
+            if (input && ga4.metadata?.property_id) {
+              input.value = ga4.metadata.property_id;
+            }
+          } else {
+            ga4Property.style.display = "none";
+          }
+        }
+      }
+
+      async function saveGa4PropertyId() {
+        if (!currentCompany) return;
+        const input = document.getElementById("ga4-property-id");
+        const propertyId = (input?.value || "").trim();
+        if (!/^\d+$/.test(propertyId)) {
+          alert("プロパティIDは数字のみで入力してください。");
+          return;
+        }
+        try {
+          const { data: integ, error: fetchErr } = await supabase
+            .from("integrations")
+            .select("id,metadata")
+            .eq("company_id", currentCompany.id)
+            .eq("type", "ga4")
+            .single();
+          if (fetchErr || !integ) throw new Error("GA4連携が見つかりません。");
+          const nextMetadata = {
+            ...(integ.metadata || {}),
+            property_id: propertyId,
+          };
+          const { error: upErr } = await supabase
+            .from("integrations")
+            .update({ metadata: nextMetadata, status: "connected" })
+            .eq("id", integ.id);
+          if (upErr) throw upErr;
+          alert(
+            "GA4プロパティIDを保存しました。明日の同期から有効になります。",
+          );
+          loadIntegrationStatus();
+        } catch (err) {
+          console.error("saveGa4PropertyId error:", err);
+          alert("保存に失敗しました：" + (err?.message || err));
+        }
       }
 
       // OAuthコールバック後の通知
@@ -2294,6 +2400,7 @@
             google_calendar: "Google カレンダー",
             slack: "Slack",
             chatwork: "Chatwork",
+            ga4: "Google Analytics（GA4）",
           };
           const providerName = nameMap[integration] || integration;
           if (result === "success") {

@@ -6,6 +6,7 @@ import {
   getUserClient,
   corsHeaders,
 } from "../_shared/supabase.ts";
+import { sanitizePII } from "../_shared/sanitize.ts";
 
 initSentry("process-answer");
 
@@ -37,7 +38,9 @@ serve(async (req) => {
     });
   }
 
-  const supabase = getServiceClient();
+  // 通常の読み書きはRLS下のuserClientで行う
+  // signals等の制限テーブルへのINSERTのみserviceで実行
+  const service = getServiceClient();
 
   try {
     const { question_id, company_id, action, answer_text } =
@@ -48,12 +51,11 @@ serve(async (req) => {
         answer_text?: string;
       };
 
-    // 会社の所有権チェック
-    const { data: company } = await supabase
+    // 会社の所有権チェック（RLSで user_id = auth.uid() に絞られる）
+    const { data: company } = await userClient
       .from("companies")
       .select("*")
       .eq("id", company_id)
-      .eq("user_id", user.id)
       .single();
 
     if (!company) {
@@ -63,7 +65,7 @@ serve(async (req) => {
       });
     }
 
-    const { data: question } = await supabase
+    const { data: question } = await userClient
       .from("questions")
       .select("*")
       .eq("id", question_id)
@@ -88,7 +90,7 @@ serve(async (req) => {
     }
 
     if (action === "skip") {
-      await supabase
+      await userClient
         .from("questions")
         .update({
           status: "skipped",
@@ -96,9 +98,9 @@ serve(async (req) => {
         })
         .eq("id", question_id);
 
-      // signal.status='resolved', resolution_type='user_reported'
+      // signalsはRLS制限のためserviceで更新
       if (question.signal_id) {
-        await supabase
+        await service
           .from("signals")
           .update({
             status: "resolved",
@@ -117,7 +119,7 @@ serve(async (req) => {
     }
 
     if (action === "defer") {
-      await supabase
+      await userClient
         .from("questions")
         .update({
           status: "deferred",
@@ -135,7 +137,7 @@ serve(async (req) => {
     }
 
     // action === 'answer'
-    await supabase
+    await userClient
       .from("questions")
       .update({
         status: "answered",
@@ -145,7 +147,7 @@ serve(async (req) => {
       .eq("id", question_id);
 
     // 会話に記録
-    await supabase.from("conversations").insert([
+    await userClient.from("conversations").insert([
       {
         company_id,
         role: "sentio",
@@ -170,7 +172,8 @@ serve(async (req) => {
           messages: [
             {
               role: "user",
-              content: `経営者の回答を分析し、「言葉と感情の矛盾」（パターン6）がないか検出してください。
+              content:
+                sanitizePII(`経営者の回答を分析し、「言葉と感情の矛盾」（パターン6）がないか検出してください。
 
 【問い】
 ${question.question_text}
@@ -198,7 +201,7 @@ JSON配列で出力（検出なしの場合は空配列[]）:
   }
 ]
 
-JSON以外は出力しないでください。`,
+JSON以外は出力しないでください。`),
             },
           ],
         });
@@ -223,7 +226,7 @@ JSON以外は出力しないでください。`,
     // パターン6のシグナルをsignalsテーブルに挿入（source='executive'）
     for (const sig of newSignals) {
       if (sig.pattern_id !== 6) continue;
-      await supabase.from("signals").insert({
+      await service.from("signals").insert({
         company_id,
         pattern_id: 6,
         strength: sig.strength,

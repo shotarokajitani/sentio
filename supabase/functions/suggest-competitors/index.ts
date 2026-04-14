@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { sanitizePII } from "../_shared/sanitize.ts";
 
 initSentry("suggest-competitors");
 
@@ -36,7 +37,7 @@ serve(async (req) => {
       messages: [
         {
           role: "user",
-          content: `以下の会社の競合候補を3〜5社提案してください。
+          content: sanitizePII(`以下の会社の競合候補を3〜5社提案してください。
 
 会社名: ${company.company_name}
 URL: ${company.url || "不明"}
@@ -53,7 +54,7 @@ JSON形式で出力してください:
 - 実在する日本の企業のみ
 - URLは実際にアクセス可能なもの
 - 同業種・同規模・同市場の企業
-- JSON以外は出力しない`,
+- JSON以外は出力しない`),
         },
       ],
     });

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { sanitizePII } from "../_shared/sanitize.ts";
 
 initSentry("generate-question");
 
@@ -112,7 +113,8 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: `あなたはSentioの問い生成エンジンです。経営者に届ける「問い」を一つ生成してください。
+            content:
+              sanitizePII(`あなたはSentioの問い生成エンジンです。経営者に届ける「問い」を一つ生成してください。
 
 【会社情報】
 会社名: ${company.company_name}
@@ -150,7 +152,7 @@ ${PROHIBITED.join("、")}
   "answer_hints": ["ヒント1", "ヒント2", "ヒント3"]
 }
 
-JSON以外は出力しないでください。`,
+JSON以外は出力しないでください。`),
           },
         ],
       });

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 import { initSentry, captureError } from "../_shared/sentry.ts";
 import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
+import { sanitizePII } from "../_shared/sanitize.ts";
 
 initSentry("detect-signals");
 
@@ -64,7 +65,8 @@ serve(async (req) => {
       messages: [
         {
           role: "user",
-          content: `あなたはSentioのシグナル検出エンジンです。以下のデータを分析し、経営上の矛盾やチャンスを検出してください。
+          content:
+            sanitizePII(`あなたはSentioのシグナル検出エンジンです。以下のデータを分析し、経営上の矛盾やチャンスを検出してください。
 
 【会社情報】
 会社名: ${company.company_name}
@@ -104,7 +106,7 @@ JSON配列で出力（0〜3件）:
   }
 ]
 
-データが不十分な場合は空配列[]を返してください。JSON以外は出力しないでください。`,
+データが不十分な場合は空配列[]を返してください。JSON以外は出力しないでください。`),
         },
       ],
     });

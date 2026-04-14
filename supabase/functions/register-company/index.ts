@@ -58,6 +58,14 @@ serve(async (req) => {
       return jsonResp({ error: "company_name と url は必須です" }, 400);
     }
 
+    // industry / initial_concern はスキーマに存在しない可能性を考慮し、
+    // 値があるときだけペイロードに含める（未定義カラムで500を起こさないため）
+    const industryVal = body.industry?.trim();
+    const concernVal = body.initial_concern?.trim();
+    const optionalFields: Record<string, string> = {};
+    if (industryVal) optionalFields.industry = industryVal;
+    if (concernVal) optionalFields.initial_concern = concernVal;
+
     // subscriptions のINSERTは service role が必要なので、
     // companies のINSERTも service role で一本化する。
     // user_id は認証済みユーザーのIDを必ず使う（フロントからは受け取らない）。
@@ -93,8 +101,7 @@ serve(async (req) => {
         .update({
           company_name: companyName,
           url,
-          industry: body.industry?.trim() || null,
-          initial_concern: body.initial_concern?.trim() || null,
+          ...optionalFields,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingCompany.id)
@@ -120,8 +127,7 @@ serve(async (req) => {
           user_id: user.id,
           company_name: companyName,
           url,
-          industry: body.industry?.trim() || null,
-          initial_concern: body.initial_concern?.trim() || null,
+          ...optionalFields,
           onboarding_stage: "stage1",
         })
         .select()

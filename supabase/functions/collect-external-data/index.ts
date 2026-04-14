@@ -485,6 +485,155 @@ serve(async (req) => {
       results.competitor_site = "error";
     }
 
+    // F2. 競合の Google Places 口コミ評点・件数
+    // confirmed=true の競合ごとに Places API で rating / user_ratings_total を取得。
+    // 前回取得値（competitor_reviews source の最新レコード）と比較して変化率を記録。
+    if (GOOGLE_PLACES_API_KEY) {
+      try {
+        const { data: competitors } = await supabase
+          .from("competitors")
+          .select("*")
+          .eq("company_id", company_id)
+          .eq("confirmed", true);
+
+        if (competitors && competitors.length > 0) {
+          for (const comp of competitors) {
+            if (!comp.name) continue;
+            try {
+              // Find Place
+              const query = encodeURIComponent(comp.name);
+              const findRes = await fetch(
+                `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${query}&inputtype=textquery&fields=place_id,name,rating,user_ratings_total&key=${GOOGLE_PLACES_API_KEY}`,
+              );
+              const findData = await findRes.json();
+
+              if (!findData.candidates || findData.candidates.length === 0) {
+                continue;
+              }
+
+              const candidate = findData.candidates[0];
+              const placeId = candidate.place_id;
+
+              await delay(1000);
+
+              // Place Details（最新のrating/user_ratings_total）
+              const detailRes = await fetch(
+                `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total&language=ja&key=${GOOGLE_PLACES_API_KEY}`,
+              );
+              const detailData = await detailRes.json();
+              if (!detailData.result) continue;
+
+              const currentRating: number | null =
+                detailData.result.rating ?? null;
+              const currentTotal: number | null =
+                detailData.result.user_ratings_total ?? null;
+
+              // 前回取得値を検索（同 competitor_id / name で最新を1件）
+              const { data: prevRows } = await supabase
+                .from("external_data")
+                .select("content, created_at")
+                .eq("company_id", company_id)
+                .eq("source", "competitor_reviews")
+                .order("created_at", { ascending: false })
+                .limit(20);
+
+              let previous: {
+                rating?: number;
+                total_reviews?: number;
+                fetched_at?: string;
+              } | null = null;
+              if (prevRows) {
+                for (const row of prevRows) {
+                  try {
+                    const parsed = JSON.parse(row.content as string);
+                    if (
+                      parsed &&
+                      (parsed.competitor_id === comp.id ||
+                        parsed.competitor_name === comp.name)
+                    ) {
+                      previous = parsed;
+                      break;
+                    }
+                  } catch {
+                    // 無視して続行
+                  }
+                }
+              }
+
+              // 変化率計算
+              const ratingDelta =
+                previous?.rating != null && currentRating != null
+                  ? Number((currentRating - previous.rating).toFixed(3))
+                  : null;
+              const totalDelta =
+                previous?.total_reviews != null && currentTotal != null
+                  ? currentTotal - previous.total_reviews
+                  : null;
+              const totalChangeRate =
+                previous?.total_reviews != null &&
+                previous.total_reviews > 0 &&
+                currentTotal != null
+                  ? Number(
+                      (
+                        (currentTotal - previous.total_reviews) /
+                        previous.total_reviews
+                      ).toFixed(4),
+                    )
+                  : null;
+
+              await supabase.from("external_data").insert({
+                company_id,
+                source: "competitor_reviews",
+                data_type: "json",
+                content: JSON.stringify({
+                  competitor_id: comp.id,
+                  competitor_name: comp.name,
+                  competitor_url: comp.url ?? null,
+                  place_id: placeId,
+                  rating: currentRating,
+                  total_reviews: currentTotal,
+                  previous: previous
+                    ? {
+                        rating: previous.rating,
+                        total_reviews: previous.total_reviews,
+                        fetched_at: previous.fetched_at,
+                      }
+                    : null,
+                  change: {
+                    rating_delta: ratingDelta,
+                    total_reviews_delta: totalDelta,
+                    total_reviews_change_rate: totalChangeRate,
+                  },
+                  fetched_at: new Date().toISOString(),
+                }),
+                // 競合評点は変化が速いので +7日
+                expires_at: new Date(
+                  Date.now() + 7 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
+              });
+
+              await delay(1000);
+            } catch (e) {
+              captureError(e as Error, {
+                company_id,
+                extra: {
+                  source: "competitor_reviews",
+                  competitor: comp.name,
+                },
+              });
+            }
+          }
+          results.competitor_reviews = "ok";
+        }
+      } catch (e) {
+        captureError(e as Error, {
+          company_id,
+          extra: { source: "competitor_reviews" },
+        });
+        results.competitor_reviews = "error";
+      }
+    }
+
     // 完了後にdetect-signalsをトリガー
     try {
       await fetch(

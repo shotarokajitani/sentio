@@ -146,43 +146,6 @@ serve(async (req) => {
       }
     }
 
-    // C. 求人情報（Google検索ベース簡易版）
-    if (company.company_name) {
-      try {
-        const query = encodeURIComponent(`${company.company_name} 求人`);
-        const searchRes = await fetch(
-          `https://www.google.com/search?q=${query}&num=5`,
-          { headers: { "User-Agent": "Sentio/1.0" } },
-        );
-        if (searchRes.ok) {
-          const html = await searchRes.text();
-          const hasJobPostings = /求人|採用|募集|キャリア/.test(html);
-
-          await supabase.from("external_data").insert({
-            company_id,
-            source: "job_posting",
-            data_type: "json",
-            content: JSON.stringify({
-              has_active_postings: hasJobPostings,
-              checked_at: new Date().toISOString(),
-            }),
-            expires_at: new Date(
-              Date.now() + 180 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-          });
-          results.job_posting = "ok";
-        }
-      } catch (e) {
-        captureError(e as Error, {
-          company_id,
-          extra: { source: "job_posting" },
-        });
-        results.job_posting = "error";
-      }
-
-      await delay(1000);
-    }
-
     // D. 登記情報（国税庁法人番号公表サイトAPI v4）
     // 【3】設立年・所在地・業種コード等の構造化データを12ヶ月保存
     if (company.company_name && HOUJIN_BANGOU_APP_ID) {

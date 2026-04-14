@@ -1734,12 +1734,21 @@
         }
         currentUser = user;
 
-        const { data: company } = await supabase
+        // 既存companiesレコードの有無を判定。
+        // .single()は0行/複数行/RLSエラーで例外になりオンボーディングに飛ばされる不具合があったため、
+        // .maybeSingle()で0行を許容し、複数行の場合は最新レコードを採用する。
+        const { data: companies, error: companiesError } = await supabase
           .from("companies")
           .select("*")
           .eq("user_id", user.id)
-          .single();
+          .order("created_at", { ascending: false })
+          .limit(1);
 
+        if (companiesError) {
+          console.error("companies query error:", companiesError);
+        }
+
+        const company = companies && companies.length > 0 ? companies[0] : null;
         if (!company) {
           showScreen("onboarding");
           return;
@@ -1816,6 +1825,10 @@
           const {
             data: { session },
           } = await supabase.auth.getSession();
+          if (!session)
+            throw new Error(
+              "セッションが切れています。再ログインしてください。",
+            );
           const res = await fetch(
             `${SUPABASE_URL}/functions/v1/register-company`,
             {
@@ -1838,7 +1851,11 @@
           }
           currentCompany = json.company;
         } catch (err) {
+          // 登録失敗時は次のステップへ進まず、エラーを表示する。
+          // （従来は失敗してもstep-3を表示していたため、ユーザーは登録済みと誤認していた）
           console.error("Onboarding error:", err);
+          alert("会社情報の登録に失敗しました：" + (err?.message || err));
+          return;
         }
 
         document.getElementById("ob-step-2").classList.add("hidden");
@@ -2060,11 +2077,24 @@
       // ===== SETTINGS =====
       // ===== ACCOUNTING INTEGRATIONS =====
       async function connectAccounting(provider) {
-        if (!currentCompany) return;
+        if (!currentCompany) {
+          alert("会社情報が読み込まれていません。再読み込みしてください。");
+          return;
+        }
         try {
+          // セッションを明示的に取得。nullだと session.access_token でTypeErrorになるため
+          // 必ずnullチェックしてから fetch する。
           const {
             data: { session },
+            error: sessionError,
           } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+          if (!session || !session.access_token) {
+            throw new Error(
+              "セッションが切れています。再ログインしてください。",
+            );
+          }
+
           const fnMap = {
             freee: "freee-oauth",
             moneyforward: "moneyforward-oauth",
@@ -2074,21 +2104,36 @@
           };
           const fn = fnMap[provider];
           if (!fn) throw new Error("unknown provider: " + provider);
+
+          // Supabase Edge Functions のゲートウェイは apikey ヘッダーを要求するため、
+          // Authorization（ユーザーJWT）と apikey（anon key）の両方を付ける。
           const res = await fetch(
             `${SUPABASE_URL}/functions/v1/${fn}/authorize?company_id=${currentCompany.id}`,
             {
               method: "GET",
-              headers: { Authorization: `Bearer ${session.access_token}` },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
+              },
             },
           );
-          const json = await res.json();
+          let json;
+          try {
+            json = await res.json();
+          } catch {
+            throw new Error(
+              `サーバーから不正な応答 (status=${res.status})。Edge Functionが未デプロイの可能性があります。`,
+            );
+          }
           if (!res.ok || !json.authorize_url) {
-            throw new Error(json.error || "authorize failed");
+            throw new Error(
+              json.error || `authorize failed (status=${res.status})`,
+            );
           }
           window.location.href = json.authorize_url;
         } catch (err) {
           console.error("connectAccounting error:", err);
-          alert("連携に失敗しました：" + err.message);
+          alert("連携に失敗しました：" + (err?.message || err));
         }
       }
 

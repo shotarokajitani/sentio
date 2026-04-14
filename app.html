@@ -1824,11 +1824,16 @@
         try {
           const {
             data: { session },
+            error: sessionError,
           } = await supabase.auth.getSession();
-          if (!session)
+          if (sessionError) throw sessionError;
+          if (!session || !session.access_token) {
             throw new Error(
               "セッションが切れています。再ログインしてください。",
             );
+          }
+          // Supabase Edge Functions のゲートウェイは apikey ヘッダーを必須要求する。
+          // Authorization のみだと 401 になるため、apikey に anon key を付与。
           const res = await fetch(
             `${SUPABASE_URL}/functions/v1/register-company`,
             {
@@ -1836,6 +1841,7 @@
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
               },
               body: JSON.stringify({
                 company_name: companyName,
@@ -1845,9 +1851,16 @@
               }),
             },
           );
-          const json = await res.json();
+          let json;
+          try {
+            json = await res.json();
+          } catch {
+            throw new Error(`サーバーから不正な応答 (status=${res.status})`);
+          }
           if (!res.ok || !json.success) {
-            throw new Error(json.error || "register-company failed");
+            throw new Error(
+              json.error || `register-company failed (status=${res.status})`,
+            );
           }
           currentCompany = json.company;
         } catch (err) {

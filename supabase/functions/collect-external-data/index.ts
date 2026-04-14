@@ -5,6 +5,12 @@ import { getServiceClient, corsHeaders } from "../_shared/supabase.ts";
 initSentry("collect-external-data");
 
 const GOOGLE_PLACES_API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
+const ESTAT_API_KEY = Deno.env.get("ESTAT_API_KEY");
+// e-Stat 経済センサス‐活動調査 デフォルトdataset（事業所数・従業者数 産業別×都道府県別）。
+// 年度更新で変わる可能性があるため、環境変数 ESTAT_STATS_DATA_ID で上書き可能。
+const ESTAT_STATS_DATA_ID = Deno.env.get("ESTAT_STATS_DATA_ID") ?? "0003411117";
+const ESTAT_ENDPOINT =
+  "https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -230,6 +236,79 @@ serve(async (req) => {
       }
     }
 
+    // E2. e-Stat API（経済センサス: 業種別企業数 / 都道府県別事業所数）
+    // industry または prefecture が判明していて、APIキーがある場合のみ取得する。
+    if (ESTAT_API_KEY && (company.industry || company.prefecture)) {
+      try {
+        const params = new URLSearchParams({
+          appId: ESTAT_API_KEY,
+          statsDataId: ESTAT_STATS_DATA_ID,
+          limit: "100",
+          lang: "J",
+        });
+
+        // 所在地（都道府県）が分かっていれば地域コードで絞り込み
+        const prefCode = prefectureToCode(company.prefecture);
+        if (prefCode) params.set("cdArea", prefCode);
+
+        const estatRes = await fetch(`${ESTAT_ENDPOINT}?${params.toString()}`);
+
+        if (estatRes.ok) {
+          const estatJson = (await estatRes.json()) as EStatResponse;
+          const status = estatJson?.GET_STATS_DATA?.RESULT?.STATUS;
+          const errMsg = estatJson?.GET_STATS_DATA?.RESULT?.ERROR_MSG;
+
+          if (status === 0) {
+            const values =
+              estatJson?.GET_STATS_DATA?.STATISTICAL_DATA?.DATA_INF?.VALUE ??
+              [];
+            const valuesArr = Array.isArray(values) ? values : [values];
+
+            // レビューテキスト同様、生データは必要分だけ保存する（サイズ制限）
+            await supabase.from("external_data").insert({
+              company_id,
+              source: "industry_stats",
+              data_type: "json",
+              content: JSON.stringify({
+                sub_source: "estat",
+                stats_data_id: ESTAT_STATS_DATA_ID,
+                industry: company.industry ?? null,
+                prefecture: company.prefecture ?? null,
+                pref_code: prefCode,
+                fetched_at: new Date().toISOString(),
+                values_count: valuesArr.length,
+                values: valuesArr.slice(0, 100),
+              }),
+              // 経済センサスは年次更新のため 90日（3ヶ月）で再取得
+              expires_at: new Date(
+                Date.now() + 90 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            });
+            results.industry_stats_estat = "ok";
+          } else {
+            console.error(
+              "[collect-external-data] e-Stat API error:",
+              status,
+              errMsg,
+            );
+            results.industry_stats_estat = "error";
+          }
+        } else {
+          console.error(
+            "[collect-external-data] e-Stat HTTP error:",
+            estatRes.status,
+          );
+          results.industry_stats_estat = "error";
+        }
+      } catch (e) {
+        captureError(e as Error, {
+          company_id,
+          extra: { source: "industry_stats_estat" },
+        });
+        results.industry_stats_estat = "error";
+      }
+    }
+
     // F. 競合情報（confirmed=trueのみ）
     try {
       const { data: competitors } = await supabase
@@ -346,4 +425,78 @@ function extractKeywords(text: string): string[] {
     "良い",
   ];
   return keywords.filter((k) => text.includes(k));
+}
+
+// e-Stat APIレスポンス型（必要部分のみ）
+interface EStatResponse {
+  GET_STATS_DATA?: {
+    RESULT?: { STATUS?: number; ERROR_MSG?: string };
+    STATISTICAL_DATA?: {
+      DATA_INF?: { VALUE?: unknown };
+    };
+  };
+}
+
+// 都道府県名 → e-Stat地域コード（2桁）マッピング。
+// e-Statの地域コードは総務省準拠の2桁数字（JIS X 0401）。
+// 住所文字列の先頭に含まれるパターンにもマッチできるよう前方一致で検索する。
+const PREFECTURE_CODES: Record<string, string> = {
+  北海道: "01",
+  青森県: "02",
+  岩手県: "03",
+  宮城県: "04",
+  秋田県: "05",
+  山形県: "06",
+  福島県: "07",
+  茨城県: "08",
+  栃木県: "09",
+  群馬県: "10",
+  埼玉県: "11",
+  千葉県: "12",
+  東京都: "13",
+  神奈川県: "14",
+  新潟県: "15",
+  富山県: "16",
+  石川県: "17",
+  福井県: "18",
+  山梨県: "19",
+  長野県: "20",
+  岐阜県: "21",
+  静岡県: "22",
+  愛知県: "23",
+  三重県: "24",
+  滋賀県: "25",
+  京都府: "26",
+  大阪府: "27",
+  兵庫県: "28",
+  奈良県: "29",
+  和歌山県: "30",
+  鳥取県: "31",
+  島根県: "32",
+  岡山県: "33",
+  広島県: "34",
+  山口県: "35",
+  徳島県: "36",
+  香川県: "37",
+  愛媛県: "38",
+  高知県: "39",
+  福岡県: "40",
+  佐賀県: "41",
+  長崎県: "42",
+  熊本県: "43",
+  大分県: "44",
+  宮崎県: "45",
+  鹿児島県: "46",
+  沖縄県: "47",
+};
+
+function prefectureToCode(pref: string | null | undefined): string | null {
+  if (!pref) return null;
+  const trimmed = pref.trim();
+  if (PREFECTURE_CODES[trimmed]) return PREFECTURE_CODES[trimmed];
+  // 住所文字列先頭に都道府県名が含まれるケースに対応（例: "東京都渋谷区..."）
+  for (const [name, code] of Object.entries(PREFECTURE_CODES)) {
+    if (trimmed.startsWith(name)) return code;
+  }
+  return null;
 }

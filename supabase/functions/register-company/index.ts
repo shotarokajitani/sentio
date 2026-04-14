@@ -16,7 +16,9 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // JWT必須
+  // この関数は `--no-verify-jwt` でデプロイされているため、
+  // Supabaseゲートウェイでの自動JWT検証は行われない。
+  // Authorizationヘッダーから取り出したJWTを supabase.auth.getUser(jwt) で手動検証する。
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "認証が必要です" }), {
@@ -25,10 +27,14 @@ serve(async (req) => {
     });
   }
 
-  // JWTを明示的にgetUser(jwt)に渡す。
-  // グローバルヘッダーだけだとEdge Function実行環境でセッションが解決されず
-  // 401になるケースがあるため、Bearerトークンを抽出して直接渡す。
   const jwt = authHeader.replace(/^Bearer\s+/i, "");
+  if (!jwt) {
+    return new Response(JSON.stringify({ error: "JWTが不正です" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const userClient = getUserClient(authHeader);
   const {
     data: { user },

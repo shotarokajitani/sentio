@@ -11,6 +11,27 @@ const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
 const MAX_RETRY = 3;
 const TRIAL_QUESTION_LIMIT = 10;
 
+// プラン別 月次問い生成上限
+// scale は Infinity（無制限）
+const PLAN_MONTHLY_LIMITS: Record<string, number> = {
+  trial: 10,
+  starter: 10,
+  growth: 50,
+  scale: Number.POSITIVE_INFINITY,
+};
+
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function jsonResp(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 const PROHIBITED = [
   "検討してください",
   "必要があります",
@@ -47,32 +68,50 @@ serve(async (req) => {
       });
     }
 
-    // トライアル制限チェック
+    // プラン情報取得
     const { data: subscription } = await supabase
       .from("subscriptions")
       .select("*")
       .eq("company_id", company_id)
       .single();
 
-    if (subscription?.status === "trialing") {
-      const { count } = await supabase
-        .from("questions")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", company_id);
+    // プラン名の解決：trialing は plan='trial' 扱い、未加入も trial 扱い
+    const plan =
+      subscription?.status === "trialing"
+        ? "trial"
+        : (subscription?.plan ?? "trial");
+    const monthlyLimit = PLAN_MONTHLY_LIMITS[plan] ?? 10;
+    const month = currentMonth();
 
-      if ((count || 0) >= TRIAL_QUESTION_LIMIT) {
-        // トライアル上限到達メール送信
-        try {
-          await sendTrialLimitEmail(company, supabase);
-        } catch (e) {
-          captureError(e as Error, { company_id });
+    // 月次上限チェック（scale プランは Infinity のためスキップ）
+    if (Number.isFinite(monthlyLimit)) {
+      const { count, error: countErr } = await supabase
+        .from("usage_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", company_id)
+        .eq("action_type", "generate_question")
+        .eq("month", month);
+
+      if (countErr) {
+        console.error("[generate-question] usage_logs count failed:", countErr);
+      }
+
+      if ((count || 0) >= monthlyLimit) {
+        // トライアル上限はユーザーへメール通知（アップグレード促進）
+        if (plan === "trial") {
+          try {
+            await sendTrialLimitEmail(company, supabase);
+          } catch (e) {
+            captureError(e as Error, { company_id });
+          }
         }
-        return new Response(
-          JSON.stringify({ success: false, reason: "trial_limit_reached" }),
+        return jsonResp(
           {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            error: "月次の問い生成上限に達しました",
+            plan,
+            limit: monthlyLimit,
           },
+          429,
         );
       }
     }
@@ -223,6 +262,26 @@ JSON以外は出力しないでください。`),
       .single();
 
     if (error) throw new Error(`Question insert failed: ${error.message}`);
+
+    // 月次利用量を記録（レート制限用カウンタ）
+    try {
+      const { error: usageErr } = await supabase.from("usage_logs").insert({
+        company_id,
+        action_type: "generate_question",
+        month,
+      });
+      if (usageErr) {
+        console.error(
+          "[generate-question] usage_logs insert failed:",
+          usageErr,
+        );
+      }
+    } catch (e) {
+      captureError(e as Error, {
+        company_id,
+        extra: { stage: "usage_logs_insert" },
+      });
+    }
 
     // deliver-questionをトリガー
     try {

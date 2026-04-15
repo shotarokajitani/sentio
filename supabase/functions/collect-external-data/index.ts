@@ -93,11 +93,13 @@ serve(async (req) => {
     }
 
     // B. Google Places API
+    // ⚠️ Google Places API規約: 事業者名・住所・レビュー本文は保存しない。
+    //    保存するのは place_id / rating / user_ratings_total と、前回値との変化量のみ。
     if (company.company_name && GOOGLE_PLACES_API_KEY) {
       try {
         const query = encodeURIComponent(company.company_name);
         const findRes = await fetch(
-          `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${query}&inputtype=textquery&fields=place_id,name,rating,user_ratings_total&key=${GOOGLE_PLACES_API_KEY}`,
+          `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${query}&inputtype=textquery&fields=place_id,rating,user_ratings_total&key=${GOOGLE_PLACES_API_KEY}`,
         );
         const findData = await findRes.json();
 
@@ -107,28 +109,64 @@ serve(async (req) => {
           await delay(1000);
 
           const detailRes = await fetch(
-            `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total,reviews&language=ja&key=${GOOGLE_PLACES_API_KEY}`,
+            `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=rating,user_ratings_total&language=ja&key=${GOOGLE_PLACES_API_KEY}`,
           );
           const detailData = await detailRes.json();
 
           if (detailData.result) {
-            // レビューテキストの生データはDBに保存しない（処理後に破棄）
-            const reviews = (detailData.result.reviews || []).map((r: any) => ({
-              rating: r.rating,
-              time: r.time,
-              text_length: r.text?.length || 0,
-              sentiment_keywords: extractKeywords(r.text || ""),
-            }));
+            const currentRating: number | null =
+              detailData.result.rating ?? null;
+            const currentTotal: number | null =
+              detailData.result.user_ratings_total ?? null;
+
+            // 前回の自社googlemapレコードから評点・件数を取得してDELTA算出
+            const { data: prevRows } = await supabase
+              .from("external_data")
+              .select("content, created_at")
+              .eq("company_id", company_id)
+              .eq("source", "googlemap")
+              .order("created_at", { ascending: false })
+              .limit(1);
+
+            let prevRating: number | null = null;
+            let prevTotal: number | null = null;
+            if (prevRows && prevRows.length > 0) {
+              try {
+                const parsed = JSON.parse(prevRows[0].content as string);
+                prevRating = parsed?.rating ?? null;
+                prevTotal = parsed?.total_reviews ?? null;
+              } catch {
+                // 無視
+              }
+            }
+
+            const ratingDelta =
+              prevRating != null && currentRating != null
+                ? Number((currentRating - prevRating).toFixed(3))
+                : null;
+            const totalDelta =
+              prevTotal != null && currentTotal != null
+                ? currentTotal - prevTotal
+                : null;
+            const totalChangeRate =
+              prevTotal != null && prevTotal > 0 && currentTotal != null
+                ? Number(((currentTotal - prevTotal) / prevTotal).toFixed(4))
+                : null;
 
             await supabase.from("external_data").insert({
               company_id,
               source: "googlemap",
               data_type: "json",
               content: JSON.stringify({
-                name: detailData.result.name,
-                rating: detailData.result.rating,
-                total_reviews: detailData.result.user_ratings_total,
-                review_summary: reviews,
+                place_id: placeId,
+                rating: currentRating,
+                total_reviews: currentTotal,
+                change: {
+                  rating_delta: ratingDelta,
+                  total_reviews_delta: totalDelta,
+                  total_reviews_change_rate: totalChangeRate,
+                },
+                fetched_at: new Date().toISOString(),
               }),
               expires_at: new Date(
                 Date.now() + 180 * 24 * 60 * 60 * 1000,
@@ -440,7 +478,7 @@ serve(async (req) => {
               const currentTotal: number | null =
                 detailData.result.user_ratings_total ?? null;
 
-              // 前回取得値を検索（同 competitor_id / name で最新を1件）
+              // 前回取得値を検索（同 competitor_id で最新を1件）
               const { data: prevRows } = await supabase
                 .from("external_data")
                 .select("content, created_at")
@@ -458,11 +496,7 @@ serve(async (req) => {
                 for (const row of prevRows) {
                   try {
                     const parsed = JSON.parse(row.content as string);
-                    if (
-                      parsed &&
-                      (parsed.competitor_id === comp.id ||
-                        parsed.competitor_name === comp.name)
-                    ) {
+                    if (parsed && parsed.competitor_id === comp.id) {
                       previous = parsed;
                       break;
                     }
@@ -493,24 +527,17 @@ serve(async (req) => {
                     )
                   : null;
 
+              // Google Places API規約: 競合名・URL・レビュー本文は保存しない。
+              // 保存するのは competitor_id（内部ID） / place_id / rating / total_reviews / 変化量のみ。
               await supabase.from("external_data").insert({
                 company_id,
                 source: "competitor_reviews",
                 data_type: "json",
                 content: JSON.stringify({
                   competitor_id: comp.id,
-                  competitor_name: comp.name,
-                  competitor_url: comp.url ?? null,
                   place_id: placeId,
                   rating: currentRating,
                   total_reviews: currentTotal,
-                  previous: previous
-                    ? {
-                        rating: previous.rating,
-                        total_reviews: previous.total_reviews,
-                        fetched_at: previous.fetched_at,
-                      }
-                    : null,
                   change: {
                     rating_delta: ratingDelta,
                     total_reviews_delta: totalDelta,
@@ -590,30 +617,6 @@ serve(async (req) => {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function extractKeywords(text: string): string[] {
-  const keywords = [
-    "安い",
-    "高い",
-    "遅い",
-    "早い",
-    "丁寧",
-    "不満",
-    "満足",
-    "最悪",
-    "最高",
-    "対応",
-    "サービス",
-    "品質",
-    "種類",
-    "少ない",
-    "多い",
-    "改善",
-    "悪い",
-    "良い",
-  ];
-  return keywords.filter((k) => text.includes(k));
 }
 
 // e-Stat APIレスポンス型（必要部分のみ）

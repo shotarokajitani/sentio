@@ -1482,6 +1482,12 @@
             </button>
             <button
               class="settings-tab"
+              onclick="switchSettingsTab('financial', this)"
+            >
+              財務データ
+            </button>
+            <button
+              class="settings-tab"
               onclick="switchSettingsTab('competitors', this)"
             >
               競合管理
@@ -1562,25 +1568,6 @@
 
           <div class="settings-panel" id="settings-integrations">
             <div class="card">
-              <div class="card-label">freee連携</div>
-              <div class="card-body" style="margin-bottom: 16px">
-                freeeと連携すると、財務データに基づいた深い問いが届きます。
-              </div>
-              <div id="integration-freee-row" style="margin-bottom: 12px">
-                <button class="qa-btn" onclick="connectAccounting('freee')">
-                  freee を連携する
-                </button>
-                <span
-                  id="integration-freee-status"
-                  style="
-                    margin-left: 12px;
-                    font-size: 12px;
-                    color: var(--stone);
-                  "
-                ></span>
-              </div>
-            </div>
-            <div class="card">
               <div class="card-label">カレンダー連携</div>
               <div class="card-body" style="margin-bottom: 16px">
                 Google
@@ -1601,154 +1588,6 @@
                     color: var(--stone);
                   "
                 ></span>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-label">Slack連携</div>
-              <div class="card-body" style="margin-bottom: 16px">
-                Slackを連携すると、社内コミュニケーションの活発度や深夜帯の偏りを問いに反映します。
-              </div>
-              <div id="integration-slack-row">
-                <button class="qa-btn" onclick="connectAccounting('slack')">
-                  Slack を連携する
-                </button>
-                <span
-                  id="integration-slack-status"
-                  style="
-                    margin-left: 12px;
-                    font-size: 12px;
-                    color: var(--stone);
-                  "
-                ></span>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-label">Chatwork連携</div>
-              <div class="card-body" style="margin-bottom: 16px">
-                Chatworkを連携すると、ルーム別の動きや未読の蓄積を問いに反映します。
-              </div>
-              <div id="integration-chatwork-row">
-                <button class="qa-btn" onclick="connectAccounting('chatwork')">
-                  Chatwork を連携する
-                </button>
-                <span
-                  id="integration-chatwork-status"
-                  style="
-                    margin-left: 12px;
-                    font-size: 12px;
-                    color: var(--stone);
-                  "
-                ></span>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-label">Google Analytics（GA4）連携</div>
-              <div class="card-body" style="margin-bottom: 16px">
-                GA4を連携すると、セッション推移・チャネル別集客・直帰率・コンバージョン率を問いに反映します。
-              </div>
-              <div id="integration-ga4-row" style="margin-bottom: 12px">
-                <button class="qa-btn" onclick="connectAccounting('ga4')">
-                  Google Analytics（GA4）を連携する
-                </button>
-                <span
-                  id="integration-ga4-status"
-                  style="
-                    margin-left: 12px;
-                    font-size: 12px;
-                    color: var(--stone);
-                  "
-                ></span>
-              </div>
-              <div id="integration-ga4-property" style="display: none">
-                <label
-                  style="
-                    font-size: 12px;
-                    color: var(--stone);
-                    display: block;
-                    margin-bottom: 6px;
-                  "
-                  >GA4 プロパティID（数字のみ・例: 123456789）</label
-                >
-                <div style="display: flex; gap: 8px; align-items: center">
-                  <input
-                    type="text"
-                    id="ga4-property-id"
-                    placeholder="123456789"
-                    style="
-                      flex: 1;
-                      padding: 8px 12px;
-                      border: 0.5px solid var(--border);
-                      border-radius: 4px;
-                      font-size: 13px;
-                    "
-                  />
-                  <button class="qa-btn" onclick="saveGa4PropertyId()">
-                    保存
-                  </button>
-                </div>
-                <div
-                  id="ga4-property-hint"
-                  style="font-size: 11px; color: var(--stone); margin-top: 6px"
-                >
-                  GA4管理画面 → プロパティ設定 → プロパティID
-                  を入力してください。
-                </div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-label">Google広告連携</div>
-              <div class="card-body" style="margin-bottom: 16px">
-                Google広告を連携すると、広告費・クリック・コンバージョン・CPAの週次推移を問いに反映します。
-              </div>
-              <div id="integration-google-ads-row" style="margin-bottom: 12px">
-                <button
-                  class="qa-btn"
-                  onclick="connectAccounting('google_ads')"
-                >
-                  Google広告を連携する
-                </button>
-                <span
-                  id="integration-google-ads-status"
-                  style="
-                    margin-left: 12px;
-                    font-size: 12px;
-                    color: var(--stone);
-                  "
-                ></span>
-              </div>
-              <div id="integration-google-ads-customer" style="display: none">
-                <label
-                  style="
-                    font-size: 12px;
-                    color: var(--stone);
-                    display: block;
-                    margin-bottom: 6px;
-                  "
-                  >Google Ads カスタマーID（例: 123-456-7890）</label
-                >
-                <div style="display: flex; gap: 8px; align-items: center">
-                  <input
-                    type="text"
-                    id="google-ads-customer-id"
-                    placeholder="123-456-7890"
-                    style="
-                      flex: 1;
-                      padding: 8px 12px;
-                      border: 0.5px solid var(--border);
-                      border-radius: 4px;
-                      font-size: 13px;
-                    "
-                  />
-                  <button class="qa-btn" onclick="saveGoogleAdsCustomerId()">
-                    保存
-                  </button>
-                </div>
-                <div
-                  style="font-size: 11px; color: var(--stone); margin-top: 6px"
-                >
-                  Google広告管理画面
-                  右上のアカウント番号（10桁）を入力してください。
-                </div>
               </div>
             </div>
             <div class="card">
@@ -1858,6 +1697,51 @@
                   color: var(--stone);
                 "
               ></span>
+            </div>
+          </div>
+
+          <div class="settings-panel" id="settings-financial">
+            <div class="card">
+              <div class="card-label">決算書・試算表アップロード</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                決算書や月次試算表（PDF）をアップロードすると、月次損益・キャッシュフロー等の数値をSentioが読み取り、問いとシグナルに反映します。PDFは解析後すぐに破棄され、DBには保存されません。
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                  flex-wrap: wrap;
+                "
+              >
+                <input
+                  type="file"
+                  id="financial-pdf-input"
+                  accept="application/pdf"
+                  style="font-size: 13px"
+                />
+                <button class="qa-btn" onclick="uploadFinancialPdf()">
+                  アップロードして解析
+                </button>
+              </div>
+              <div
+                id="financial-pdf-status"
+                style="
+                  margin-top: 12px;
+                  font-size: 12px;
+                  color: var(--stone);
+                  min-height: 18px;
+                "
+              ></div>
+              <div
+                id="financial-pdf-result"
+                style="
+                  margin-top: 12px;
+                  font-size: 13px;
+                  color: var(--earth-soft);
+                  line-height: 1.8;
+                "
+              ></div>
             </div>
           </div>
 
@@ -2415,13 +2299,7 @@
           }
 
           const fnMap = {
-            freee: "freee-oauth",
-            moneyforward: "moneyforward-oauth",
             google_calendar: "google-calendar-oauth",
-            slack: "slack-oauth",
-            chatwork: "chatwork-oauth",
-            ga4: "ga4-oauth",
-            google_ads: "google-ads-oauth",
           };
           const fn = fnMap[provider];
           if (!fn) throw new Error("unknown provider: " + provider);
@@ -2486,28 +2364,12 @@
           el.style.color =
             integ.status === "error" ? "#c0392b" : "var(--stone)";
         };
-        const freee = (integrations || []).find((i) => i.type === "freee");
-        const mf = (integrations || []).find((i) => i.type === "moneyforward");
         const gcal = (integrations || []).find(
           (i) => i.type === "google_calendar",
         );
-        const slack = (integrations || []).find((i) => i.type === "slack");
-        const chatwork = (integrations || []).find(
-          (i) => i.type === "chatwork",
-        );
-        const ga4 = (integrations || []).find((i) => i.type === "ga4");
-        const googleAds = (integrations || []).find(
-          (i) => i.type === "google_ads",
-        );
         const semrush = (integrations || []).find((i) => i.type === "semrush");
         const ahrefs = (integrations || []).find((i) => i.type === "ahrefs");
-        renderStatus("integration-freee-status", freee);
-        renderStatus("integration-mf-status", mf);
         renderStatus("integration-gcal-status", gcal);
-        renderStatus("integration-slack-status", slack);
-        renderStatus("integration-chatwork-status", chatwork);
-        renderStatus("integration-ga4-status", ga4);
-        renderStatus("integration-google-ads-status", googleAds);
         renderStatus("integration-semrush-status", semrush);
         renderStatus("integration-ahrefs-status", ahrefs);
 
@@ -2519,111 +2381,6 @@
         const ahrefsInput = document.getElementById("ahrefs-api-key");
         if (ahrefsInput && ahrefs?.status === "connected") {
           ahrefsInput.placeholder = "保存済み（変更する場合のみ入力）";
-        }
-
-        // 連携後のみプロパティID入力欄を表示
-        const ga4Property = document.getElementById("integration-ga4-property");
-        if (ga4Property) {
-          if (ga4 && (ga4.status === "connected" || ga4.status === "pending")) {
-            ga4Property.style.display = "block";
-            const input = document.getElementById("ga4-property-id");
-            if (input && ga4.metadata?.property_id) {
-              input.value = ga4.metadata.property_id;
-            }
-          } else {
-            ga4Property.style.display = "none";
-          }
-        }
-
-        // Google広告も同様にカスタマーID入力欄を表示
-        const adsCustomer = document.getElementById(
-          "integration-google-ads-customer",
-        );
-        if (adsCustomer) {
-          if (
-            googleAds &&
-            (googleAds.status === "connected" || googleAds.status === "pending")
-          ) {
-            adsCustomer.style.display = "block";
-            const input = document.getElementById("google-ads-customer-id");
-            if (input && googleAds.metadata?.customer_id) {
-              input.value = googleAds.metadata.customer_id;
-            }
-          } else {
-            adsCustomer.style.display = "none";
-          }
-        }
-      }
-
-      async function saveGa4PropertyId() {
-        if (!currentCompany) return;
-        const input = document.getElementById("ga4-property-id");
-        const propertyId = (input?.value || "").trim();
-        if (!/^\d+$/.test(propertyId)) {
-          alert("プロパティIDは数字のみで入力してください。");
-          return;
-        }
-        try {
-          const { data: integ, error: fetchErr } = await supabase
-            .from("integrations")
-            .select("id,metadata")
-            .eq("company_id", currentCompany.id)
-            .eq("type", "ga4")
-            .single();
-          if (fetchErr || !integ) throw new Error("GA4連携が見つかりません。");
-          const nextMetadata = {
-            ...(integ.metadata || {}),
-            property_id: propertyId,
-          };
-          const { error: upErr } = await supabase
-            .from("integrations")
-            .update({ metadata: nextMetadata, status: "connected" })
-            .eq("id", integ.id);
-          if (upErr) throw upErr;
-          alert(
-            "GA4プロパティIDを保存しました。明日の同期から有効になります。",
-          );
-          loadIntegrationStatus();
-        } catch (err) {
-          console.error("saveGa4PropertyId error:", err);
-          alert("保存に失敗しました：" + (err?.message || err));
-        }
-      }
-
-      async function saveGoogleAdsCustomerId() {
-        if (!currentCompany) return;
-        const input = document.getElementById("google-ads-customer-id");
-        const raw = (input?.value || "").trim();
-        const normalized = raw.replace(/-/g, "");
-        if (!/^\d{10}$/.test(normalized)) {
-          alert("カスタマーIDは10桁の数字で入力してください（ハイフン可）。");
-          return;
-        }
-        try {
-          const { data: integ, error: fetchErr } = await supabase
-            .from("integrations")
-            .select("id,metadata")
-            .eq("company_id", currentCompany.id)
-            .eq("type", "google_ads")
-            .single();
-          if (fetchErr || !integ)
-            throw new Error("Google広告連携が見つかりません。");
-          const nextMetadata = {
-            ...(integ.metadata || {}),
-            customer_id: normalized,
-          };
-          const { error: upErr } = await supabase
-            .from("integrations")
-            .update({ metadata: nextMetadata, status: "connected" })
-            .eq("id", integ.id);
-          if (upErr) throw upErr;
-          alert(
-            "Google広告カスタマーIDを保存しました。明日の同期から有効になります。",
-          );
-          loadIntegrationStatus();
-        } catch (err) {
-          console.error("saveGoogleAdsCustomerId error:", err);
-          alert("保存に失敗しました：" + (err?.message || err));
         }
       }
 
@@ -2672,6 +2429,84 @@
         await saveApiKeyIntegration("ahrefs", "Ahrefs", apiKey);
       }
 
+      // 決算書PDFアップロード。ファイルはサーバに保存せず、Claude APIで解析→数値だけ
+      // signalsに書き込む。PDFバイト列はEdge Functionのメモリ上でのみ扱う。
+      async function uploadFinancialPdf() {
+        if (!currentCompany) return;
+        const input = document.getElementById("financial-pdf-input");
+        const statusEl = document.getElementById("financial-pdf-status");
+        const resultEl = document.getElementById("financial-pdf-result");
+        const file = input?.files?.[0];
+        if (!file) {
+          alert("PDFファイルを選択してください。");
+          return;
+        }
+        if (file.type !== "application/pdf") {
+          alert("PDF形式のファイルのみアップロードできます。");
+          return;
+        }
+        if (file.size > 20 * 1024 * 1024) {
+          alert("ファイルサイズが20MBを超えています。");
+          return;
+        }
+        statusEl.textContent = "解析中…（30〜60秒ほどかかる場合があります）";
+        resultEl.innerHTML = "";
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            throw new Error("セッションが切れています。再ログインしてください。");
+          }
+          const form = new FormData();
+          form.append("file", file, file.name);
+          form.append("company_id", currentCompany.id);
+
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/analyze-financial-pdf`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
+              },
+              body: form,
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.success) {
+            throw new Error(json.error || "解析に失敗しました。");
+          }
+          statusEl.textContent = `解析完了: シグナル${json.signals_created ?? 0}件を追加しました。`;
+          input.value = "";
+
+          const summary = json.summary || {};
+          const findings = json.findings || [];
+          let html = "";
+          if (summary && Object.keys(summary).length > 0) {
+            html += '<div style="margin-bottom:10px;"><strong>抽出された数値</strong></div>';
+            html += '<ul style="margin-left:18px;">';
+            for (const [k, v] of Object.entries(summary)) {
+              html += `<li>${k}: ${v}</li>`;
+            }
+            html += "</ul>";
+          }
+          if (findings.length > 0) {
+            html += '<div style="margin:12px 0 6px;"><strong>検出された兆候</strong></div>';
+            html += '<ul style="margin-left:18px;">';
+            for (const f of findings) {
+              html += `<li>${f}</li>`;
+            }
+            html += "</ul>";
+          }
+          resultEl.innerHTML = html;
+        } catch (err) {
+          console.error("uploadFinancialPdf error:", err);
+          statusEl.textContent = "";
+          alert("PDF解析に失敗しました：" + (err?.message || err));
+        }
+      }
+
       // OAuthコールバック後の通知
       (function handleIntegrationCallback() {
         const params = new URLSearchParams(window.location.search);
@@ -2679,13 +2514,7 @@
         const result = params.get("result");
         if (integration && result) {
           const nameMap = {
-            freee: "freee",
-            moneyforward: "マネーフォワード",
             google_calendar: "Google カレンダー",
-            slack: "Slack",
-            chatwork: "Chatwork",
-            ga4: "Google Analytics（GA4）",
-            google_ads: "Google広告",
           };
           const providerName = nameMap[integration] || integration;
           if (result === "success") {

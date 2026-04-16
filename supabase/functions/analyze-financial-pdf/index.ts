@@ -42,6 +42,66 @@ interface Finding {
   evidence: Record<string, unknown>;
 }
 
+// 月次財務データ（financials テーブル行）
+interface MonthlyFinancial {
+  year_month: string; // 'YYYY-MM'
+  revenue: number | null;
+  gross_profit: number | null;
+  fixed_cost: number | null;
+  operating_profit: number | null;
+}
+
+// 'YYYY-MM' に正規化。"2026年3月" / "2026/3" / "2026-03" などを受け取る。
+function normalizeYearMonth(s: unknown): string | null {
+  if (typeof s !== "string") return null;
+  const t = s.trim();
+  const jp = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月?/);
+  if (jp) {
+    const m = Number(jp[2]);
+    if (m >= 1 && m <= 12) return `${jp[1]}-${String(m).padStart(2, "0")}`;
+  }
+  const num = t.match(/(\d{4})[\/\-.](\d{1,2})/);
+  if (num) {
+    const m = Number(num[2]);
+    if (m >= 1 && m <= 12) return `${num[1]}-${String(m).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+// Claudeが返した monthly_financials を financials テーブル行に整形
+function sanitizeMonthly(input: unknown): MonthlyFinancial[] {
+  if (!Array.isArray(input)) return [];
+  const out: MonthlyFinancial[] = [];
+  for (const r of input) {
+    if (!r || typeof r !== "object") continue;
+    const rec = r as Record<string, unknown>;
+    const ym = normalizeYearMonth(rec.year_month ?? rec.period);
+    if (!ym) continue;
+    const pickInt = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      if (!isFinite(n)) return null;
+      return Math.round(n);
+    };
+    const row: MonthlyFinancial = {
+      year_month: ym,
+      revenue: pickInt(rec.revenue),
+      gross_profit: pickInt(rec.gross_profit),
+      fixed_cost: pickInt(rec.fixed_cost),
+      operating_profit: pickInt(rec.operating_profit),
+    };
+    if (
+      row.revenue !== null ||
+      row.gross_profit !== null ||
+      row.fixed_cost !== null ||
+      row.operating_profit !== null
+    ) {
+      out.push(row);
+    }
+  }
+  return out;
+}
+
 function analyzeFindings(summary: Record<string, unknown>): Finding[] {
   const findings: Finding[] = [];
   const rev = Number(summary.revenue_trend_pct ?? NaN);
@@ -158,7 +218,7 @@ serve(async (req) => {
 【抽出対象（JSON形式）】
 {
   "period_label": "対象期間の表記（例: 2026年3月期 / 2026年3月度）",
-  "revenue": "売上高の金額（数値・百万円単位で可）。不明なら null",
+  "revenue": "売上高の金額。不明なら null",
   "gross_profit": "粗利（売上総利益）。不明なら null",
   "operating_profit": "営業利益。不明なら null",
   "ordinary_profit": "経常利益。不明なら null",
@@ -167,14 +227,26 @@ serve(async (req) => {
   "revenue_trend_pct": "前年・前期比の売上変化率（%、増加ならプラス）。不明なら null",
   "operating_profit_trend_pct": "前年・前期比の営業利益変化率（%）。不明なら null",
   "operating_margin_delta_pt": "営業利益率の前期比変化（ポイント）。不明なら null",
-  "cash_delta_pct": "現預金残高の前期比変化率（%）。不明なら null"
+  "cash_delta_pct": "現預金残高の前期比変化率（%）。不明なら null",
+  "monthly_financials": [
+    {
+      "year_month": "YYYY-MM形式（例: 2026-03）",
+      "revenue": "その月の売上高（円、単位統一。不明なら null）",
+      "gross_profit": "その月の粗利（不明なら null）",
+      "fixed_cost": "その月の販管費（不明なら null）",
+      "operating_profit": "その月の営業利益（不明なら null）"
+    }
+  ]
 }
 
 【出力ルール】
 - JSONのみ出力。前後の説明文は一切書かない。
-- 数値は円単位でも百万円単位でも構わないが、同じ指標は同じ単位で揃える。
+- 数値はすべて「円」単位に統一して返す（百万円表記のPDFなら×1,000,000する）。
 - PDFに含まれない項目は null を返す。
-- 推測はせず、PDFに明記された数値だけ返す。`,
+- 推測はせず、PDFに明記された数値だけ返す。
+- 月次試算表なら monthly_financials に各月を配列で入れる。
+- 年次決算書の場合は monthly_financials に期末月1件だけ入れる。
+- monthly_financials が存在しない場合は空配列 [] を返す。`,
             },
           ],
         },
@@ -228,6 +300,34 @@ serve(async (req) => {
       if (!insErr) signalsCreated++;
     }
 
+    // 月次データを financials テーブルへ upsert（source='pdf'）。
+    // 年次決算書なら期末月1件、試算表なら複数月。
+    const monthly = sanitizeMonthly(summary.monthly_financials);
+    let financialsSaved = 0;
+    if (monthly.length > 0) {
+      const payload = monthly.map((r) => ({
+        company_id: companyId,
+        year_month: r.year_month,
+        revenue: r.revenue,
+        gross_profit: r.gross_profit,
+        fixed_cost: r.fixed_cost,
+        operating_profit: r.operating_profit,
+        source: "pdf" as const,
+      }));
+      const { error: finErr, data: finData } = await service
+        .from("financials")
+        .upsert(payload, { onConflict: "company_id,year_month" })
+        .select("id");
+      if (finErr) {
+        captureError(new Error(finErr.message), {
+          company_id: companyId,
+          extra: { stage: "financials_upsert_pdf" },
+        });
+      } else {
+        financialsSaved = finData?.length ?? monthly.length;
+      }
+    }
+
     // 画面表示用の短い findings 文字列リスト
     const displayFindings = findings.map((f) => f.description);
 
@@ -236,6 +336,8 @@ serve(async (req) => {
       summary,
       findings: displayFindings,
       signals_created: signalsCreated,
+      financials_saved: financialsSaved,
+      monthly_saved: monthly,
     });
   } catch (e) {
     captureError(e as Error);

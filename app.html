@@ -1276,7 +1276,7 @@
               ダッシュボードへ
             </button>
             <div class="ob-note">
-              freeeを連携すると、<br />財務データに基づいた問いが届きます。
+              決算書や月次試算表をアップロードすると、<br />財務データに基づいた問いが届きます。
             </div>
           </div>
         </div>
@@ -1384,8 +1384,8 @@
               <div class="conn-item">
                 <div class="conn-dot off"></div>
                 <div>
-                  <div class="conn-name">freee</div>
-                  <div class="conn-status">未接続</div>
+                  <div class="conn-name">財務データ</div>
+                  <div class="conn-status">未アップロード</div>
                 </div>
               </div>
               <div class="conn-item">
@@ -1701,10 +1701,69 @@
           </div>
 
           <div class="settings-panel" id="settings-financial">
-            <div class="card">
-              <div class="card-label">決算書・試算表アップロード</div>
+            <!-- ===== CSVアップロード ===== -->
+            <div class="card" style="margin-bottom: 20px">
+              <div class="card-label">
+                CSVアップロード（freee / マネーフォワード / 弥生）
+              </div>
               <div class="card-body" style="margin-bottom: 16px">
-                決算書や月次試算表（PDF）をアップロードすると、月次損益・キャッシュフロー等の数値をSentioが読み取り、問いとシグナルに反映します。PDFは解析後すぐに破棄され、DBには保存されません。
+                会計ソフトからエクスポートした月次試算表CSVをアップロードすると、月次の売上・粗利・固定費・営業利益を自動で読み取ります。<br />
+                <strong>CSVファイル本体はサーバに保存されません</strong
+                >。処理後すぐに破棄され、DBには数値のみが保存されます。
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 12px;
+                  align-items: center;
+                  flex-wrap: wrap;
+                "
+              >
+                <input
+                  type="file"
+                  id="financial-csv-input"
+                  accept=".csv,text/csv"
+                  style="font-size: 13px"
+                />
+                <select
+                  id="financial-csv-format"
+                  style="
+                    font-size: 13px;
+                    padding: 6px 10px;
+                    border: 0.5px solid var(--border);
+                    background: #fff;
+                  "
+                >
+                  <option value="">自動判定</option>
+                  <option value="freee">freee</option>
+                  <option value="mf">マネーフォワード</option>
+                  <option value="yayoi">弥生</option>
+                  <option value="generic">汎用</option>
+                </select>
+                <button class="qa-btn" onclick="previewFinancialCsv()">
+                  プレビュー表示
+                </button>
+              </div>
+              <div
+                id="financial-csv-status"
+                style="
+                  margin-top: 12px;
+                  font-size: 12px;
+                  color: var(--stone);
+                  min-height: 18px;
+                "
+              ></div>
+              <div id="financial-csv-preview" style="margin-top: 12px"></div>
+            </div>
+
+            <!-- ===== PDFアップロード ===== -->
+            <div class="card">
+              <div class="card-label">決算書・試算表PDFアップロード</div>
+              <div class="card-body" style="margin-bottom: 16px">
+                決算書や月次試算表（PDF）をアップロードすると、<strong
+                  >Claude API</strong
+                >がPDFを解析し、月次損益・キャッシュフロー等の数値を抽出します。<br />
+                送信前に同意確認を表示します。PDFは解析後すぐに破棄され、DBには保存されません。
               </div>
               <div
                 style="
@@ -1720,7 +1779,7 @@
                   accept="application/pdf"
                   style="font-size: 13px"
                 />
-                <button class="qa-btn" onclick="uploadFinancialPdf()">
+                <button class="qa-btn" onclick="requestPdfAnalysisConsent()">
                   アップロードして解析
                 </button>
               </div>
@@ -1742,6 +1801,98 @@
                   line-height: 1.8;
                 "
               ></div>
+            </div>
+          </div>
+
+          <!-- ===== PDF解析 同意モーダル ===== -->
+          <div
+            id="pdf-consent-modal"
+            style="
+              display: none;
+              position: fixed;
+              inset: 0;
+              background: rgba(26, 26, 26, 0.45);
+              z-index: 2000;
+              align-items: center;
+              justify-content: center;
+              padding: 24px;
+            "
+          >
+            <div
+              style="
+                background: #fff;
+                border-radius: 6px;
+                max-width: 480px;
+                width: 100%;
+                padding: 32px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+                font-size: 14px;
+                line-height: 1.8;
+              "
+            >
+              <div
+                style="
+                  font-family: &quot;Cormorant Garamond&quot;, serif;
+                  font-size: 22px;
+                  color: var(--ocean);
+                  margin-bottom: 16px;
+                "
+              >
+                財務データをAI解析に送信します
+              </div>
+              <p style="margin-bottom: 12px">
+                アップロードいただいたPDFは、解析のために
+                <strong>Anthropic社のClaude API</strong> に送信されます。
+              </p>
+              <ul
+                style="
+                  margin: 12px 0 20px 18px;
+                  font-size: 13px;
+                  color: var(--stone);
+                  line-height: 1.9;
+                "
+              >
+                <li>PDF本体はサーバに保存されません</li>
+                <li>抽出された数値のみをDBに保存します</li>
+                <li>Anthropic社には学習目的での使用を許可していません</li>
+                <li>TLS（通信時）・AES-256（保存時）で暗号化されます</li>
+              </ul>
+              <p
+                style="
+                  font-size: 12px;
+                  color: var(--stone);
+                  margin-bottom: 20px;
+                "
+              >
+                詳細は<a
+                  href="/privacy.html#financial"
+                  target="_blank"
+                  style="
+                    color: var(--ocean);
+                    border-bottom: 0.5px solid var(--ocean-mid);
+                  "
+                  >プライバシーポリシー「財務データの取り扱い」</a
+                >をご確認ください。
+              </p>
+              <div style="display: flex; gap: 12px; justify-content: flex-end">
+                <button
+                  onclick="closePdfConsent(false)"
+                  style="
+                    background: transparent;
+                    border: 0.5px solid var(--border);
+                    padding: 8px 18px;
+                    font-size: 13px;
+                    color: var(--stone);
+                    cursor: pointer;
+                    border-radius: 3px;
+                  "
+                >
+                  キャンセル
+                </button>
+                <button class="qa-btn" onclick="closePdfConsent(true)">
+                  同意して送信
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1793,7 +1944,7 @@
               <ul>
                 <li>週2〜3回の問い配信</li>
                 <li>競合モニタリング</li>
-                <li>freee連携</li>
+                <li>財務データアップロード</li>
               </ul>
               <button class="plan-select" onclick="selectPlan('growth')">
                 Growthを選択
@@ -2429,13 +2580,194 @@
         await saveApiKeyIntegration("ahrefs", "Ahrefs", apiKey);
       }
 
-      // 決算書PDFアップロード。ファイルはサーバに保存せず、Claude APIで解析→数値だけ
-      // signalsに書き込む。PDFバイト列はEdge Functionのメモリ上でのみ扱う。
-      async function uploadFinancialPdf() {
+      // ─────────────────────────────────────────────────────────
+      // 財務CSV: freee / MF / 弥生のエクスポートをパース→プレビュー→upsert保存。
+      // CSVファイル本体はサーバに保存されず、parse-financial-csv Edge Functionが
+      // メモリ上でパースして数値のみ返す。ユーザーが確認後にcommitで financials 保存。
+      // ─────────────────────────────────────────────────────────
+      let pendingFinancialRows = []; // プレビューで返ってきた行を保持
+
+      function escapeHtml(s) {
+        return String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
+
+      function fmtNum(n) {
+        if (n === null || n === undefined) return "—";
+        return Number(n).toLocaleString("ja-JP");
+      }
+
+      async function previewFinancialCsv() {
+        if (!currentCompany) return;
+        const input = document.getElementById("financial-csv-input");
+        const formatSel = document.getElementById("financial-csv-format");
+        const statusEl = document.getElementById("financial-csv-status");
+        const previewEl = document.getElementById("financial-csv-preview");
+        const file = input?.files?.[0];
+        if (!file) {
+          alert("CSVファイルを選択してください。");
+          return;
+        }
+        if (file.type !== "text/csv") {
+          alert("CSV形式（text/csv）のファイルのみアップロードできます。");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          alert("CSVファイルは5MB以下にしてください。");
+          return;
+        }
+        statusEl.textContent = "パース中…";
+        previewEl.innerHTML = "";
+        pendingFinancialRows = [];
+
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session?.access_token)
+            throw new Error(
+              "セッションが切れています。再ログインしてください。",
+            );
+
+          const form = new FormData();
+          form.append("file", file, file.name);
+          form.append("company_id", currentCompany.id);
+          form.append("action", "preview");
+          if (formatSel?.value) form.append("format", formatSel.value);
+
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/parse-financial-csv`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
+              },
+              body: form,
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.success)
+            throw new Error(json.error || "パースに失敗しました。");
+
+          pendingFinancialRows = json.rows || [];
+          const fmtName =
+            {
+              freee: "freee",
+              mf: "マネーフォワード",
+              yayoi: "弥生",
+              generic: "汎用",
+            }[json.detected_format] || json.detected_format;
+          statusEl.textContent = `検出フォーマット: ${fmtName} / ${pendingFinancialRows.length}ヶ月分`;
+
+          if (pendingFinancialRows.length === 0) {
+            previewEl.innerHTML = `<div style="font-size:13px; color:var(--stone);">数値を抽出できませんでした。フォーマットを手動で指定してみてください。</div>`;
+            return;
+          }
+
+          let html = `
+            <div style="overflow-x:auto; border:0.5px solid var(--border); border-radius:4px; margin-top:8px;">
+              <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                <thead>
+                  <tr style="background:var(--ocean-light);">
+                    <th style="padding:8px; text-align:left;">年月</th>
+                    <th style="padding:8px; text-align:right;">売上</th>
+                    <th style="padding:8px; text-align:right;">粗利</th>
+                    <th style="padding:8px; text-align:right;">固定費</th>
+                    <th style="padding:8px; text-align:right;">営業利益</th>
+                  </tr>
+                </thead>
+                <tbody>`;
+          for (const r of pendingFinancialRows) {
+            html += `
+              <tr style="border-top:0.5px solid var(--border);">
+                <td style="padding:8px;">${escapeHtml(r.year_month)}</td>
+                <td style="padding:8px; text-align:right;">${fmtNum(r.revenue)}</td>
+                <td style="padding:8px; text-align:right;">${fmtNum(r.gross_profit)}</td>
+                <td style="padding:8px; text-align:right;">${fmtNum(r.fixed_cost)}</td>
+                <td style="padding:8px; text-align:right;">${fmtNum(r.operating_profit)}</td>
+              </tr>`;
+          }
+          html += `
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+              <button class="qa-btn" onclick="commitFinancialCsv()">この内容で保存</button>
+              <span style="font-size:12px; color:var(--stone);">同じ年月のデータは上書きされます。</span>
+            </div>`;
+          previewEl.innerHTML = html;
+          input.value = "";
+        } catch (err) {
+          console.error("previewFinancialCsv error:", err);
+          statusEl.textContent = "";
+          alert("CSVパースに失敗しました：" + (err?.message || err));
+        }
+      }
+
+      async function commitFinancialCsv() {
+        if (!currentCompany) return;
+        if (!pendingFinancialRows || pendingFinancialRows.length === 0) {
+          alert("先に「プレビュー表示」でCSVを読み込んでください。");
+          return;
+        }
+        const statusEl = document.getElementById("financial-csv-status");
+        const previewEl = document.getElementById("financial-csv-preview");
+        statusEl.textContent = "保存中…";
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session?.access_token)
+            throw new Error(
+              "セッションが切れています。再ログインしてください。",
+            );
+
+          const res = await fetch(
+            `${SUPABASE_URL}/functions/v1/parse-financial-csv`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                apikey: SUPABASE_ANON_KEY,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                action: "commit",
+                company_id: currentCompany.id,
+                rows: pendingFinancialRows,
+              }),
+            },
+          );
+          const json = await res.json();
+          if (!res.ok || !json.success)
+            throw new Error(json.error || "保存に失敗しました。");
+          statusEl.textContent = `保存しました（${json.saved}件）。`;
+          previewEl.innerHTML = "";
+          pendingFinancialRows = [];
+        } catch (err) {
+          console.error("commitFinancialCsv error:", err);
+          statusEl.textContent = "";
+          alert("保存に失敗しました：" + (err?.message || err));
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // 財務PDFアップロード。Claude APIに送信する前に同意モーダルを表示。
+      // ファイルはサーバに保存されず、Edge Functionのメモリ上でのみ扱う。
+      // ─────────────────────────────────────────────────────────
+      function requestPdfAnalysisConsent() {
         if (!currentCompany) return;
         const input = document.getElementById("financial-pdf-input");
-        const statusEl = document.getElementById("financial-pdf-status");
-        const resultEl = document.getElementById("financial-pdf-result");
         const file = input?.files?.[0];
         if (!file) {
           alert("PDFファイルを選択してください。");
@@ -2449,6 +2781,23 @@
           alert("ファイルサイズが20MBを超えています。");
           return;
         }
+        const modal = document.getElementById("pdf-consent-modal");
+        if (modal) modal.style.display = "flex";
+      }
+
+      function closePdfConsent(agreed) {
+        const modal = document.getElementById("pdf-consent-modal");
+        if (modal) modal.style.display = "none";
+        if (agreed) uploadFinancialPdf();
+      }
+
+      async function uploadFinancialPdf() {
+        if (!currentCompany) return;
+        const input = document.getElementById("financial-pdf-input");
+        const statusEl = document.getElementById("financial-pdf-status");
+        const resultEl = document.getElementById("financial-pdf-result");
+        const file = input?.files?.[0];
+        if (!file) return;
         statusEl.textContent = "解析中…（30〜60秒ほどかかる場合があります）";
         resultEl.innerHTML = "";
         try {
@@ -2456,7 +2805,9 @@
             data: { session },
           } = await supabase.auth.getSession();
           if (!session?.access_token) {
-            throw new Error("セッションが切れています。再ログインしてください。");
+            throw new Error(
+              "セッションが切れています。再ログインしてください。",
+            );
           }
           const form = new FormData();
           form.append("file", file, file.name);
@@ -2477,25 +2828,45 @@
           if (!res.ok || !json.success) {
             throw new Error(json.error || "解析に失敗しました。");
           }
-          statusEl.textContent = `解析完了: シグナル${json.signals_created ?? 0}件を追加しました。`;
+          statusEl.textContent = `解析完了: シグナル${json.signals_created ?? 0}件 / 財務データ${json.financials_saved ?? 0}件を保存しました。`;
           input.value = "";
 
           const summary = json.summary || {};
           const findings = json.findings || [];
+          const monthly = json.monthly_saved || [];
           let html = "";
+
+          if (monthly.length > 0) {
+            html +=
+              '<div style="margin-bottom:8px;"><strong>保存した月次データ</strong></div>';
+            html +=
+              '<div style="overflow-x:auto; border:0.5px solid var(--border); border-radius:4px; margin-bottom:12px;">';
+            html +=
+              '<table style="width:100%; font-size:12px; border-collapse:collapse;">';
+            html +=
+              '<thead><tr style="background:var(--ocean-light);"><th style="padding:6px; text-align:left;">年月</th><th style="padding:6px; text-align:right;">売上</th><th style="padding:6px; text-align:right;">粗利</th><th style="padding:6px; text-align:right;">固定費</th><th style="padding:6px; text-align:right;">営業利益</th></tr></thead><tbody>';
+            for (const r of monthly) {
+              html += `<tr style="border-top:0.5px solid var(--border);"><td style="padding:6px;">${escapeHtml(r.year_month)}</td><td style="padding:6px; text-align:right;">${fmtNum(r.revenue)}</td><td style="padding:6px; text-align:right;">${fmtNum(r.gross_profit)}</td><td style="padding:6px; text-align:right;">${fmtNum(r.fixed_cost)}</td><td style="padding:6px; text-align:right;">${fmtNum(r.operating_profit)}</td></tr>`;
+            }
+            html += "</tbody></table></div>";
+          }
+
           if (summary && Object.keys(summary).length > 0) {
-            html += '<div style="margin-bottom:10px;"><strong>抽出された数値</strong></div>';
+            html +=
+              '<div style="margin-bottom:10px;"><strong>抽出された数値</strong></div>';
             html += '<ul style="margin-left:18px;">';
             for (const [k, v] of Object.entries(summary)) {
-              html += `<li>${k}: ${v}</li>`;
+              if (k === "monthly_financials") continue;
+              html += `<li>${escapeHtml(k)}: ${escapeHtml(v)}</li>`;
             }
             html += "</ul>";
           }
           if (findings.length > 0) {
-            html += '<div style="margin:12px 0 6px;"><strong>検出された兆候</strong></div>';
+            html +=
+              '<div style="margin:12px 0 6px;"><strong>検出された兆候</strong></div>';
             html += '<ul style="margin-left:18px;">';
             for (const f of findings) {
-              html += `<li>${f}</li>`;
+              html += `<li>${escapeHtml(f)}</li>`;
             }
             html += "</ul>";
           }

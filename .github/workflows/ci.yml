@@ -1,0 +1,17 @@
+name: ci
+on: [pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2        # F4: 秘密の混入検査
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck && pnpm lint
+      - run: pnpm test                            # 単体・契約テスト（B/C/D/Fの自動化分）
+      - run: pnpm run check:allowlist             # S2/トークンのスキーマ検査（scripts/で実装）
+      - run: pnpm run eval:engine -- --ci         # prompts/ 変更時はエンジン評価を必須実行
+# 本番反映はmainマージ後の別workflow（deploy.yml, スライス1で作成）のみ。手動デプロイ禁止。

@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /app.html
-Sitemap: https://www.sentio-ai.jp/sitemap.xml

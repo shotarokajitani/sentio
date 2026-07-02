@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Read|Edit|Write", "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-env-read.sh"}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-prod-ref.sh"}]},
+      {"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-secrets-patterns.sh"}]}
+    ]
+  }
+}

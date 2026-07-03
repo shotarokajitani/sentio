@@ -1,0 +1,2 @@
+-- Supabase seed file
+-- This file is run after migrations on `supabase db reset`.

@@ -2,7 +2,9 @@
 name: gotchas
 description: 実際に踏んだ失敗の蓄積。原因調査・実装判断で迷ったら最初に参照。新しい失敗は必ずここに追記。
 ---
+
 # Gotchas（実績ベース）
+
 - Stripe: サブスクで billing_address_collection / customer_creation → 500エラー（Lauda実績）
 - KING OF TIME: JST 8:30–10:00 / 17:30–18:30 接続禁止。cronはUTC 02:00以降
 - BOJ API: 本番公開時に post.rsd17@boj.or.jp へ通知＋クレジット表示が必要

@@ -1,6 +1,29 @@
 {
   "s2_tables": {
-    "events_communication": ["event_id","company_id","occurred_at","ingested_at","source","actor_ref","counterpart_ref","channel","char_count","response_latency_sec","thread_ref","sensitivity"]
+    "events_communication": [
+      "event_id",
+      "company_id",
+      "occurred_at",
+      "ingested_at",
+      "source",
+      "actor_ref",
+      "counterpart_ref",
+      "channel",
+      "char_count",
+      "response_latency_sec",
+      "thread_ref",
+      "sensitivity"
+    ]
   },
-  "forbidden_column_patterns": ["body","content","text","message","subject","token","secret","password","api_key"]
+  "forbidden_column_patterns": [
+    "body",
+    "content",
+    "text",
+    "message",
+    "subject",
+    "token",
+    "secret",
+    "password",
+    "api_key"
+  ]
 }

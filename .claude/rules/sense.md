@@ -1,6 +1,12 @@
 ---
-paths: ["supabase/functions/scan*/**", "supabase/functions/investigat*/**", "src/sense/**"]
+paths:
+  [
+    "supabase/functions/scan*/**",
+    "supabase/functions/investigat*/**",
+    "src/sense/**",
+  ]
 ---
+
 - ScannerはLLMを呼ばない。決定的処理のみ
 - immediate緊急度は機械的事実（monitor・期日）専用。LLM生成物にimmediateを付けない
 - Investigator: 仮説3件未満のFindingを作らない。全主張に証拠イベントID配列を必須

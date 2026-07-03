@@ -1,4 +1,5 @@
 # Step 2: 梶谷さん側タスク（並行実行・各10〜30分）
+
 1. 申請キュー着手: Google審査の状況確認 → Slack Marketplace申請開始 → Metaアプリ審査（Instagram）。
 2. K4整備: パスワードマネージャに全ルート認証を集約（Supabase/Vercel/Stripe/Google Cloud/Meta/レジストラ/GitHub）。
    全て2FA有効化＋復旧コード保存＋緊急アクセスキット（1Passwordならエマージェンシーキット）作成。

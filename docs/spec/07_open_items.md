@@ -1,6 +1,7 @@
 # 07 未確定・要確認キュー（勝手に確定させない）
 
 ## 事業判断待ち（人間）
+
 - プラン具体値（原則のみ確定: 体験×調査予算×Finding属性範囲で切る。「連携数課金」は禁止）
   前提条件（禁じ手9・確定）: 機構の2分——【担保＝全プラン標準】3点開示/透明性ページ/本文非取得/
   カバレッジ・鮮度・確度の正直表示/証拠遡及/ケア文脈制限/勝手に送らない/fail-closed/進行中損失の即時通知
@@ -10,6 +11,7 @@
 - Phase3 横断パターンの匿名化設計（法務含む）
 
 ## 規約・API要確認
+
 - Chatworkの過去メッセージ取得可否 / freee口座明細スコープと規約 / Square等POSのAPI・規約
 - 人流オープンデータの二次利用条件 / 気象データ商用条件 / LINE公式のinsight API
 - GBP API: Lauda側の実地知見で要件確定（2026-07-02）——Basic API Access申請が必須（api_defaultフォーム）、
@@ -21,8 +23,10 @@
 - Supabaseプレビューブランチでのcron/secrets/Vault再現範囲
 
 ## 申請キュー（リードタイム＝クリティカルパス）
+
 Google審査（進行中・継続）→ Slack Marketplace → Metaアプリ審査（Instagram）→ GBP利用申請。
 Gmail CASA・GBPの実装はフェーズ2。BOJ APIは本番公開時にpost.rsd17@boj.or.jpへ通知＋クレジット表示。
 
 ## 既存資産の扱い（スライス1契約で切り分け提示）
+
 Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは流用。旧Edge Functions/スキーマは凍結→新設計で置換。

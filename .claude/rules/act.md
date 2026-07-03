@@ -1,6 +1,12 @@
 ---
-paths: ["supabase/functions/deliver*/**", "supabase/functions/day0*/**", "src/act/**"]
+paths:
+  [
+    "supabase/functions/deliver*/**",
+    "supabase/functions/day0*/**",
+    "src/act/**",
+  ]
 ---
+
 - 「Sentioは何も勝手に送らない」: ワンタップは下書き/仮登録生成まで。送信・確定APIを直接呼ばない
 - 週次の構成順（spec/04）を固定。Findingは0〜2件。拡張ナッジは最大1行・同一ツール2週間に1回
 - 即時アラートに解釈文を含めない。静音時間帯ロジック必須（進行中損失のみ例外）

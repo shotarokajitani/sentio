@@ -1,6 +1,7 @@
 ---
 paths: ["supabase/functions/state*/**", "src/state/**"]
 ---
+
 - 記銘は3経路のみ: baselines再計算（決定的）/ narratives upsert（confidence規則）/ summary再生成（章立て・上限固定）
 - 自由文の追記API・カラムを作らない
 - baselinesは最低観測数未満なら is_established=false。Sense層はこのフラグを必ず尊重

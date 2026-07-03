@@ -1,6 +1,7 @@
 ---
 paths: ["**"]
 ---
+
 - トークン・鍵をコード・イベント・ログ・ドキュメント・テストフィクスチャに書かない。K2はVaultのみ
 - Vaultアクセスはsecurity definer関数経由・service_role限定。statement loggingはOFF前提
 - 本番Project Ref kwpldqbnkraftaahnpev へのCLI直接操作禁止。本番反映はCIのみ

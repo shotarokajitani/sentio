@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-env-read.sh"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/block-env-read.mjs"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-prod-ref.sh"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/block-prod-ref.mjs"
           }
         ]
       },
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/check-secrets-patterns.sh"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/check-secrets-patterns.mjs"
           }
         ]
       }

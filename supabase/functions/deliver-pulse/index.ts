@@ -61,7 +61,7 @@ Deno.serve(async (req: Request) => {
     const pulseText = lines.join("\n");
 
     // Store in delivery_log
-    await supabase.from("delivery_log").insert({
+    const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
@@ -70,6 +70,13 @@ Deno.serve(async (req: Request) => {
       status: "sent",
       created_at: new Date().toISOString(),
     });
+
+    if (logErr) {
+      return new Response(
+        JSON.stringify({ error: `delivery_log insert failed: ${logErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Send via Resend
     if (resendKey && email) {
@@ -80,7 +87,7 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Sentio <noreply@sentio.app>",
+          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
           to: [email],
           subject: "[Sentio] デイリーパルス",
           html: `<pre>${pulseText}</pre>`,

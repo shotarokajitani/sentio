@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
     // E5: Quiet hours check
     if (isQuietHour(now) && !QUIET_HOUR_EXCEPTIONS.has(category)) {
       // Defer to next morning — store for batch delivery
-      await supabase.from("delivery_log").insert({
+      const { error: deferErr } = await supabase.from("delivery_log").insert({
         id: crypto.randomUUID(),
         company_id,
         channel: "email",
@@ -37,6 +37,13 @@ Deno.serve(async (req: Request) => {
         status: "deferred",
         created_at: now.toISOString(),
       });
+
+      if (deferErr) {
+        return new Response(
+          JSON.stringify({ error: `delivery_log insert failed: ${deferErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
 
       return new Response(
         JSON.stringify({ status: "deferred", reason: "quiet_hours" }),
@@ -60,7 +67,7 @@ Deno.serve(async (req: Request) => {
     };
 
     // Store in delivery_log
-    await supabase.from("delivery_log").insert({
+    const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
@@ -69,6 +76,13 @@ Deno.serve(async (req: Request) => {
       status: "sent",
       created_at: now.toISOString(),
     });
+
+    if (logErr) {
+      return new Response(
+        JSON.stringify({ error: `delivery_log insert failed: ${logErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Send via Resend
     if (resendKey && email) {
@@ -79,7 +93,7 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Sentio <noreply@sentio.app>",
+          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
           to: [email],
           subject: alertContent.subject,
           html: `<pre>${alertContent.body}</pre>`,

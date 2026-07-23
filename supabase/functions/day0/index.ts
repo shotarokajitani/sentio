@@ -1,7 +1,6 @@
-// Day0 batch Edge Function — runs within 10 minutes of registration (A1)
-// Generates 8-block report, sends via Resend
-// Uses Anthropic API for initial_hypothesis block (model from ANTHROPIC_MODEL env)
-// Reads prompts from filesystem at runtime (code embedding prohibited)
+// Day0 batch Edge Function — Investigator harness (Planner→Generator→Evaluator)
+// Generates 8-block report from real data, evaluates each block, sends via Resend
+// spec/03 (Sense) + spec/04 (Act) compliant
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
@@ -32,16 +31,52 @@ interface Day0Input {
   email: string;
 }
 
-async function loadPrompt(filename: string): Promise<string> {
-  const path = new URL(`../../../prompts/${filename}`, import.meta.url).pathname;
-  return await Deno.readTextFile(path);
+interface BlockPlan {
+  key: string;
+  title: string;
+  dataSources: string[];
+  dataAvailable: boolean;
+  instructions: string;
 }
 
-// Fetch S0 data from events table (company_id=null, sensitivity=S0)
-async function fetchS0Data(supabase: ReturnType<typeof getSupabaseAdmin>) {
+interface GeneratedBlock {
+  key: string;
+  title: string;
+  content: string;
+  hasData: boolean;
+  sources: string[];
+  tokensUsed: number;
+  generationMs: number;
+}
+
+interface EvalResult {
+  key: string;
+  pass: boolean;
+  scores: Record<string, { pass: boolean; reason: string }>;
+  tokensUsed: number;
+}
+
+// ──────────────────────────────────────────────────────
+// Data fetchers
+// ──────────────────────────────────────────────────────
+
+async function fetchCompanyEvents(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+) {
   const { data } = await supabase
     .from("events")
-    .select("*")
+    .select("event_id, occurred_at, source, event_type, metrics, sensitivity")
+    .eq("company_id", companyId)
+    .order("occurred_at", { ascending: false })
+    .limit(200);
+  return data || [];
+}
+
+async function fetchS0Events(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  const { data } = await supabase
+    .from("events")
+    .select("event_id, occurred_at, source, event_type, metrics")
     .is("company_id", null)
     .eq("sensitivity", "S0")
     .order("occurred_at", { ascending: false })
@@ -49,65 +84,585 @@ async function fetchS0Data(supabase: ReturnType<typeof getSupabaseAdmin>) {
   return data || [];
 }
 
-// Fetch monitor data for the company's URL
-async function fetchSiteHealth(
+async function fetchConnections(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
 ) {
   const { data } = await supabase
-    .from("events")
-    .select("metrics, occurred_at")
-    .eq("company_id", companyId)
-    .eq("event_type", "monitor")
-    .order("occurred_at", { ascending: false })
-    .limit(1)
-    .single();
-  return data;
+    .from("connections")
+    .select("provider, status")
+    .eq("company_id", companyId);
+  return data || [];
 }
 
-// Generate initial_hypothesis block via LLM when concern is provided
-async function generateHypothesis(
+async function fetchCompetitors(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+) {
+  const { data } = await supabase
+    .from("entities")
+    .select("canonical_name, attrs")
+    .eq("company_id", companyId)
+    .eq("type", "competitor");
+  return data || [];
+}
+
+async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Sentio/1.0", Accept: "text/html" },
+      redirect: "follow",
+    });
+    if (!res.ok) return { error: `HTTP ${res.status}` };
+
+    const contentType = res.headers.get("content-type") || "";
+    let charset = "utf-8";
+    const cm = contentType.match(/charset=([^\s;]+)/i);
+    if (cm) charset = cm[1].toLowerCase();
+
+    const bytes = await res.arrayBuffer();
+    let html: string;
+    try {
+      html = new TextDecoder(charset, { fatal: false }).decode(bytes);
+    } catch {
+      html = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    }
+
+    // Re-detect charset from meta tag
+    if (!cm) {
+      const mc = html.match(/<meta[^>]+charset=["']?([^"'\s;>]+)/i);
+      if (mc) {
+        try { html = new TextDecoder(mc[1].toLowerCase(), { fatal: false }).decode(bytes); } catch { /* keep */ }
+      }
+    }
+
+    const extract = (re: RegExp) => { const m = html.match(re); return m ? m[1].trim() : null; };
+    const metaContent = (name: string, attr = "name") => {
+      const re = new RegExp(`<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']*)["']|<meta[^>]+content=["']([^"']*)["'][^>]+${attr}=["']${name}["']`, "i");
+      const m = html.match(re);
+      return m ? (m[1] || m[2]).trim() : null;
+    };
+
+    return {
+      title: extract(/<title[^>]*>([^<]+)<\/title>/i),
+      description: metaContent("description"),
+      h1: extract(/<h1[^>]*>([^<]+)<\/h1>/i),
+      ogTitle: metaContent("og:title", "property"),
+      ogDescription: metaContent("og:description", "property"),
+    };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Phase 1: PLANNER
+// ──────────────────────────────────────────────────────
+
+function buildPlan(
+  companyEvents: Record<string, unknown>[],
+  s0Events: Record<string, unknown>[],
+  connections: { provider: string; status: string }[],
+  competitors: Record<string, unknown>[],
+  concern: string | null,
+  siteAnalysis: Record<string, string | null>,
+): BlockPlan[] {
+  const activeProviders = connections
+    .filter((c) => c.status === "active")
+    .map((c) => c.provider);
+
+  const calendarEvents = companyEvents.filter((e) => e.event_type === "schedule");
+  const transactionEvents = companyEvents.filter((e) => e.event_type === "transaction");
+  const gbizEvents = s0Events.filter((e) => (e.source as string)?.includes("gbizinfo"));
+
+  return DAY0_BLOCK_KEYS.map((key) => {
+    switch (key) {
+      case "external_view":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: ["analyze-url", "calendar", "transaction"],
+          dataAvailable: true, // Always attempt: we have company info + events even if site fetch fails
+          instructions: "URLの実分析結果があれば活用。なくてもカレンダー・入出金データから外部視点で会社を描写。",
+        };
+      case "reputation":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: [],
+          dataAvailable: false,
+          instructions: "Google Places / レビューデータは未接続。正直に表示。",
+        };
+      case "site_health": {
+        const monitorEvents = companyEvents.filter((e) => e.event_type === "monitor");
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: monitorEvents.length > 0 ? ["monitor:health"] : [],
+          dataAvailable: monitorEvents.length > 0,
+          instructions: monitorEvents.length > 0
+            ? "モニターデータからSSL残存日数・応答時間を報告。"
+            : "モニターデータは未取得。正直に表示。",
+        };
+      }
+      case "public_records":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: gbizEvents.length > 0 ? ["gbizinfo"] : [],
+          dataAvailable: gbizEvents.length > 0,
+          instructions: gbizEvents.length > 0
+            ? "gBizINFOの競合データと自社の入出金・カレンダーデータを交差させ、「公的記録から見える競合との違い」を経営者が一枚の絵として掴めるように描写。補助金採択の有無・事業規模・所在地の比較を含める。"
+            : "gBizINFOデータなし。正直に表示。",
+        };
+      case "opportunities":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: [],
+          dataAvailable: false,
+          instructions: "jGrantsデータは未取得。正直に表示。",
+        };
+      case "industry_position":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: [],
+          dataAvailable: false,
+          instructions: "e-Stat・日銀データは未取得。正直に表示。",
+        };
+      case "initial_hypothesis":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: concern
+            ? ["registration:concern", "calendar", "transaction", "gbizinfo"]
+            : ["calendar", "transaction"],
+          dataAvailable: calendarEvents.length > 0 || transactionEvents.length > 0,
+          instructions: concern
+            ? "経営者の懸念と全実データを交差させて初期仮説を生成。"
+            : "懸念未登録。実データ（カレンダー・入出金）から自動的に見える傾向を報告。",
+        };
+      case "coverage_map":
+        return {
+          key, title: BLOCK_TITLES[key],
+          dataSources: ["system:coverage"],
+          dataAvailable: true,
+          instructions: "接続状況と各データソースの件数を動的に報告。",
+        };
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────
+// Phase 2: GENERATOR (LLM per block)
+// ──────────────────────────────────────────────────────
+
+async function generateBlock(
   client: Anthropic,
   model: string,
-  concern: string,
-  s0Context: string,
-): Promise<string> {
-  const evaluatorCriteria = await loadPrompt("evaluator_criteria.md");
-  // Day0 variant: criteria 2 = "source attribution", assertive expressions forbidden
-  const day0Note = evaluatorCriteria
-    .split("\n")
-    .filter((l) => l.includes("Day0"))
-    .join("\n");
+  plan: BlockPlan,
+  context: {
+    companyName: string;
+    url: string;
+    industry: string;
+    concern: string | null;
+    siteAnalysis: Record<string, string | null>;
+    calendarSummary: string;
+    transactionSummary: string;
+    gbizSummary: string;
+    competitorsSummary: string;
+    connections: { provider: string; status: string }[];
+    eventCounts: Record<string, number>;
+  },
+): Promise<GeneratedBlock> {
+  // coverage_map is deterministic (no LLM needed)
+  if (plan.key === "coverage_map") {
+    const active = context.connections
+      .filter((c) => c.status === "active")
+      .map((c) => c.provider);
 
+    const connected: string[] = [];
+    const notConnected: string[] = [];
+
+    if (active.includes("google_calendar")) {
+      connected.push(`カレンダー(${context.eventCounts["google_calendar"] || 0}件)`);
+    } else { notConnected.push("カレンダー(予定の異常)"); }
+
+    const csvCount = context.eventCounts["csv:accounting"] || 0;
+    if (active.includes("freee") || csvCount > 0) {
+      connected.push(`入出金CSV[入出金明細からの暫定集計・${csvCount}件]`);
+    } else { notConnected.push("入出金(収支の変化)"); }
+
+    if (!active.includes("slack")) notConnected.push("Slack(コミュニケーション変化)");
+    notConnected.push("勤怠(労務リスク)");
+
+    const parts: string[] = [];
+    if (connected.length > 0) parts.push(`現在の接続: ${connected.join("、")}`);
+    if (notConnected.length > 0) parts.push(`追加接続で見えるようになる領域: ${notConnected.join("、")}`);
+
+    return {
+      key: plan.key, title: plan.title,
+      content: parts.join("。"),
+      hasData: true, sources: ["system:coverage"],
+      tokensUsed: 0, generationMs: 0,
+    };
+  }
+
+  // Blocks with no data: honest display (no LLM needed)
+  if (!plan.dataAvailable && plan.key !== "initial_hypothesis") {
+    const noDataMessages: Record<string, string> = {
+      reputation: "評判データ（Google Places等）はまだ接続されていません。接続後に競合との比較が可能になります。",
+      site_health: "サイト健全性のモニタリングはまだ開始されていません。",
+      opportunities: "補助金・助成金情報（jGrants）はまだ取得されていません。",
+      industry_position: "業界統計（e-Stat・日銀）はまだ取得されていません。",
+    };
+    return {
+      key: plan.key, title: plan.title,
+      content: noDataMessages[plan.key] || "このブロックのデータはまだ利用できません。",
+      hasData: false, sources: [],
+      tokensUsed: 0, generationMs: 0,
+    };
+  }
+
+  // Build block-specific data context
+  let dataContext = "";
+  switch (plan.key) {
+    case "external_view":
+      dataContext = `## URL分析結果（${context.url}）
+タイトル: ${context.siteAnalysis.title || "取得不可"}
+説明: ${context.siteAnalysis.description || "なし"}
+H1: ${context.siteAnalysis.h1 || "なし"}
+OGタイトル: ${context.siteAnalysis.ogTitle || "なし"}
+OG説明: ${context.siteAnalysis.ogDescription || "なし"}
+${context.siteAnalysis.error ? `(サイト取得エラー: ${context.siteAnalysis.error})` : ""}
+
+## カレンダーデータ概要
+${context.calendarSummary}
+
+## 入出金データ概要
+${context.transactionSummary}
+
+## 推定競合
+${context.competitorsSummary || "推定なし"}`;
+      break;
+    case "public_records":
+      dataContext = `## gBizINFO取得データ
+${context.gbizSummary || "データなし"}
+
+## 自社の概要（比較材料として）
+会社: ${context.companyName}（${context.industry}）
+入出金概要: ${context.transactionSummary}
+カレンダー概要: ${context.calendarSummary}`;
+      break;
+    case "initial_hypothesis":
+      dataContext = `## カレンダーデータ分析
+${context.calendarSummary}
+
+## 入出金データ分析
+${context.transactionSummary}
+
+## 外部データ
+${context.gbizSummary || "なし"}
+${context.concern ? `\n## 経営者の懸念\n${context.concern}` : "（懸念未登録: 実データから見える傾向を報告すること）"}`;
+      break;
+    default:
+      dataContext = "データなし";
+  }
+
+  const start = Date.now();
   const response = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 800,
     messages: [
       {
         role: "user",
-        content: `あなたはSentioのDay0レポート生成器です。経営者の懸念に対して、外部データのみに基づく暫定的な推察を生成してください。
+        content: `あなたはSentioのDay0レポート生成器です。以下のブロックの本文を生成してください。
 
-## 経営者の懸念
-${concern}
+## ブロック: ${plan.title}
+## 会社: ${context.companyName}（${context.industry}）
+## URL: ${context.url}
 
-## 利用可能な外部データ
-${s0Context}
+## 実データ
+${dataContext}
 
-## Day0変形ルール
-${day0Note}
-- 全ての記述に出所を明示すること
-- 「外部データのみに基づく暫定推察」であることを明示すること
+## Day0生成ルール（厳守）
+- 全ての記述に出所を明示すること（例: 「入出金明細によると」「gBizINFOによると」「サイト分析によると」）
+- 「外部データのみに基づく暫定推察」であることを冒頭に明示すること
 - 断定表現は不合格（「である」「に違いない」「確実に」「必ず」は使用禁止）
+- 実データに基づく具体的な数字・傾向・固有名詞を必ず含めること
+- データがないことを推測で埋めないこと
+- 入出金データがある場合: 資金の出入りのリズム、大きな支出、入金元の集中度を分析すること
+- カレンダーデータがある場合: 時間配分、会議相手の傾向を分析すること
 
-暫定推察を日本語で3-5文で生成してください。`,
+日本語で5〜10文で生成してください。本文のみ出力（ブロックタイトルやマークダウンヘッダーは不要）。`,
       },
     ],
   });
 
-  return response.content[0].type === "text"
-    ? response.content[0].text
-    : "暫定推察の生成に失敗しました";
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+
+  return {
+    key: plan.key, title: plan.title,
+    content: text,
+    hasData: true,
+    sources: plan.dataSources,
+    tokensUsed,
+    generationMs: Date.now() - start,
+  };
 }
+
+// ──────────────────────────────────────────────────────
+// Phase 2b: REVISE (re-generate with Evaluator feedback)
+// ──────────────────────────────────────────────────────
+
+async function reviseBlock(
+  client: Anthropic,
+  model: string,
+  plan: BlockPlan,
+  context: Parameters<typeof generateBlock>[3],
+  previousContent: string,
+  evaluatorFeedback: string,
+  attempt: number,
+): Promise<GeneratedBlock> {
+  const start = Date.now();
+  const response = await client.messages.create({
+    model,
+    max_tokens: 800,
+    messages: [
+      {
+        role: "user",
+        content: `あなたはSentioのDay0レポート生成器です。前回生成したブロックがEvaluatorに不合格とされました。フィードバックを反映して書き直してください。
+
+## ブロック: ${plan.title}（リバイズ${attempt}回目）
+## 会社: ${context.companyName}（${context.industry}）
+
+## 前回の生成内容
+${previousContent}
+
+## Evaluatorフィードバック（不通過理由）
+${evaluatorFeedback}
+
+## 重要な指示
+- 経営者の頭に「自社の今の姿」が一枚の絵として浮かぶよう、具体的な数字・傾向を織り交ぜた物語として書くこと
+- 数字の羅列ではなく、数字が何を意味するかを語ること
+- 全ての記述に出所を明示すること
+- 「外部データのみに基づく暫定推察」であることを明示すること
+- 断定表現は不合格
+
+日本語で5〜10文。本文のみ出力。`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+
+  return {
+    key: plan.key, title: plan.title,
+    content: text,
+    hasData: true, sources: plan.dataSources,
+    tokensUsed, generationMs: Date.now() - start,
+  };
+}
+
+// ──────────────────────────────────────────────────────
+// Phase 3: EVALUATOR (Day0 variant)
+// ──────────────────────────────────────────────────────
+
+async function evaluateBlock(
+  client: Anthropic,
+  model: string,
+  block: GeneratedBlock,
+): Promise<EvalResult> {
+  // Skip evaluation for no-data blocks and deterministic blocks
+  if (!block.hasData || block.tokensUsed === 0) {
+    return {
+      key: block.key,
+      pass: true, // No-data honest display always passes
+      scores: { honest_display: { pass: true, reason: "データなしの正直表示" } },
+      tokensUsed: 0,
+    };
+  }
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: 600,
+    system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。`,
+    messages: [
+      {
+        role: "user",
+        content: `採点対象ブロック「${block.title}」:
+${block.content}
+
+ハード基準（全通過のみpass）:
+1 像: 経営者の頭に自社の状態が一枚の絵として浮かぶか
+2 出所: 全事実に出所が明示されているか
+3 誠実: 暫定推察の明示あり・断定表現なし
+4 トーン: 断定・責めなし
+5 具体: 実データの数字・傾向・固有名詞があるか
+
+回答は以下のJSON構造のみ:
+{"criteria_1":{"pass":true,"reason":"..."},"criteria_2":{"pass":true,"reason":"..."},"criteria_3":{"pass":true,"reason":"..."},"criteria_4":{"pass":true,"reason":"..."},"criteria_5":{"pass":true,"reason":"..."},"overall_pass":true,"feedback":"不通過時の改善指示"}`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text : "{}";
+  const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+
+  // Robust JSON extraction: find the outermost { ... } handling nested objects
+  let braceDepth = 0;
+  let jsonStart = -1;
+  let jsonEnd = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "{") {
+      if (braceDepth === 0) jsonStart = i;
+      braceDepth++;
+    } else if (text[i] === "}") {
+      braceDepth--;
+      if (braceDepth === 0 && jsonStart >= 0) {
+        jsonEnd = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (jsonStart < 0 || jsonEnd < 0) {
+    return {
+      key: block.key, pass: false,
+      scores: { parse_error: { pass: false, reason: "Evaluator出力にJSONが見つからない" } },
+      tokensUsed,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(text.substring(jsonStart, jsonEnd));
+    const scores: Record<string, { pass: boolean; reason: string }> = {};
+    for (let i = 1; i <= 5; i++) {
+      const c = parsed[`criteria_${i}`];
+      if (c) scores[`criteria_${i}`] = { pass: !!c.pass, reason: c.reason || "" };
+    }
+    return {
+      key: block.key,
+      pass: !!parsed.overall_pass,
+      scores,
+      tokensUsed,
+    };
+  } catch {
+    return {
+      key: block.key, pass: false,
+      scores: { parse_error: { pass: false, reason: `JSON parse failed: ${text.substring(jsonStart, Math.min(jsonStart + 100, jsonEnd))}...` } },
+      tokensUsed,
+    };
+  }
+}
+
+// ──────────────────────────────────────────────────────
+// Data summarizers (no PII leakage to LLM)
+// ──────────────────────────────────────────────────────
+
+function summarizeCalendar(events: Record<string, unknown>[]): string {
+  const calEvents = events.filter((e) => e.event_type === "schedule");
+  if (calEvents.length === 0) return "カレンダーデータなし";
+
+  const titles = calEvents.map((e) => (e.metrics as Record<string, unknown>)?.title as string || "(無題)");
+  const dates = calEvents.map((e) => (e.occurred_at as string).split("T")[0]);
+
+  // Meeting partner analysis
+  const partnerCounts: Record<string, number> = {};
+  for (const e of calEvents) {
+    const m = e.metrics as Record<string, unknown>;
+    const attendees = m?.attendees as string[] || [];
+    for (const a of attendees) {
+      const domain = a.split("@")[1];
+      if (domain) partnerCounts[domain] = (partnerCounts[domain] || 0) + 1;
+    }
+  }
+  const topPartners = Object.entries(partnerCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([domain, count]) => `${domain}: ${count}件`);
+
+  // Time distribution
+  const monthCounts: Record<string, number> = {};
+  for (const d of dates) {
+    const month = d.substring(0, 7);
+    monthCounts[month] = (monthCounts[month] || 0) + 1;
+  }
+
+  const earliest = dates[dates.length - 1];
+  const latest = dates[0];
+
+  return `全${calEvents.length}件（${earliest}〜${latest}）
+月別分布: ${Object.entries(monthCounts).map(([m, c]) => `${m}: ${c}件`).join("、")}
+予定タイトル例: ${titles.slice(0, 5).join("、")}
+会議相手ドメイン: ${topPartners.length > 0 ? topPartners.join("、") : "出席者情報なし"}`;
+}
+
+function summarizeTransactions(events: Record<string, unknown>[]): string {
+  const txEvents = events.filter((e) => e.event_type === "transaction");
+  if (txEvents.length === 0) return "入出金データなし";
+
+  let totalCredit = 0, totalDebit = 0;
+  let creditCount = 0, debitCount = 0;
+  let maxCredit = 0, maxDebit = 0;
+  const dates: string[] = [];
+
+  for (const e of txEvents) {
+    const m = e.metrics as Record<string, unknown>;
+    const amount = (m?.amount as number) || 0;
+    const direction = m?.direction as string;
+    dates.push((e.occurred_at as string).split("T")[0]);
+
+    if (direction === "credit" || amount > 0) {
+      const absAmt = Math.abs(amount);
+      totalCredit += absAmt;
+      creditCount++;
+      if (absAmt > maxCredit) maxCredit = absAmt;
+    }
+    if (direction === "debit" || amount < 0) {
+      const absAmt = Math.abs(amount);
+      totalDebit += absAmt;
+      debitCount++;
+      if (absAmt > maxDebit) maxDebit = absAmt;
+    }
+  }
+
+  const earliest = dates[dates.length - 1];
+  const latest = dates[0];
+
+  // Monthly breakdown
+  const monthlyNet: Record<string, { credit: number; debit: number }> = {};
+  for (const e of txEvents) {
+    const m = e.metrics as Record<string, unknown>;
+    const amount = Math.abs((m?.amount as number) || 0);
+    const direction = m?.direction as string;
+    const month = (e.occurred_at as string).substring(0, 7);
+    if (!monthlyNet[month]) monthlyNet[month] = { credit: 0, debit: 0 };
+    if (direction === "credit") monthlyNet[month].credit += amount;
+    else monthlyNet[month].debit += amount;
+  }
+
+  const fmt = (n: number) => n.toLocaleString("ja-JP");
+
+  return `全${txEvents.length}件（${earliest}〜${latest}）
+入金: ${creditCount}件・合計¥${fmt(totalCredit)}・最大¥${fmt(maxCredit)}
+出金: ${debitCount}件・合計¥${fmt(totalDebit)}・最大¥${fmt(maxDebit)}
+月別:
+${Object.entries(monthlyNet).map(([m, v]) => `  ${m}: 入金¥${fmt(v.credit)} / 出金¥${fmt(v.debit)} / 差引¥${fmt(v.credit - v.debit)}`).join("\n")}`;
+}
+
+function summarizeGbiz(events: Record<string, unknown>[]): string {
+  const gbiz = events.filter((e) => (e.source as string)?.includes("gbizinfo"));
+  if (gbiz.length === 0) return "";
+
+  return gbiz.map((e) => {
+    const m = e.metrics as Record<string, unknown>;
+    if (m.type === "subsidy") return `補助金採択: ${m.company_name} — ${m.title}`;
+    if (m.type === "certification") return `認定: ${m.company_name} — ${m.title}`;
+    if (m.type === "corporate_info") return `法人情報: ${m.name}（${m.location || "所在地不明"}）`;
+    return JSON.stringify(m);
+  }).join("\n");
+}
+
+// ──────────────────────────────────────────────────────
+// Main handler
+// ──────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -134,149 +689,128 @@ Deno.serve(async (req: Request) => {
     const client = new Anthropic({ apiKey });
     const supabase = getSupabaseAdmin();
 
-    // Gather data
-    const [s0Events, siteHealth] = await Promise.all([
-      fetchS0Data(supabase),
-      fetchSiteHealth(supabase, company_id),
+    // ── Gather all data ──
+    const [companyEvents, s0Events, connections, competitors, siteAnalysis] = await Promise.all([
+      fetchCompanyEvents(supabase, company_id),
+      fetchS0Events(supabase),
+      fetchConnections(supabase, company_id),
+      fetchCompetitors(supabase, company_id),
+      analyzeUrl(url),
     ]);
 
-    // Categorize S0 data
-    const publicRecords = s0Events.filter((e) => e.source?.includes("gbizinfo"));
-    const opportunities = s0Events.filter((e) => e.source?.includes("jgrants"));
-    const industryData = s0Events.filter((e) =>
-      e.source?.includes("estat") || e.source?.includes("boj")
-    );
+    // Event counts for coverage_map
+    const eventCounts: Record<string, number> = {};
+    for (const e of companyEvents) {
+      const src = e.source as string;
+      eventCounts[src] = (eventCounts[src] || 0) + 1;
+    }
 
-    // Build 8 blocks
+    // Summarize data for LLM context
+    const calendarSummary = summarizeCalendar(companyEvents);
+    const transactionSummary = summarizeTransactions(companyEvents);
+    const gbizSummary = summarizeGbiz(s0Events);
+    const competitorsSummary = competitors.length > 0
+      ? competitors.map((c) => `- ${c.canonical_name}: ${(c.attrs as Record<string, string>)?.reason || ""}`).join("\n")
+      : "競合推定なし";
+
+    // ── PLANNER ──
+    const plan = buildPlan(companyEvents, s0Events, connections, competitors, concern, siteAnalysis);
+
+    // ── GENERATOR (parallel) ──
+    const generatorContext = {
+      companyName: company_name, url, industry, concern,
+      siteAnalysis, calendarSummary, transactionSummary,
+      gbizSummary, competitorsSummary, connections, eventCounts,
+    };
+
     const blocks = await Promise.all(
-      DAY0_BLOCK_KEYS.map(async (key) => {
-        switch (key) {
-          case "external_view":
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: `${company_name}(${url})の外部からの観察です。業種: ${industry}`,
-              hasData: true,
-              sources: ["URL analysis"],
-            };
-
-          case "reputation":
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "評判データは接続後に利用可能になる見込みです",
-              hasData: false, sources: [],
-            };
-
-          case "site_health":
-            if (siteHealth?.metrics) {
-              const m = siteHealth.metrics as Record<string, unknown>;
-              return {
-                key, title: BLOCK_TITLES[key],
-                content: `SSL残存: ${m.ssl_days_remaining ?? "不明"}日、応答時間: ${m.response_time_ms ?? "不明"}msと観測されました (${siteHealth.occurred_at}時点)`,
-                hasData: true,
-                sources: ["monitor:health", "monitor:ssl"],
-              };
-            }
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "サイト健全性データは取得できませんでした",
-              hasData: false, sources: [],
-            };
-
-          case "public_records":
-            if (publicRecords.length > 0) {
-              return {
-                key, title: BLOCK_TITLES[key],
-                content: publicRecords
-                  .map((r) => `${JSON.stringify(r.metrics)} (${r.source}より)`)
-                  .join("\n"),
-                hasData: true,
-                sources: publicRecords.map((r) => r.source),
-              };
-            }
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "該当する公的記録は確認されませんでした",
-              hasData: false, sources: [],
-            };
-
-          case "opportunities":
-            if (opportunities.length > 0) {
-              return {
-                key, title: BLOCK_TITLES[key],
-                content: opportunities
-                  .map((o) => `${JSON.stringify(o.metrics)} (${o.source}より)`)
-                  .join("\n"),
-                hasData: true,
-                sources: opportunities.map((o) => o.source),
-              };
-            }
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "利用可能な機会情報はありません",
-              hasData: false, sources: [],
-            };
-
-          case "industry_position":
-            if (industryData.length > 0) {
-              return {
-                key, title: BLOCK_TITLES[key],
-                content: industryData
-                  .map((d) => `${JSON.stringify(d.metrics)} (${d.source}より)`)
-                  .join("\n"),
-                hasData: true,
-                sources: industryData.map((d) => d.source),
-              };
-            }
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "業界データは収集中です",
-              hasData: false, sources: [],
-            };
-
-          case "initial_hypothesis":
-            if (concern) {
-              const s0Context = s0Events
-                .slice(0, 10)
-                .map((e) => `${e.source}: ${JSON.stringify(e.metrics)}`)
-                .join("\n");
-              const hypothesis = await generateHypothesis(
-                client, model, concern, s0Context,
-              );
-              return {
-                key, title: BLOCK_TITLES[key],
-                content: hypothesis,
-                hasData: true,
-                sources: ["registration:concern", ...s0Events.slice(0, 5).map((e) => e.source)],
-              };
-            }
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "懸念は登録されていません。データ接続後に検知を開始します",
-              hasData: false, sources: [],
-            };
-
-          case "coverage_map":
-            return {
-              key, title: BLOCK_TITLES[key],
-              content: "現在の接続: 会計CSV。追加接続で見えるようになる領域: カレンダー(予定の異常), 勤怠(労務リスク), Slack(コミュニケーション変化)",
-              hasData: true,
-              sources: ["system:coverage"],
-            };
-        }
-      }),
+      plan.map((blockPlan) => generateBlock(client, model, blockPlan, generatorContext)),
     );
+    let totalGeneratorTokens = blocks.reduce((sum, b) => sum + b.tokensUsed, 0);
+
+    // ── EVALUATOR with revise loop (spec: revise ≤ 1 to stay within timeout) ──
+    const MAX_REVISE = 1;
+
+    // Evaluate all blocks in parallel
+    const initialEvals = await Promise.all(
+      blocks.map((block) => evaluateBlock(client, model, block)),
+    );
+    let totalEvaluatorTokens = initialEvals.reduce((sum, e) => sum + e.tokensUsed, 0);
+
+    // Revise failed LLM blocks in parallel
+    const revisePromises = initialEvals.map(async (evalResult, idx) => {
+      if (evalResult.pass || blocks[idx].tokensUsed === 0) {
+        return { block: blocks[idx], eval: evalResult };
+      }
+
+      // Revise once
+      const feedback = Object.entries(evalResult.scores)
+        .filter(([, v]) => !v.pass)
+        .map(([k, v]) => `${k}: ${v.reason}`)
+        .join("\n");
+
+      const revisedBlock = await reviseBlock(
+        client, model, plan[idx], generatorContext,
+        blocks[idx].content, feedback, 1,
+      );
+
+      const revisedEval = await evaluateBlock(client, model, revisedBlock);
+      return { block: revisedBlock, eval: revisedEval };
+    });
+
+    const reviseResults = await Promise.all(revisePromises);
+
+    const evalResults: EvalResult[] = [];
+    const passedBlocks: GeneratedBlock[] = [];
+
+    for (let i = 0; i < reviseResults.length; i++) {
+      const { block, eval: evalResult } = reviseResults[i];
+      // Count revised block tokens (not already counted in initial generation)
+      if (block !== blocks[i]) totalGeneratorTokens += block.tokensUsed;
+      // Count revised eval tokens (initial eval already counted above)
+      if (evalResult !== initialEvals[i]) totalEvaluatorTokens += evalResult.tokensUsed;
+      evalResults.push(evalResult);
+      if (evalResult.pass) passedBlocks.push(block);
+    }
 
     const generationTimeMs = Date.now() - start;
+    const totalTokens = totalGeneratorTokens + totalEvaluatorTokens;
+
+    // ── fail-closed: if all LLM-generated blocks fail, don't send ──
+    const llmBlocks = blocks.filter((b) => b.tokensUsed > 0);
+    const passedLlmBlocks = passedBlocks.filter((b) => b.tokensUsed > 0);
+
+    if (llmBlocks.length > 0 && passedLlmBlocks.length === 0) {
+      return new Response(
+        JSON.stringify({
+          status: "fail_closed",
+          reason: "全LLM生成ブロックがEvaluator不通過。送信を中止しました。",
+          eval_log: evalResults,
+          generation_time_ms: generationTimeMs,
+          total_tokens: totalTokens,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const report = {
       company_id,
-      blocks,
+      blocks: passedBlocks.map((b) => ({
+        key: b.key, title: b.title, content: b.content,
+        hasData: b.hasData, sources: b.sources,
+      })),
+      eval_log: evalResults,
       generated_at: new Date().toISOString(),
       generation_time_ms: generationTimeMs,
+      total_tokens: totalTokens,
+      generator_tokens: totalGeneratorTokens,
+      evaluator_tokens: totalEvaluatorTokens,
+      blocks_generated: blocks.length,
+      blocks_passed: passedBlocks.length,
     };
 
     // Store in delivery_log
-    await supabase.from("delivery_log").insert({
+    const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
@@ -286,13 +820,18 @@ Deno.serve(async (req: Request) => {
       created_at: new Date().toISOString(),
     });
 
+    if (logErr) {
+      return new Response(
+        JSON.stringify({ error: `delivery_log insert failed: ${logErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Send via Resend
     if (resendKey && email) {
-      const htmlBlocks = blocks
+      const htmlBlocks = passedBlocks
         .map((b) => {
-          const style = b.hasData
-            ? ""
-            : 'style="color: #999;"';
+          const style = b.hasData ? "" : 'style="color: #999;"';
           return `<h3 ${style}>${b.title}</h3><p ${style}>${b.content.replace(/\n/g, "<br>")}</p>`;
         })
         .join("");
@@ -304,10 +843,10 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Sentio <noreply@sentio.app>",
+          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
           to: [email],
           subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: `<h1>Day0レポート: ${company_name}</h1>${htmlBlocks}<hr><p style="font-size:12px;color:#999;">生成時間: ${generationTimeMs}ms</p>`,
+          html: `<html><head><meta charset="utf-8"></head><body><h1>Day0レポート: ${company_name}</h1>${htmlBlocks}<hr><p style="font-size:12px;color:#999;">生成時間: ${generationTimeMs}ms / トークン: ${totalTokens} / 通過ブロック: ${passedBlocks.length}/${blocks.length}</p></body></html>`,
         }),
       });
     }

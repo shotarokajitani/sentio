@@ -1,0 +1,8 @@
+# 歴史的検出: 本番 Supabase anon key（ローテーション対応済み・人間タスク）
+# app.html は現在のブランチに存在しない古いファイル
+# CLAUDE.md のキーも該当コミットで削除済み
+# 新規検出はブロック維持
+4eb956a8b95a9ce61b7075d526eff1244568d99d:app.html:jwt:1611
+9b64d677ea273e6e686d53bba4756ce4a04a77d8:app.html:jwt:1511
+23f89d72e3c79bfac56af06be704fa80bf2809e7:app.html:jwt:1720
+7bfa5f2ce6d4ad3ed4b5f19a8f3d6f13d932d03e:CLAUDE.md:jwt:86

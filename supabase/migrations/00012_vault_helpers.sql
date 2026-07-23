@@ -10,9 +10,7 @@ LANGUAGE plpgsql AS $$
 DECLARE
   v_id UUID;
 BEGIN
-  INSERT INTO vault.secrets (name, secret, description)
-  VALUES (p_name, p_secret, p_description)
-  RETURNING id INTO v_id;
+  SELECT vault.create_secret(p_secret, p_name, p_description) INTO v_id;
   RETURN v_id;
 END;
 $$;

@@ -23,14 +23,14 @@ describe.skipIf(!canRun)("F2: RLS enforcement", () => {
 
   it("anon ユーザーは他社の events を読めない", async () => {
     // admin（service_role）でRLSをバイパスしてイベントを挿入
-    const { error: insertError } = await adminClient.from("events").insert({
+    const { error: insertError } = await adminClient.from("events").upsert({
       event_id: TEST_EVENT_ID,
       company_id: TEST_COMPANY_ID,
       occurred_at: new Date().toISOString(),
       source: "test",
       event_type: "transaction",
       sensitivity: "S1",
-    });
+    }, { onConflict: "event_id" });
     expect(insertError).toBeNull();
 
     // anon クライアント（認証なし）では読めないはず

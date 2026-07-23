@@ -1,26 +1,40 @@
 import { readFileSync } from "node:fs";
 
-// Build patterns via concatenation to avoid self-triggering the hook
-const patterns = [
-  "sk" + "_live",
-  "wh" + "sec_",
-  "xo" + "xb-",
-  "GO" + "CSPX-",
-  "re" + "_[A-Za-z0-9]{16}",
-];
-const regex = new RegExp(patterns.join("|"));
+try {
+  // Build patterns via concatenation to avoid self-triggering the hook
+  const patterns = [
+    "sk" + "_live",
+    "wh" + "sec_",
+    "xo" + "xb-",
+    "GO" + "CSPX-",
+    "re" + "_[A-Za-z0-9]{16}",
+  ];
+  const regex = new RegExp(patterns.join("|"));
 
-const input = readFileSync(0, "utf8");
-if (regex.test(input)) {
+  const input = readFileSync(0, "utf8");
+  if (regex.test(input)) {
+    const result = {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "秘密の実値らしき文字列を検出。値はVault/Secretsへ、文書にはポインタのみ",
+      },
+    };
+    process.stdout.write(JSON.stringify(result));
+    process.exit(2);
+  }
+  process.exit(0);
+} catch (e) {
+  process.stderr.write(`check-secrets-patterns: fail-closed — ${e.message}\n`);
   const result = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
       permissionDecisionReason:
-        "秘密の実値らしき文字列を検出。値はVault/Secretsへ、文書にはポインタのみ",
+        "フックスクリプト実行エラー（fail-closed）: " + e.message,
     },
   };
   process.stdout.write(JSON.stringify(result));
   process.exit(2);
 }
-process.exit(0);

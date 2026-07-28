@@ -27,7 +27,8 @@ export interface PlantedSignal {
 }
 
 const COMPANY_ID = "a0ba0000-0000-0000-0000-000000000001";
-const BASE_DATE = new Date("2025-07-01T00:00:00Z");
+// Use current date as base so events fall within Scanner's 90-day window
+const BASE_DATE = new Date();
 
 function deterministicId(prefix: string, index: number): string {
   return `${prefix}_${String(index).padStart(4, "0")}`;

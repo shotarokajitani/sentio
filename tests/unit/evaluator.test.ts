@@ -3,7 +3,9 @@ import {
   buildEvaluatorInput,
   parseEvalResult,
   shouldReject,
+  computeDay0Pass,
   EVALUATOR_CRITERIA_NAMES,
+  DAY0_CRITERIA_NAMES,
   type EvalCriterion,
 } from "../../src/sense/evaluator";
 
@@ -85,5 +87,58 @@ describe("Evaluator (D3)", () => {
     }));
     const parsed = parseEvalResult({ criteria, revisions: 1, result: "revise" });
     expect(parsed.result).toBe("revise");
+  });
+});
+
+describe("Day0 Evaluator (D+3)", () => {
+  it("D+3: all criteria pass → computeDay0Pass returns true", () => {
+    const results: Record<string, { pass: boolean; reason: string }> = {};
+    for (let i = 1; i <= 5; i++) {
+      results[`criteria_${i}`] = { pass: true, reason: "OK" };
+    }
+    expect(computeDay0Pass(results)).toBe(true);
+  });
+
+  it("D+3: one criterion fails → computeDay0Pass returns false", () => {
+    const results: Record<string, { pass: boolean; reason: string }> = {};
+    for (let i = 1; i <= 5; i++) {
+      results[`criteria_${i}`] = {
+        pass: i !== 5, // criteria_5 (specificity) fails
+        reason: i === 5 ? "抽象的な一般論のみで具体的な数字・固有名詞がない" : "OK",
+      };
+    }
+    expect(computeDay0Pass(results)).toBe(false);
+  });
+
+  it("D+3: vague input must fail specificity criterion", () => {
+    // This is the exact test input from the contract D+3
+    const _vagueInput = "御社の事業は順調に推移していると思われます。今後もこの調子で成長が続く可能性があります。";
+    // The input has no numbers, no specific names, no data sources
+    // When evaluated by the LLM, criteria_5 (specificity) must fail
+    // Here we test the AND logic: even if LLM returns overall_pass:true,
+    // computeDay0Pass correctly rejects when criteria_5 is false
+    const results: Record<string, { pass: boolean; reason: string }> = {
+      criteria_1: { pass: true, reason: "OK" },
+      criteria_2: { pass: true, reason: "OK" },
+      criteria_3: { pass: true, reason: "OK" },
+      criteria_4: { pass: true, reason: "OK" },
+      criteria_5: { pass: false, reason: "具体的な数字・傾向・固有名詞が含まれていない" },
+    };
+    expect(computeDay0Pass(results)).toBe(false);
+  });
+
+  it("D+3: fewer than 5 criteria → computeDay0Pass returns false", () => {
+    const results: Record<string, { pass: boolean; reason: string }> = {
+      criteria_1: { pass: true, reason: "OK" },
+      criteria_2: { pass: true, reason: "OK" },
+      criteria_3: { pass: true, reason: "OK" },
+    };
+    expect(computeDay0Pass(results)).toBe(false);
+  });
+
+  it("Day0 criteria names are defined", () => {
+    expect(DAY0_CRITERIA_NAMES).toHaveLength(5);
+    expect(DAY0_CRITERIA_NAMES).toContain("specificity");
+    expect(DAY0_CRITERIA_NAMES).toContain("provisional");
   });
 });

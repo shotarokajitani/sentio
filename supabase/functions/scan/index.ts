@@ -114,6 +114,77 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // 5. Metric change scan — detect monotonic worsening across event types
+    // Groups events by (event_type, metric_key) and detects 3+ consecutive worsening values
+    const metricExtractors: Array<{
+      eventType: string;
+      metricKey: string;
+      extract: (m: Record<string, unknown>) => number | undefined;
+      direction: "increasing_is_bad" | "decreasing_is_bad";
+      label: string;
+    }> = [
+      {
+        eventType: "communication",
+        metricKey: "reply_time_hours",
+        extract: (m) => m.reply_time_hours as number | undefined,
+        direction: "increasing_is_bad",
+        label: "Reply time worsening",
+      },
+      {
+        eventType: "web",
+        metricKey: "inquiry_count",
+        extract: (m) => m.inquiry_count as number | undefined,
+        direction: "decreasing_is_bad",
+        label: "Inquiry count declining",
+      },
+      {
+        eventType: "attendance",
+        metricKey: "late_hours",
+        extract: (m) => m.late_hours as number | undefined,
+        direction: "increasing_is_bad",
+        label: "Overtime hours increasing",
+      },
+    ];
+
+    for (const extractor of metricExtractors) {
+      const relevantEvents = (events || [])
+        .filter((e) => e.event_type === extractor.eventType)
+        .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+
+      const dataPoints = relevantEvents
+        .map((e) => ({
+          event_id: e.event_id,
+          value: extractor.extract(e.metrics as Record<string, unknown>),
+        }))
+        .filter((d): d is { event_id: string; value: number } => d.value !== undefined);
+
+      if (dataPoints.length < 3) continue;
+
+      // Check last 3+ points for monotonic worsening
+      const recent = dataPoints.slice(-Math.min(dataPoints.length, 5));
+      let isWorsening = true;
+      for (let i = 1; i < recent.length; i++) {
+        if (extractor.direction === "increasing_is_bad") {
+          if (recent[i].value <= recent[i - 1].value) { isWorsening = false; break; }
+        } else {
+          if (recent[i].value >= recent[i - 1].value) { isWorsening = false; break; }
+        }
+      }
+
+      if (isWorsening && recent.length >= 3) {
+        const first = recent[0].value;
+        const last = recent[recent.length - 1].value;
+        candidates.push({
+          scanType: "deviation",
+          source: extractor.eventType,
+          suggestedUrgency: "weekly",
+          evidence_event_ids: recent.map((d) => d.event_id),
+          description: `${extractor.label}: ${first} → ${last} (${recent.length} consecutive points)`,
+          score: Math.abs(last - first) / (Math.abs(first) || 1),
+        });
+      }
+    }
+
     // Store high-score candidates for Investigator pickup
     // Immediate candidates bypass Investigator (fact alert fast path)
     const immediates = candidates.filter((c) => c.suggestedUrgency === "immediate");

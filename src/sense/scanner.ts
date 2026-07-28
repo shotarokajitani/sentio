@@ -39,6 +39,7 @@ export function runScan(
   candidates.push(...scanDeviation(events, baselines));
   candidates.push(...scanTrend(events, baselines));
   candidates.push(...scanSilence(events, baselines));
+  candidates.push(...scanMetricChange(events));
   candidates.push(...scanDeadline(events));
   candidates.push(...scanExternal(events));
   candidates.push(...scanMonitor(events));
@@ -170,6 +171,79 @@ function scanSilence(
       description: `No schedule event for ${Math.round(daysSinceLast)} days (expected every ${intervalBaseline.median} days)`,
       score: daysSinceLast / intervalBaseline.median,
     });
+  }
+
+  return candidates;
+}
+
+// Metric change scan: detect monotonic worsening across event types
+// Groups events by (event_type, metric_key) and detects 3+ consecutive worsening values
+function scanMetricChange(events: TimelineEvent[]): ScanCandidate[] {
+  const candidates: ScanCandidate[] = [];
+
+  const extractors: Array<{
+    eventType: string;
+    metricKey: string;
+    extract: (m: Record<string, unknown>) => number | undefined;
+    direction: "increasing_is_bad" | "decreasing_is_bad";
+    label: string;
+  }> = [
+    {
+      eventType: "communication",
+      metricKey: "reply_time_hours",
+      extract: (m) => m.reply_time_hours as number | undefined,
+      direction: "increasing_is_bad",
+      label: "Reply time worsening",
+    },
+    {
+      eventType: "web",
+      metricKey: "inquiry_count",
+      extract: (m) => m.inquiry_count as number | undefined,
+      direction: "decreasing_is_bad",
+      label: "Inquiry count declining",
+    },
+    {
+      eventType: "attendance",
+      metricKey: "late_hours",
+      extract: (m) => m.late_hours as number | undefined,
+      direction: "increasing_is_bad",
+      label: "Overtime hours increasing",
+    },
+  ];
+
+  for (const ext of extractors) {
+    const relevant = events
+      .filter((e) => e.event_type === ext.eventType)
+      .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+
+    const dataPoints = relevant
+      .map((e) => ({ event_id: e.event_id, value: ext.extract(e.metrics) }))
+      .filter((d): d is { event_id: string; value: number } => d.value !== undefined);
+
+    if (dataPoints.length < 3) continue;
+
+    const recent = dataPoints.slice(-Math.min(dataPoints.length, 5));
+    let isWorsening = true;
+    for (let i = 1; i < recent.length; i++) {
+      if (ext.direction === "increasing_is_bad") {
+        if (recent[i].value <= recent[i - 1].value) { isWorsening = false; break; }
+      } else {
+        if (recent[i].value >= recent[i - 1].value) { isWorsening = false; break; }
+      }
+    }
+
+    if (isWorsening && recent.length >= 3) {
+      const first = recent[0].value;
+      const last = recent[recent.length - 1].value;
+      candidates.push({
+        scanType: "deviation",
+        source: ext.eventType,
+        suggestedUrgency: "weekly",
+        evidence_event_ids: recent.map((d) => d.event_id),
+        description: `${ext.label}: ${first} → ${last} (${recent.length} consecutive points)`,
+        score: Math.abs(last - first) / (Math.abs(first) || 1),
+      });
+    }
   }
 
   return candidates;

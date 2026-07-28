@@ -122,10 +122,25 @@ Deno.serve(async (req: Request) => {
 
     // Send via Resend
     if (resendKey && email) {
+      const sectionTitles: Record<string, string> = {
+        digest: "状態ダイジェスト",
+        finding: "今週のFinding",
+        followup: "続報",
+        stable_coverage: "安定指標とカバレッジ",
+        nudge: "",
+      };
+
       const html = sections
         .filter((s) => s.content)
-        .map((s) => `<div><strong>${s.type}</strong><p>${s.content.replace(/\n/g, "<br>")}</p></div>`)
-        .join("<hr>");
+        .map((s) => {
+          const title = sectionTitles[s.type] || s.type;
+          if (s.type === "nudge") {
+            // Nudge has no heading, just a subtle line
+            return `<p style="font-size:13px;color:#888;">${s.content}</p>`;
+          }
+          return `<div><h3 style="margin:0 0 4px;">${title}</h3><p style="margin:0 0 16px;">${s.content.replace(/\n/g, "<br>")}</p></div>`;
+        })
+        .join("");
 
       await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -137,7 +152,7 @@ Deno.serve(async (req: Request) => {
           from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
           to: [email],
           subject: "[Sentio] 今週の会社",
-          html: `<h1>今週の会社</h1>${html}`,
+          html: `<html><head><meta charset="utf-8"></head><body><h1>今週の会社</h1>${html}</body></html>`,
         }),
       });
     }

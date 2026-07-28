@@ -141,6 +141,80 @@ describe("Scanner (D1-D2, D4)", () => {
     expect(candidates.filter((c) => c.scanType === "deviation")).toHaveLength(0);
   });
 
+  it("metric change: detects reply_time worsening (#3 reply_delay)", () => {
+    const now = Date.now();
+    const events: TimelineEvent[] = [
+      makeEvent({
+        event_id: "comm_reply_0",
+        event_type: "communication",
+        metrics: { reply_time_hours: 2, actor: "entity_employee_tanaka" },
+        occurred_at: new Date(now - 21 * 24 * 60 * 60 * 1000).toISOString(),
+        sensitivity: "S2",
+      }),
+      makeEvent({
+        event_id: "comm_reply_1",
+        event_type: "communication",
+        metrics: { reply_time_hours: 10, actor: "entity_employee_tanaka" },
+        occurred_at: new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString(),
+        sensitivity: "S2",
+      }),
+      makeEvent({
+        event_id: "comm_reply_2",
+        event_type: "communication",
+        metrics: { reply_time_hours: 18, actor: "entity_employee_tanaka" },
+        occurred_at: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        sensitivity: "S2",
+      }),
+    ];
+    const candidates = runScan(events, []);
+    const replyCandidate = candidates.find(
+      (c) => c.source === "communication" && c.scanType === "deviation",
+    );
+    expect(replyCandidate).toBeDefined();
+    expect(replyCandidate!.evidence_event_ids).toHaveLength(3);
+  });
+
+  it("metric change: detects inquiry_count decline (#6 inquiry_decline)", () => {
+    const now = Date.now();
+    const events: TimelineEvent[] = [0, 1, 2, 3].map((w) =>
+      makeEvent({
+        event_id: `web_inquiry_${w}`,
+        event_type: "web",
+        metrics: { inquiry_count: 10 - w * 3 }, // 10, 7, 4, 1
+        occurred_at: new Date(now - (28 - w * 7) * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+    const candidates = runScan(events, []);
+    const inquiryCandidate = candidates.find(
+      (c) => c.source === "web" && c.scanType === "deviation",
+    );
+    expect(inquiryCandidate).toBeDefined();
+    expect(inquiryCandidate!.evidence_event_ids).toHaveLength(4);
+  });
+
+  it("metric change: no detection for non-monotonic data", () => {
+    const now = Date.now();
+    const events: TimelineEvent[] = [
+      makeEvent({
+        event_type: "communication",
+        metrics: { reply_time_hours: 2 },
+        occurred_at: new Date(now - 21 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+      makeEvent({
+        event_type: "communication",
+        metrics: { reply_time_hours: 10 },
+        occurred_at: new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+      makeEvent({
+        event_type: "communication",
+        metrics: { reply_time_hours: 5 }, // goes back down — not monotonic
+        occurred_at: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    ];
+    const candidates = runScan(events, []);
+    expect(candidates.filter((c) => c.source === "communication")).toHaveLength(0);
+  });
+
   it("D2: seasonal normal decline is NOT detected (negative control)", () => {
     // Revenue within normal seasonal range (between p25 and p75)
     const events: TimelineEvent[] = [

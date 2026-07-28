@@ -4,6 +4,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { FINDING_TEMPLATE, EVALUATOR_CRITERIA } from "../_shared/prompts.ts";
+import { MODEL_GENERATOR, MODEL_EVALUATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 
 const MAX_REVISIONS = 2;
@@ -23,11 +25,7 @@ interface EvalCriterion {
   reason: string;
 }
 
-// Load prompt files at runtime (not embedded in code)
-async function loadPrompt(filename: string): Promise<string> {
-  const path = new URL(`../../../prompts/${filename}`, import.meta.url).pathname;
-  return await Deno.readTextFile(path);
-}
+// Prompts loaded via import from _shared/prompts.ts (Edge Runtime sandbox blocks readTextFile)
 
 // Planner: cluster related candidates into investigation units
 function planInvestigations(candidates: Candidate[]): Candidate[][] {
@@ -58,9 +56,9 @@ async function generate(
 }> {
   const evidenceIds = candidates.flatMap((c) => c.evidence_event_ids);
 
-  const response = await client.messages.create({
+  const { data: response, response: rawResponse } = await client.messages.create({
     model,
-    max_tokens: 2048,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -92,10 +90,11 @@ ${findingTemplate}
 }`,
       },
     ],
-  });
+  }).withResponse();
+  warnIfModelDeprecated(rawResponse.headers, model);
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const genTextBlock = response.content.find((c: { type: string }) => c.type === "text");
+  const text = genTextBlock && "text" in genTextBlock ? (genTextBlock as { type: "text"; text: string }).text : "";
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -132,9 +131,9 @@ async function evaluate(
   criteriaText: string,
 ): Promise<{ criteria: EvalCriterion[]; result: "pass" | "revise" | "reject" }> {
   // D3 independence: only finding + evidence passed (no generator reasoning)
-  const response = await client.messages.create({
+  const { data: evalResponse, response: evalRawResponse } = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -153,10 +152,11 @@ ${JSON.stringify(evidenceSummaries, null, 2)}
 [{"name": "基準名", "pass": true/false, "reason": "判定理由"}]`,
       },
     ],
-  });
+  }).withResponse();
+  warnIfModelDeprecated(evalRawResponse.headers, model);
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const evalTextBlock = evalResponse.content.find((c: { type: string }) => c.type === "text");
+  const text = evalTextBlock && "text" in evalTextBlock ? (evalTextBlock as { type: "text"; text: string }).text : "";
 
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -189,23 +189,22 @@ Deno.serve(async (req: Request) => {
       candidates: Candidate[];
     };
 
-    const model = Deno.env.get("ANTHROPIC_MODEL");
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!model || !apiKey) {
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "ANTHROPIC_MODEL and ANTHROPIC_API_KEY must be set" }),
+        JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { "anthropic-version": "2023-06-01" },
+    });
     const supabase = getSupabaseAdmin();
 
-    // Load prompts from filesystem (not embedded)
-    const [findingTemplate, evaluatorCriteria] = await Promise.all([
-      loadPrompt("finding_template.md"),
-      loadPrompt("evaluator_criteria.md"),
-    ]);
+    const findingTemplate = FINDING_TEMPLATE;
+    const evaluatorCriteria = EVALUATOR_CRITERIA;
 
     // Build memory packet from company_summary
     const { data: summaryData } = await supabase
@@ -233,7 +232,7 @@ Deno.serve(async (req: Request) => {
       if (budgetExhausted) break;
 
       // Generator
-      const draft = await generate(client, model, group, memoryPacket, findingTemplate);
+      const draft = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
 
       // Fetch evidence summaries for Evaluator
       const { data: evidenceEvents } = await supabase
@@ -248,7 +247,7 @@ Deno.serve(async (req: Request) => {
 
       // Evaluator loop (max 2 revisions)
       let evalResult = await evaluate(
-        client, model,
+        client, MODEL_EVALUATOR,
         { what: draft.what, evidence_event_ids: draft.evidence_event_ids, hypotheses: draft.hypotheses },
         evidenceSummaries,
         evaluatorCriteria,
@@ -258,7 +257,7 @@ Deno.serve(async (req: Request) => {
       while (evalResult.result === "revise" && revisions < MAX_REVISIONS) {
         revisions++;
         // Re-generate with feedback
-        const revised = await generate(client, model, group, memoryPacket, findingTemplate);
+        const revised = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
         draft.what = revised.what;
         draft.hypotheses = revised.hypotheses;
         draft.evidence_event_ids = revised.evidence_event_ids;
@@ -266,7 +265,7 @@ Deno.serve(async (req: Request) => {
         draft.rendered = revised.rendered;
 
         evalResult = await evaluate(
-          client, model,
+          client, MODEL_EVALUATOR,
           { what: draft.what, evidence_event_ids: draft.evidence_event_ids, hypotheses: draft.hypotheses },
           evidenceSummaries,
           evaluatorCriteria,
@@ -321,7 +320,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
+      JSON.stringify({ error: (error as Error).message, model_used: MODEL_GENERATOR }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

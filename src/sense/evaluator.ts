@@ -61,3 +61,19 @@ export function parseEvalResult(raw: {
 export function shouldReject(revisionCount: number): boolean {
   return revisionCount > 2;
 }
+
+// Day0 Evaluator: compute pass from individual criteria AND (not LLM overall_pass)
+export const DAY0_CRITERIA_NAMES = [
+  "image",       // 像
+  "source",      // 出所
+  "provisional", // 暫定推察
+  "tone",        // トーン
+  "specificity", // 具体
+] as const;
+
+export function computeDay0Pass(
+  criteriaResults: Record<string, { pass: boolean; reason: string }>,
+): boolean {
+  const keys = Object.keys(criteriaResults);
+  return keys.length >= 5 && Object.values(criteriaResults).every((c) => c.pass);
+}

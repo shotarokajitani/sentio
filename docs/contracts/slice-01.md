@@ -67,7 +67,10 @@ F4 gitleaksがリポジトリ全体で検出ゼロ / F5 プレビュー環境に
 
 D+1 合成会社データでscanを実行するとfindingsテーブルに1件以上のレコードがINSERTされること
 D+2 週次レポートに表示されるFinding件数と、findingsテーブルの該当期間のレコード数が一致すること
-D+3 Evaluatorに基準を意図的に割る入力（「御社の事業は順調に推移していると思われます。今後もこの調子で成長が続く可能性があります。」）を与えると、pass以外（reviseまたはreject）が返ること
+D+3 Evaluatorが出力品質を判別できること（陽性/陰性コントロール）:
+  - 良質な出力（実データに基づく数字・出所・暫定推察明示）→ scoresに5基準が揃い、overall_pass=true
+  - 曖昧な出力（一般論のみ・数字なし・出所なし）→ scoresに5基準が揃い（{}でないこと）、基準5「具体」を含む複数基準がfailしてoverall_pass=false
+  - scripts/test-evaluator-direct.ts で検証（Evaluator単体テスト。E2EではGeneratorが常に具体的出力を生成するため陰性コントロール不可）
 
 ### F+. フックガード健全性（2026-07-23追加）
 

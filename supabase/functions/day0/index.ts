@@ -4,6 +4,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { MODEL_GENERATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
@@ -208,7 +209,7 @@ function buildPlan(
           dataSources: gbizEvents.length > 0 ? ["gbizinfo"] : [],
           dataAvailable: gbizEvents.length > 0,
           instructions: gbizEvents.length > 0
-            ? "gBizINFOの競合データと自社の入出金・カレンダーデータを交差させ、「公的記録から見える競合との違い」を経営者が一枚の絵として掴めるように描写。補助金採択の有無・事業規模・所在地の比較を含める。"
+            ? "gBizINFOで法人番号が完全一致した企業のみ言及すること。一致しなかった競合は「gBizINFOでは特定できませんでした」の1行で済ませる。一致した企業について補助金採択・認定・事業規模を報告し、自社の入出金・カレンダーデータと交差させて経営者が一枚の絵として掴める描写にする。"
             : "gBizINFOデータなし。正直に表示。",
         };
       case "opportunities":
@@ -364,9 +365,9 @@ ${context.concern ? `\n## 経営者の懸念\n${context.concern}` : "（懸念�
   }
 
   const start = Date.now();
-  const response = await client.messages.create({
+  const { data: response, response: rawResponse } = await client.messages.create({
     model,
-    max_tokens: 800,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -380,20 +381,24 @@ ${context.concern ? `\n## 経営者の懸念\n${context.concern}` : "（懸念�
 ${dataContext}
 
 ## Day0生成ルール（厳守）
-- 全ての記述に出所を明示すること（例: 「入出金明細によると」「gBizINFOによると」「サイト分析によると」）
+- 以下の3パート構造で書くこと:
+  【見えたこと】実データから直接読み取れる事実（数字・傾向・固有名詞を含む）
+  【根拠】その事実の出所（「入出金明細によると」「カレンダーデータによると」「gBizINFOによると」等）
+  【考えられること】事実から推察される示唆（暫定推察であることを明示）
 - 「外部データのみに基づく暫定推察」であることを冒頭に明示すること
 - 断定表現は不合格（「である」「に違いない」「確実に」「必ず」は使用禁止）
-- 実データに基づく具体的な数字・傾向・固有名詞を必ず含めること
 - データがないことを推測で埋めないこと
 - 入出金データがある場合: 資金の出入りのリズム、大きな支出、入金元の集中度を分析すること
 - カレンダーデータがある場合: 時間配分、会議相手の傾向を分析すること
 
-日本語で5〜10文で生成してください。本文のみ出力（ブロックタイトルやマークダウンヘッダーは不要）。`,
+日本語で各パート2〜4文。本文のみ出力（ブロックタイトルやマークダウンヘッダーは不要。パート見出し【見えたこと】【根拠】【考えられること】は出力する）。`,
       },
     ],
-  });
+  }).withResponse();
+  warnIfModelDeprecated(rawResponse.headers, model);
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const genTextBlock = response.content.find((c: { type: string }) => c.type === "text");
+  const text = genTextBlock && "text" in genTextBlock ? (genTextBlock as { type: "text"; text: string }).text : "";
   const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
 
   return {
@@ -420,9 +425,9 @@ async function reviseBlock(
   attempt: number,
 ): Promise<GeneratedBlock> {
   const start = Date.now();
-  const response = await client.messages.create({
+  const { data: reviseResponse, response: reviseRawResponse } = await client.messages.create({
     model,
-    max_tokens: 800,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
@@ -447,10 +452,12 @@ ${evaluatorFeedback}
 日本語で5〜10文。本文のみ出力。`,
       },
     ],
-  });
+  }).withResponse();
+  warnIfModelDeprecated(reviseRawResponse.headers, model);
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
-  const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+  const revTextBlock = reviseResponse.content.find((c: { type: string }) => c.type === "text");
+  const text = revTextBlock && "text" in revTextBlock ? (revTextBlock as { type: "text"; text: string }).text : "";
+  const tokensUsed = (reviseResponse.usage?.input_tokens || 0) + (reviseResponse.usage?.output_tokens || 0);
 
   return {
     key: plan.key, title: plan.title,
@@ -479,9 +486,9 @@ async function evaluateBlock(
     };
   }
 
-  const response = await client.messages.create({
+  const { data: evalBlockResponse, response: evalBlockRawResponse } = await client.messages.create({
     model,
-    max_tokens: 600,
+    max_tokens: 16000,
     system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。`,
     messages: [
       {
@@ -489,21 +496,23 @@ async function evaluateBlock(
         content: `採点対象ブロック「${block.title}」:
 ${block.content}
 
-ハード基準（全通過のみpass）:
-1 像: 経営者の頭に自社の状態が一枚の絵として浮かぶか
-2 出所: 全事実に出所が明示されているか
-3 誠実: 暫定推察の明示あり・断定表現なし
-4 トーン: 断定・責めなし
-5 具体: 実データの数字・傾向・固有名詞があるか
+ハード基準（全5基準を通過した場合のみpass。1つでもfailならoverall_pass:false）:
+1 像: このブロックを読んだ経営者の頭に、自社の状態が一枚の絵として浮かぶか。数字の羅列や一般論は不合格
+2 出所: 全事実に出所が明示されているか（例:「入出金明細によると」「カレンダーデータによると」）。出所不明の事実が1つでもあれば不合格
+3 暫定推察: 「外部データのみに基づく暫定推察」であることが明示されているか。断定表現（「である」「に違いない」「確実に」）があれば不合格
+4 トーン: 誰かを責めていないか。上から目線・査定口調でないか
+5 具体: 実データに基づく数字・傾向・固有名詞が含まれているか。抽象的な一般論のみなら不合格
 
 回答は以下のJSON構造のみ:
 {"criteria_1":{"pass":true,"reason":"..."},"criteria_2":{"pass":true,"reason":"..."},"criteria_3":{"pass":true,"reason":"..."},"criteria_4":{"pass":true,"reason":"..."},"criteria_5":{"pass":true,"reason":"..."},"overall_pass":true,"feedback":"不通過時の改善指示"}`,
       },
     ],
-  });
+  }).withResponse();
+  warnIfModelDeprecated(evalBlockRawResponse.headers, model);
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "{}";
-  const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+  const textBlock = evalBlockResponse.content.find((c: { type: string }) => c.type === "text");
+  const text = textBlock && "text" in textBlock ? (textBlock as { type: "text"; text: string }).text : "{}";
+  const tokensUsed = (evalBlockResponse.usage?.input_tokens || 0) + (evalBlockResponse.usage?.output_tokens || 0);
 
   // Robust JSON extraction: find the outermost { ... } handling nested objects
   let braceDepth = 0;
@@ -537,9 +546,12 @@ ${block.content}
       const c = parsed[`criteria_${i}`];
       if (c) scores[`criteria_${i}`] = { pass: !!c.pass, reason: c.reason || "" };
     }
+    // Compute pass from individual criteria AND (not LLM's overall_pass)
+    const allCriteriaPass = Object.values(scores).length >= 5 &&
+      Object.values(scores).every((s) => s.pass);
     return {
       key: block.key,
-      pass: !!parsed.overall_pass,
+      pass: allCriteriaPass,
       scores,
       tokensUsed,
     };
@@ -675,13 +687,13 @@ Deno.serve(async (req: Request) => {
     const input: Day0Input = await req.json();
     const { company_id, company_name, url, industry, concern, email } = input;
 
-    const model = Deno.env.get("ANTHROPIC_MODEL");
+    const model = MODEL_GENERATOR;
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     const resendKey = Deno.env.get("RESEND_API_KEY");
 
-    if (!model || !apiKey) {
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "ANTHROPIC_MODEL and ANTHROPIC_API_KEY must be set" }),
+        JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

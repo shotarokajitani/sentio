@@ -3,6 +3,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { renderPulseHtml, renderPulseText } from "../_shared/email-html.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -60,14 +61,72 @@ Deno.serve(async (req: Request) => {
 
     const pulseText = lines.join("\n");
 
-    // Store in delivery_log
+    // Send via Resend — fail-closed: missing config is an error, not a silent skip
+    if (!resendKey) {
+      return new Response(
+        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", company_id, pulse: lines }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let emailStatus = "skipped";
+    let emailId: string | undefined;
+    let sendError: string | undefined;
+
+    if (email) {
+      const resendFrom = Deno.env.get("RESEND_FROM");
+      if (!resendFrom) {
+        await supabase.from("delivery_log").insert({
+          id: crypto.randomUUID(),
+          company_id,
+          channel: "email",
+          delivery_type: "pulse",
+          content: { lines },
+          status: "failed",
+          created_at: new Date().toISOString(),
+        });
+        return new Response(
+          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: resendFrom,
+          to: [email],
+          subject: "[Sentio] デイリーパルス",
+          html: renderPulseHtml(lines),
+          text: renderPulseText(lines),
+        }),
+      });
+
+      const resendBody = await resendRes.json().catch(() => ({}));
+
+      if (resendRes.ok) {
+        emailId = resendBody.id;
+        emailStatus = "sent";
+        console.log(`Resend OK: email_id=${emailId}`);
+      } else {
+        emailStatus = "failed";
+        sendError = `Resend ${resendRes.status}: ${resendBody.message || JSON.stringify(resendBody)}`;
+        console.error(`Resend failed: ${sendError}`);
+      }
+    }
+
+    // Store in delivery_log (actual send status)
     const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
       delivery_type: "pulse",
-      content: { lines },
-      status: "sent",
+      content: { lines, email_id: emailId },
+      status: emailStatus,
       created_at: new Date().toISOString(),
     });
 
@@ -78,25 +137,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Send via Resend
-    if (resendKey && email) {
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
-          to: [email],
-          subject: "[Sentio] デイリーパルス",
-          html: `<pre>${pulseText}</pre>`,
-        }),
-      });
+    if (emailStatus === "failed") {
+      return new Response(
+        JSON.stringify({ status: "error", reason: sendError, company_id, pulse: lines }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(
-      JSON.stringify({ status: "ok", company_id, pulse: lines }),
+      JSON.stringify({ status: "ok", email_id: emailId, company_id, pulse: lines }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

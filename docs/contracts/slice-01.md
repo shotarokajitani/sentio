@@ -81,6 +81,15 @@ F+2 以下4項目が各3回連続で同一結果:
   - 秘密パターンを含む書き込み試行 → 毎回ブロック
   - フックスクリプト不在時のツール実行 → 毎回ブロック（fail-closed）
 
+### E+. 配信API検証（2026-07-28追加）
+
+E+1 配信Functionは送信APIの成功レスポンス（email id）を確認して初めてstatus:"ok"を返すこと
+E+2 送信APIが4xx/5xxを返した場合、status:"error"と理由を返し、"ok"を返さないこと
+E+3 RESEND_FROM未設定時はサンドボックス送信せず、明示的にエラーを返すこと（fail-closed）
+E+4 delivery_logのstatusが実際の送信結果（sent/failed/skipped）を反映すること
+E+5 RESEND_API_KEY未設定時はメール送信をスキップせず、status:"error"を返すこと（設定漏れの沈黙スキップ禁止）
+E+6 送信メールはGmail（Web/モバイル）で文字化けなく表示され、レイアウトが崩れないこと。件名および本文中の日本語（挿入変数含む）が文字化けしないこと。検証は実受信での目視確認とする
+
 ### G. 手動スモーク（sprint-evaluator対象外・人間1回）
 
 G1 実Googleアカウントでカレンダー接続→当日中にscheduleイベント到着

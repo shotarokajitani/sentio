@@ -4,6 +4,7 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { renderWeeklyHtml, renderWeeklyText } from "../_shared/email-html.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -102,14 +103,72 @@ Deno.serve(async (req: Request) => {
       },
     ];
 
-    // Store in delivery_log
+    // Send via Resend — fail-closed: missing config is an error, not a silent skip
+    if (!resendKey) {
+      return new Response(
+        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", company_id, sections }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let emailStatus = "skipped";
+    let emailId: string | undefined;
+    let sendError: string | undefined;
+
+    if (email) {
+      const resendFrom = Deno.env.get("RESEND_FROM");
+      if (!resendFrom) {
+        await supabase.from("delivery_log").insert({
+          id: crypto.randomUUID(),
+          company_id,
+          channel: "email",
+          delivery_type: "weekly",
+          content: { sections },
+          status: "failed",
+          created_at: new Date().toISOString(),
+        });
+        return new Response(
+          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: resendFrom,
+          to: [email],
+          subject: "[Sentio] 今週の会社",
+          html: renderWeeklyHtml(sections),
+          text: renderWeeklyText(sections),
+        }),
+      });
+
+      const resendBody = await resendRes.json().catch(() => ({}));
+
+      if (resendRes.ok) {
+        emailId = resendBody.id;
+        emailStatus = "sent";
+        console.log(`Resend OK: email_id=${emailId}`);
+      } else {
+        emailStatus = "failed";
+        sendError = `Resend ${resendRes.status}: ${resendBody.message || JSON.stringify(resendBody)}`;
+        console.error(`Resend failed: ${sendError}`);
+      }
+    }
+
+    // Store in delivery_log (actual send status)
     const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
       delivery_type: "weekly",
-      content: { sections },
-      status: "sent",
+      content: { sections, email_id: emailId },
+      status: emailStatus,
       created_at: new Date().toISOString(),
     });
 
@@ -120,45 +179,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Send via Resend
-    if (resendKey && email) {
-      const sectionTitles: Record<string, string> = {
-        digest: "状態ダイジェスト",
-        finding: "今週のFinding",
-        followup: "続報",
-        stable_coverage: "安定指標とカバレッジ",
-        nudge: "",
-      };
-
-      const html = sections
-        .filter((s) => s.content)
-        .map((s) => {
-          const title = sectionTitles[s.type] || s.type;
-          if (s.type === "nudge") {
-            // Nudge has no heading, just a subtle line
-            return `<p style="font-size:13px;color:#888;">${s.content}</p>`;
-          }
-          return `<div><h3 style="margin:0 0 4px;">${title}</h3><p style="margin:0 0 16px;">${s.content.replace(/\n/g, "<br>")}</p></div>`;
-        })
-        .join("");
-
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
-          to: [email],
-          subject: "[Sentio] 今週の会社",
-          html: `<html><head><meta charset="utf-8"></head><body><h1>今週の会社</h1>${html}</body></html>`,
-        }),
-      });
+    if (emailStatus === "failed") {
+      return new Response(
+        JSON.stringify({ status: "error", reason: sendError, company_id, sections }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(
-      JSON.stringify({ status: "ok", company_id, sections }),
+      JSON.stringify({ status: "ok", email_id: emailId, company_id, sections }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

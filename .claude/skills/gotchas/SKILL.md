@@ -17,3 +17,6 @@ description: 実際に踏んだ失敗の蓄積。原因調査・実装判断で�
   60日以上アクティブな自社GBP＋オーナー権限メールが要件（Lauda実地・2026-07）
 - Vault実装（security definer関数・トークン暗号化・180日削除）はLaudaに本番稼働コードあり。新規発明せず移植する
 - AIクローラ（GPTBot/ClaudeBot/PerplexityBot等）はJSを実行しない。公開ページを作る場合は初期HTML/SSGが必須（Lauda調査・2026-06時点）
+- Resend: onboarding@resend.devフォールバックはサンドボックス扱い。アカウントオーナー以外に届かない。RESEND_FROM未設定時はfail-closedにすること。また外部APIのfetch()レスポンスは必ずステータスコードを確認し、未確認のまま"ok"を返さないこと（Day0未着事故・2026-07-28）
+- 配信Function環境変数: RESEND_API_KEY未設定時に黙ってスキップして"ok"を返すと設定漏れが検知できない。RESEND_API_KEY・RESEND_FROMの両方が未設定ならstatus:"error"で即返却すること。「キーが無いから静かにスキップ」は事故の再演（2026-07-29追記）
+- メールHTML: Gmailはdivレイアウト・`<style>`タグ・外部CSS・Webフォントを除去する。テーブルベース＋インラインstyle＋600px幅＋システムフォント＋XHTML DOCTYPEが必須。text版も併せてマルチパート送信すること（Day0文字化け事故・2026-07-29）

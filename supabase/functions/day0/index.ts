@@ -5,6 +5,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { MODEL_GENERATOR, warnIfModelDeprecated } from "../_shared/models.ts";
+import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
@@ -821,14 +822,78 @@ Deno.serve(async (req: Request) => {
       blocks_passed: passedBlocks.length,
     };
 
-    // Store in delivery_log
+    // Send via Resend — fail-closed: missing config is an error, not a silent skip
+    if (!resendKey) {
+      return new Response(
+        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", report }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    let emailStatus = "skipped";
+    let emailId: string | undefined;
+    let sendError: string | undefined;
+
+    if (email) {
+      const resendFrom = Deno.env.get("RESEND_FROM");
+      if (!resendFrom) {
+        await supabase.from("delivery_log").insert({
+          id: crypto.randomUUID(),
+          company_id,
+          channel: "email",
+          delivery_type: "day0",
+          content: report,
+          status: "failed",
+          created_at: new Date().toISOString(),
+        });
+        return new Response(
+          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。", report }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      const emailHtml = renderDay0Html(company_name, passedBlocks, {
+        generationTimeMs, totalTokens,
+        passedCount: passedBlocks.length, totalCount: blocks.length,
+      });
+      const emailText = renderDay0Text(company_name, passedBlocks);
+
+      const resendRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: resendFrom,
+          to: [email],
+          subject: `[Sentio] Day0レポート: ${company_name}`,
+          html: emailHtml,
+          text: emailText,
+        }),
+      });
+
+      const resendBody = await resendRes.json().catch(() => ({}));
+
+      if (resendRes.ok) {
+        emailId = resendBody.id;
+        emailStatus = "sent";
+        console.log(`Resend OK: email_id=${emailId}`);
+      } else {
+        emailStatus = "failed";
+        sendError = `Resend ${resendRes.status}: ${resendBody.message || JSON.stringify(resendBody)}`;
+        console.error(`Resend failed: ${sendError}`);
+      }
+    }
+
+    // Store in delivery_log (actual send status)
     const { error: logErr } = await supabase.from("delivery_log").insert({
       id: crypto.randomUUID(),
       company_id,
       channel: "email",
       delivery_type: "day0",
-      content: report,
-      status: "sent",
+      content: { ...report, email_id: emailId },
+      status: emailStatus,
       created_at: new Date().toISOString(),
     });
 
@@ -839,32 +904,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Send via Resend
-    if (resendKey && email) {
-      const htmlBlocks = passedBlocks
-        .map((b) => {
-          const style = b.hasData ? "" : 'style="color: #999;"';
-          return `<h3 ${style}>${b.title}</h3><p ${style}>${b.content.replace(/\n/g, "<br>")}</p>`;
-        })
-        .join("");
-
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("RESEND_FROM") || "Sentio <onboarding@resend.dev>",
-          to: [email],
-          subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: `<html><head><meta charset="utf-8"></head><body><h1>Day0レポート: ${company_name}</h1>${htmlBlocks}<hr><p style="font-size:12px;color:#999;">生成時間: ${generationTimeMs}ms / トークン: ${totalTokens} / 通過ブロック: ${passedBlocks.length}/${blocks.length}</p></body></html>`,
-        }),
-      });
+    if (emailStatus === "failed") {
+      return new Response(
+        JSON.stringify({ status: "error", reason: sendError, report }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(
-      JSON.stringify({ status: "ok", report }),
+      JSON.stringify({ status: "ok", email_id: emailId, report }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

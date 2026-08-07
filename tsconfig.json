@@ -22,6 +22,9 @@
       ],
       "@shared/*": [
         "./shared/*"
+      ],
+      "@edge/*": [
+        "./supabase/functions/*"
       ]
     },
     "plugins": [
@@ -43,6 +46,6 @@
   ],
   "exclude": [
     "node_modules",
-    "supabase/functions"
+    "supabase/functions/*/index.ts"
   ]
 }

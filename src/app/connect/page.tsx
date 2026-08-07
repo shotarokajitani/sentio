@@ -210,7 +210,7 @@ export default function ConnectPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Google Calendar */}
-        <div style={cardStyle(!!calConn)}>
+        <div style={cardStyle(!!calConn, calConn?.status === "reauth_required")}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <h3 style={{ margin: 0 }}>Google カレンダー</h3>
@@ -219,7 +219,19 @@ export default function ConnectPage() {
               </p>
             </div>
             {calConn ? (
-              <span style={badgeStyle("active")}>接続済み</span>
+              calConn.status === "reauth_required" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={badgeStyle("reauth_required")}>要再連携</span>
+                  <a
+                    href={`/api/auth/google?company_id=${COMPANY_ID}`}
+                    style={buttonStyle("#4285F4")}
+                  >
+                    再接続
+                  </a>
+                </div>
+              ) : (
+                <span style={badgeStyle("active")}>接続済み</span>
+              )
             ) : (
               <a
                 href={`/api/auth/google?company_id=${COMPANY_ID}`}
@@ -238,7 +250,7 @@ export default function ConnectPage() {
         </div>
 
         {/* freee */}
-        <div style={cardStyle(!!freeeConn)}>
+        <div style={cardStyle(!!freeeConn, freeeConn?.status === "reauth_required")}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <h3 style={{ margin: 0 }}>freee 会計</h3>
@@ -247,7 +259,19 @@ export default function ConnectPage() {
               </p>
             </div>
             {freeeConn ? (
-              <span style={badgeStyle("active")}>接続済み</span>
+              freeeConn.status === "reauth_required" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={badgeStyle("reauth_required")}>要再連携</span>
+                  <a
+                    href={`/api/auth/freee?company_id=${COMPANY_ID}`}
+                    style={buttonStyle("#2CA01C")}
+                  >
+                    再接続
+                  </a>
+                </div>
+              ) : (
+                <span style={badgeStyle("active")}>接続済み</span>
+              )
             ) : freeeConfigured ? (
               <a
                 href={`/api/auth/freee?company_id=${COMPANY_ID}`}
@@ -492,20 +516,21 @@ function computeTypeStats(
 }
 
 // Styles
-function cardStyle(connected: boolean): React.CSSProperties {
+function cardStyle(connected: boolean, needsReauth = false): React.CSSProperties {
   return {
-    border: `1px solid ${connected ? "#4CAF50" : "#ddd"}`,
+    border: `1px solid ${needsReauth ? "#f44336" : connected ? "#4CAF50" : "#ddd"}`,
     borderRadius: 8,
     padding: 20,
-    background: connected ? "#f8fff8" : "#fafafa",
+    background: needsReauth ? "#fff5f5" : connected ? "#f8fff8" : "#fafafa",
   };
 }
 
-function badgeStyle(_status: string): React.CSSProperties {
+function badgeStyle(status: string): React.CSSProperties {
+  const isError = status === "reauth_required";
   return {
     display: "inline-block",
     padding: "4px 12px",
-    background: "#4CAF50",
+    background: isError ? "#f44336" : "#4CAF50",
     color: "white",
     borderRadius: 12,
     fontSize: 13,

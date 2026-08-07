@@ -17,6 +17,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src"),
       "@shared": path.resolve(__dirname, "shared"),
+      "@edge": path.resolve(__dirname, "supabase/functions"),
     },
   },
 });

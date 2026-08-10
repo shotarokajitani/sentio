@@ -38,3 +38,11 @@
 - **原因**: (1) メールHTMLがdiv+CSSレイアウトで構築されており、Gmailのレンダリングエンジン（`<style>`タグ・div layoutを除去）で崩壊 (2) charsetはmeta tagにあったが、XHTML DOCTYPEとContent-Type HTTPヘッダでのcharset宣言が不足 (3) プレーンテキスト版（textフィールド）が未設定でマルチパート非対応 (4) Evaluatorは生成内容の品質を採点するが描画品質は対象外であり、実受信確認が受け入れ基準になかった
 - **対処**: (1) `_shared/email-html.ts`を新規作成し、テーブルベース・インラインスタイル・600px幅のGmail互換HTMLテンプレートを4配信Function共通で使用 (2) XHTML DOCTYPE + `Content-Type: text/html; charset=UTF-8` ヘッダ付き (3) Resend APIにtext/htmlの両方を送信（マルチパート） (4) デザイントークン統一（背景#f7f5f2/アクセント#0e5070） (5) 【見えたこと】【根拠】【考えられること】の3パート構造を色分けボーダーで視覚区別
 - **再発防止**: (1) E+6基準を追加（Gmail実受信での目視確認を受け入れ基準化） (2) メールHTMLの制約（テーブルベース・インラインスタイル・Webフォント不使用）をgotchasに追記
+
+### 2026-08-07 #5: Vercel Preview ビルド全停止（devEngines vs npm 衝突）
+
+- **事象**: 全PRのVercel Previewデプロイが `EBADDEVENGINES` で失敗。少なくとも2026-07-29以降の全デプロイが同一原因で失敗中
+- **原因**: Vercelプロジェクトのインストールコマンドがnpm（デフォルト）のまま。`package.json`の`devEngines.packageManager`が`pnpm ^11.9.0`を要求しているため、npmの`EBADDEVENGINES`チェックで拒否される。加えて`Error while parsing config file: pnpm-lock.yaml`が発生しており、Vercel側でpnpm-lock.yamlの解析にも失敗している
+- **影響**: Vercel Previewのみ。GitHub Actions CI（pnpm使用）・ローカルビルド（`pnpm build`成功確認済み）・本番デプロイ（deploy.yml経由Supabase CLI）は影響なし
+- **対処（未実施）**: Vercel Dashboard > Project Settings > General > Install Command を `pnpm install --frozen-lockfile` に変更、またはRoot Directory設定を確認。あるいは`packageManager`フィールドが存在すればVercelが自動でpnpmを使用するはずだが、`devEngines`との競合で検出に失敗している可能性がある
+- **再発防止**: Vercelプロジェクト設定のパッケージマネージャーを明示的に指定する。Preview環境のビルド成功をCIの必須チェックに含めるかは要判断（現在はオプション扱い）

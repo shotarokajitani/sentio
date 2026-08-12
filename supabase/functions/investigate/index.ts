@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { FINDING_TEMPLATE, EVALUATOR_CRITERIA } from "../_shared/prompts.ts";
 import { MODEL_GENERATOR, MODEL_EVALUATOR, warnIfModelDeprecated } from "../_shared/models.ts";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
+import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
 const MAX_REVISIONS = 2;
 

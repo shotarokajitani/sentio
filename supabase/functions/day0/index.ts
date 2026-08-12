@@ -6,7 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { MODEL_GENERATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.39.0";
+import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
   "external_view", "reputation", "site_health", "public_records",

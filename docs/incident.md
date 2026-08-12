@@ -45,4 +45,5 @@
 - **原因**: Vercelプロジェクトのインストールコマンドがnpm（デフォルト）のまま。`package.json`の`devEngines.packageManager`が`pnpm ^11.9.0`を要求しているため、npmの`EBADDEVENGINES`チェックで拒否される。加えて`Error while parsing config file: pnpm-lock.yaml`が発生しており、Vercel側でpnpm-lock.yamlの解析にも失敗している
 - **影響**: Vercel Previewのみ。GitHub Actions CI（pnpm使用）・ローカルビルド（`pnpm build`成功確認済み）・本番デプロイ（deploy.yml経由Supabase CLI）は影響なし
 - **対処（未実施）**: Vercel Dashboard > Project Settings > General > Install Command を `pnpm install --frozen-lockfile` に変更、またはRoot Directory設定を確認。あるいは`packageManager`フィールドが存在すればVercelが自動でpnpmを使用するはずだが、`devEngines`との競合で検出に失敗している可能性がある
-- **再発防止**: Vercelプロジェクト設定のパッケージマネージャーを明示的に指定する。Preview環境のビルド成功をCIの必須チェックに含めるかは要判断（現在はオプション扱い）
+- **対処（2026-08-12 実施）**: (1) pnpm-lock.yamlが2つのYAMLドキュメントが連結された壊れた状態だった（コミット54f9543での手動整合性修正時に追記ミス）。node_modules削除＋lockfile削除＋`pnpm install`で正規に再生成 (2) `packageManager`フィールドを`pnpm@11.9.0`→`pnpm@11.21.0`に更新（ローカル実行バージョンと一致させ、Vercelのcorepackが同一バージョンを使用するようにする）。なおpnpm v11.21+はmulti-document YAML形式のlockfileを生成するため、古いバージョンではパース不可
+- **再発防止**: (1) Vercelプロジェクト設定のパッケージマネージャーを明示的に指定する。Preview環境のビルド成功をCIの必須チェックに含めるかは要判断（現在はオプション扱い） (2) pnpm-lock.yamlは手編集禁止。変更時は必ず`pnpm install`で再生成し、clean環境での`pnpm install --frozen-lockfile`で検証する

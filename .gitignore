@@ -3,3 +3,10 @@
 !.env.example
 node_modules/
 *.bak
+.next/
+next-env.d.ts
+tsconfig.tsbuildinfo
+day0_out.json
+supabase/.branches/
+supabase/.temp/
+.claude/settings.local.json

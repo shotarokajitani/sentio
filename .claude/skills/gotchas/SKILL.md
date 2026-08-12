@@ -17,3 +17,10 @@ description: 実際に踏んだ失敗の蓄積。原因調査・実装判断で�
   60日以上アクティブな自社GBP＋オーナー権限メールが要件（Lauda実地・2026-07）
 - Vault実装（security definer関数・トークン暗号化・180日削除）はLaudaに本番稼働コードあり。新規発明せず移植する
 - AIクローラ（GPTBot/ClaudeBot/PerplexityBot等）はJSを実行しない。公開ページを作る場合は初期HTML/SSGが必須（Lauda調査・2026-06時点）
+- Resend: onboarding@resend.devフォールバックはサンドボックス扱い。アカウントオーナー以外に届かない。RESEND_FROM未設定時はfail-closedにすること。また外部APIのfetch()レスポンスは必ずステータスコードを確認し、未確認のまま"ok"を返さないこと（Day0未着事故・2026-07-28）
+- 配信Function環境変数: RESEND_API_KEY未設定時に黙ってスキップして"ok"を返すと設定漏れが検知できない。RESEND_API_KEY・RESEND_FROMの両方が未設定ならstatus:"error"で即返却すること。「キーが無いから静かにスキップ」は事故の再演（2026-07-29追記）
+- メールHTML: Gmailはdivレイアウト・`<style>`タグ・外部CSS・Webフォントを除去する。テーブルベース＋インラインstyle＋600px幅＋システムフォント＋XHTML DOCTYPEが必須。text版も併せてマルチパート送信すること（Day0文字化け事故・2026-07-29）
+- OAuthトークンリフレッシュ: Google/freeeともaccess_tokenは1時間で失効。refresh_tokenで自動更新しないと連携翌日に停止する。リフレッシュ失敗時はfail-closed（reauth_required）。Vault secretの更新にはupdate_vault_secret関数（00017）を使うこと（2026-08-07）
+- tsconfig.json: supabase/functionsはDeno用のためexcludeされている。_shared/をNode側テストからimportする場合は`@edge/*`パスエイリアス＋exclude対象を`supabase/functions/*/index.ts`に限定すること（2026-08-07）
+- pnpm-lock.yaml: 手編集・手動追記は禁止。lockfile変更時は必ず`pnpm install`で再生成する。検証はclean環境（node_modules削除後）での`pnpm install --frozen-lockfile`を必須とする。`devEngines.packageManager`は`packageManagerDependencies`をlockfileに書き込み、multi-document YAML形式を生成する原因になるため使用禁止。`packageManager`フィールドのみで管理する（2026-08-12）
+- リモート実物検証: ローカルで修正→テストPASS→コミット・プッシュしても、リモートの実物が意図通りとは限らない。コミット時にgit addが漏れている・.gitattributes等でファイルが変換される等の原因がある。push後は`git show origin/branch:path`でリモート実物を引用確認すること。「ローカルPASS」の申告とリモート実物の乖離はVercel Preview等のCI失敗として顕在化する（2026-08-12）

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    # セキュリティ更新は自動で優先的に作成される（Dependabot security updates）
+    # グループ外のmajor更新は個別PRとして作成
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

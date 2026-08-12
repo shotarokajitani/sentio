@@ -1,0 +1,31 @@
+{
+  "id": 12,
+  "lang": "ja",
+  "type": "real",
+  "scanType": "coverage",
+  "description": "実会社ケース: ディセーノ。Google Calendar 15件+銀行入出金CSV 52件の実データでDay0レポート生成。Investigatorハーネス（Planner→Generator→Evaluator）を通過したブロックのみレンダリング。",
+  "company": {
+    "name": "MDC Diseño",
+    "industry": "デジタルマーケティング / Webデザイン",
+    "url": "https://www.sentio-ai.jp",
+    "data_sources": ["google_calendar", "csv:accounting", "gbizinfo"],
+    "note": "PII除去済み。イベントデータは構造のみ"
+  },
+  "learnings": {
+    "accounting_data_access": "顧客0号（ディセーノ）の会計データ（弥生）は税理士が管理しており、経営者の手元に仕訳の生データがない。CSVドロップゾーンの主対象は銀行入出金明細・Stripe入金レポート等。",
+    "a2_misjudgment": "テンプレ差し込みによるDay0をpassと誤採点した。LLM非使用（生成時間135ms）が証拠。実データ67件を保有しながら一切プロンプトに含めていなかった。"
+  },
+  "expected": {
+    "day0_blocks_generated": 8,
+    "day0_blocks_with_llm": ["external_view", "public_records", "initial_hypothesis"],
+    "day0_must_contain": {
+      "initial_hypothesis": ["入出金", "カレンダー", "具体的金額or件数or傾向"],
+      "external_view": ["サイト分析", "タイトルorメタ情報"],
+      "coverage_map": ["カレンダー", "入出金CSV", "暫定集計"]
+    },
+    "evaluator_must_run": true,
+    "fail_closed_if_all_fail": true,
+    "generation_time_min_ms": 2000,
+    "csv_confidence_label": true
+  }
+}

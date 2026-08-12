@@ -10,9 +10,12 @@
 ## スコープ / 非スコープ
 
 IN: Ingest（カレンダー・会計CSV・稼働監視・外部S0の一部: e-Stat/Places/gBizINFO/jGrants）/ State4構成 /
-Scanner5走査＋高速路 / Investigator（フルハーネス）/ Day0バッチ / 週次メール / パルス(メールで代替可) / ワンタップ①
+Scanner（deviation/deadline/external/monitor）＋高速路 / Investigator（フルハーネス）/ scan→investigate→findingsパイプライン /
+Day0バッチ / 週次メール / パルス(メールで代替可) / ワンタップ①
 OUT: Slack/CW/Instagram/Gmail・従業員接点・月次レーダー・「Sentioに聞く」・プランentitlement・LINE配信・
-外部OAuth実画面のE2E（コントラクトテスト＋フィクスチャ注入で代替。実OAuthは手動スモーク1回のみ）
+外部OAuth実画面のE2E（コントラクトテスト＋フィクスチャ注入で代替。実OAuthは手動スモーク1回のみ）・
+trend/silence scan（#1発注間隔伸長・#4残業漸増・#7会議消失）→スライス2に移管。
+理由: spec/03がチャット非依存への全面再設計中であり、旧仕様での実装は確実に作り直しになるため
 
 ## 受け入れ基準（全passが必要）
 
@@ -40,7 +43,7 @@ C3 記憶パケット編成器が上限内のパケットを返す（超過時�
 
 ### D. Sense
 
-D1 合成会社の仕込み陽性7件中6件以上を検知 / D2 誤検知2件以下（陰性コントロール#5を検知したら即fail）
+D1 合成会社の仕込み陽性7件中6件以上を検知（metric change scanにより#3/#4/#6も検知可能。trend/silence scanはsrc/sense/scanner.tsに存在するがEdge Function非スコープ） / D2 誤検知2件以下（陰性コントロール#5を検知したら即fail）
 D3 全FindingがEvaluator5基準の判定ログを持ち、reviseは2回以内
 D4 immediateのFindingが機械的事実（monitor/期日）のみである
 D5 各Findingの全主張が証拠イベントIDに解決できる（リンク切れゼロ）
@@ -59,6 +62,33 @@ E5 静音時間帯: 23–6時の非例外アラートが翌朝に集約される
 F1 トークンがVault以外（テーブル・ログ・コード）に存在しない（grep＋スキーマ検査）
 F2 全新テーブルにRLSが有効 / F3 受信Webhookが不正署名を拒否する
 F4 gitleaksがリポジトリ全体で検出ゼロ / F5 プレビュー環境に本番Secretsが存在しない
+
+### D+. パイプライン結合（G2 fail是正で追加 2026-07-23）
+
+D+1 合成会社データでscanを実行するとfindingsテーブルに1件以上のレコードがINSERTされること
+D+2 週次レポートに表示されるFinding件数と、findingsテーブルの該当期間のレコード数が一致すること
+D+3 Evaluatorが出力品質を判別できること（陽性/陰性コントロール）:
+  - 良質な出力（実データに基づく数字・出所・暫定推察明示）→ scoresに5基準が揃い、overall_pass=true
+  - 曖昧な出力（一般論のみ・数字なし・出所なし）→ scoresに5基準が揃い（{}でないこと）、基準5「具体」を含む複数基準がfailしてoverall_pass=false
+  - scripts/test-evaluator-direct.ts で検証（Evaluator単体テスト。E2EではGeneratorが常に具体的出力を生成するため陰性コントロール不可）
+
+### F+. フックガード健全性（2026-07-23追加）
+
+F+1 全PreToolUseフックがfail-closed: スクリプト実行失敗時にツール実行がブロックされること（exit 2）
+F+2 以下4項目が各3回連続で同一結果:
+  - .envの読み取り試行 → 毎回ブロック
+  - 本番Ref操作試行 → 毎回ブロック
+  - 秘密パターンを含む書き込み試行 → 毎回ブロック
+  - フックスクリプト不在時のツール実行 → 毎回ブロック（fail-closed）
+
+### E+. 配信API検証（2026-07-28追加）
+
+E+1 配信Functionは送信APIの成功レスポンス（email id）を確認して初めてstatus:"ok"を返すこと
+E+2 送信APIが4xx/5xxを返した場合、status:"error"と理由を返し、"ok"を返さないこと
+E+3 RESEND_FROM未設定時はサンドボックス送信せず、明示的にエラーを返すこと（fail-closed）
+E+4 delivery_logのstatusが実際の送信結果（sent/failed/skipped）を反映すること
+E+5 RESEND_API_KEY未設定時はメール送信をスキップせず、status:"error"を返すこと（設定漏れの沈黙スキップ禁止）
+E+6 送信メールはGmail（Web/モバイル）で文字化けなく表示され、レイアウトが崩れないこと。件名および本文中の日本語（挿入変数含む）が文字化けしないこと。検証は実受信での目視確認とする
 
 ### G. 手動スモーク（sprint-evaluator対象外・人間1回）
 

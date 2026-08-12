@@ -1,0 +1,73 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+
+# 同時デプロイを防止
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # CIと同じ検証を再実行（mainへの直pushやsquash mergeでCIをスキップした場合の安全弁）
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck && pnpm lint
+      - run: pnpm test
+      - run: pnpm run check:allowlist
+
+  deploy-functions:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Edge Functions
+        run: |
+          supabase functions deploy sync-connections --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy scan --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy investigate --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy run-sense --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy ingest-calendar --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy ingest-csv --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy ingest-s0 --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy ingest-monitor --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy state-baselines --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy state-summary --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy state-narratives --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy state-memory-packet --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy deliver-alert --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy deliver-pulse --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy deliver-weekly --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy day0 --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy onetap-calendar --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+  deploy-migrations:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply migrations
+        run: supabase db push --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}

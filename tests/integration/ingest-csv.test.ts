@@ -26,10 +26,7 @@ describe.skipIf(!canRun)("CSV投入の統合テスト (B1-B3)", () => {
   afterAll(async () => {
     // テストデータのクリーンアップ
     if (canRun) {
-      await admin
-        .from("events")
-        .delete()
-        .eq("company_id", companyId);
+      await admin.from("events").delete().eq("company_id", companyId);
     }
   });
 
@@ -41,15 +38,13 @@ describe.skipIf(!canRun)("CSV投入の統合テスト (B1-B3)", () => {
     const { parseCsvToEnvelopes } = await import("@/ingest/csv-parser");
     const envelopes = parseCsvToEnvelopes(csvText, fingerprint, companyId);
 
-    const { error } = await admin
-      .from("events")
-      .upsert(
-        envelopes.map((e) => ({
-          ...e,
-          entity_refs: e.entity_refs ?? [],
-        })),
-        { onConflict: "event_id" },
-      );
+    const { error } = await admin.from("events").upsert(
+      envelopes.map((e) => ({
+        ...e,
+        entity_refs: e.entity_refs ?? [],
+      })),
+      { onConflict: "event_id" },
+    );
 
     if (error) throw new Error(`UPSERT failed: ${error.message}`);
     return envelopes;
@@ -68,8 +63,7 @@ describe.skipIf(!canRun)("CSV投入の統合テスト (B1-B3)", () => {
     expect(data).toHaveLength(envelopes.length);
 
     const totalAmount = data!.reduce(
-      (sum: number, row: { metrics: { amount: number } }) =>
-        sum + row.metrics.amount,
+      (sum: number, row: { metrics: { amount: number } }) => sum + row.metrics.amount,
       0,
     );
     // 100000 + (-50000) = 50000

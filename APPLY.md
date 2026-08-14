@@ -1,4 +1,5 @@
 # 差分適用指示（Claude Code用）
+
 1. docs/spec/10_company_model_overview.md を本パッケージからそのまま追加（新規ファイル）
 2. .claude/rules/ingest.md の末尾に追記:
    - カレンダーのタイトルは準本文として扱う: 機微カテゴリ検出時はS2相当に格下げし、本文・Finding・ログへのタイトル引用禁止（spec/10 第0段）

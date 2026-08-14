@@ -72,9 +72,7 @@ export async function analyzeUrl(url: string): Promise<UrlAnalysis> {
 
     // Check for meta charset in HTML if header didn't specify
     if (!charsetMatch) {
-      const metaCharset = html.match(
-        /<meta[^>]+charset=["']?([^"'\s;>]+)/i,
-      );
+      const metaCharset = html.match(/<meta[^>]+charset=["']?([^"'\s;>]+)/i);
       if (metaCharset) {
         const detectedCharset = metaCharset[1].toLowerCase();
         if (detectedCharset !== "utf-8") {
@@ -111,11 +109,7 @@ function extractTag(html: string, regex: RegExp): string | null {
   return match ? decodeHtmlEntities(match[1].trim()) : null;
 }
 
-function extractMeta(
-  html: string,
-  name: string,
-  attr: string = "name",
-): string | null {
+function extractMeta(html: string, name: string, attr: string = "name"): string | null {
   // Match both name="..." content="..." and content="..." name="..." orders
   const regex = new RegExp(
     `<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']*)["']` +
@@ -134,10 +128,6 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
-      String.fromCodePoint(parseInt(hex, 16)),
-    )
-    .replace(/&#(\d+);/g, (_, dec) =>
-      String.fromCodePoint(parseInt(dec)),
-    );
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec)));
 }

@@ -41,10 +41,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   const lines = csv_text.trim().split("\n");
   if (lines.length < 2) {
@@ -145,13 +142,17 @@ export async function POST(req: NextRequest) {
       if (directionIdx >= 0) {
         const dirVal = (cols[directionIdx] || "").trim().toLowerCase();
         if (
-          dirVal.includes("入金") || dirVal.includes("収入") ||
-          dirVal.includes("deposit") || dirVal.includes("credit")
+          dirVal.includes("入金") ||
+          dirVal.includes("収入") ||
+          dirVal.includes("deposit") ||
+          dirVal.includes("credit")
         ) {
           direction = "credit";
         } else if (
-          dirVal.includes("出金") || dirVal.includes("支出") ||
-          dirVal.includes("withdrawal") || dirVal.includes("debit")
+          dirVal.includes("出金") ||
+          dirVal.includes("支出") ||
+          dirVal.includes("withdrawal") ||
+          dirVal.includes("debit")
         ) {
           direction = "debit";
         } else {
@@ -164,13 +165,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const description = descIdx >= 0 ? (cols[descIdx]?.trim() || "(不明)") : "(不明)";
+    const description = descIdx >= 0 ? cols[descIdx]?.trim() || "(不明)" : "(不明)";
     const balance = balanceIdx >= 0 ? parseNumber(cols[balanceIdx]) : null;
 
     const rowContent = cols.join(",");
-    const eventId = createHash("sha256")
-      .update(`${fileFingerprint}:${rowContent}`)
-      .digest("hex");
+    const eventId = createHash("sha256").update(`${fileFingerprint}:${rowContent}`).digest("hex");
 
     rows.push({
       event_id: eventId,
@@ -216,9 +215,7 @@ export async function POST(req: NextRequest) {
 
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
-    const { error } = await supabase
-      .from("events")
-      .upsert(batch, { onConflict: "event_id" });
+    const { error } = await supabase.from("events").upsert(batch, { onConflict: "event_id" });
 
     if (error) {
       return NextResponse.json(
@@ -233,17 +230,18 @@ export async function POST(req: NextRequest) {
     count: totalInserted,
     skipped: skipReasons.length,
     total_lines: totalDataLines,
-    skip_summary: skipReasons.length > 0
-      ? Object.entries(
-          skipReasons.reduce<Record<string, number>>((acc, s) => {
-            const key = s.reason.replace(/: ".*"/, "");
-            acc[key] = (acc[key] || 0) + 1;
-            return acc;
-          }, {}),
-        )
-          .map(([reason, count]) => `${reason}: ${count}行`)
-          .join("、")
-      : null,
+    skip_summary:
+      skipReasons.length > 0
+        ? Object.entries(
+            skipReasons.reduce<Record<string, number>>((acc, s) => {
+              const key = s.reason.replace(/: ".*"/, "");
+              acc[key] = (acc[key] || 0) + 1;
+              return acc;
+            }, {}),
+          )
+            .map(([reason, count]) => `${reason}: ${count}行`)
+            .join("、")
+        : null,
   });
 }
 

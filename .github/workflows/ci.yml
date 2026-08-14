@@ -20,7 +20,99 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck && pnpm lint
-      - run: pnpm test # 単体・契約テスト（B/C/D/Fの自動化分）
+      # integration は Supabase 起動が要るため専用ジョブ（integration）で実行する。
+      # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail するため明示除外する。
+      # 除外を外したい場合は integration ジョブ側の env 注入も併せて見直すこと。
+      - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
       - run: pnpm run check:allowlist # S2/トークンのスキーマ検査（scripts/で実装）
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
+
+  # RLS等の統合テストを skip なしで実行する。
+  # 「env が無いから skip」で緑になる状態（fail-open）を構造的に作らないためのジョブ。
+  integration:
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      # version: latest はCLIの破壊的変更をそのまま踏む（deploy #31559757735）。固定する
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+
+      - name: Start local Supabase
+        run: supabase start
+
+      # 00001〜00019 が素通しで適用されることの証跡。
+      # ローカルのDocker不可環境ではここが唯一の全適用検証になる
+      - name: Apply all migrations from scratch (00001..00019)
+        run: supabase db reset
+
+      - name: Export Supabase env
+        run: |
+          set -euo pipefail
+          status=$(supabase status -o env)
+          get() { printf '%s\n' "$status" | grep "^$1=" | cut -d= -f2- | tr -d '"'; }
+          API_URL=$(get API_URL)
+          ANON=$(get ANON_KEY)
+          SRK=$(get SERVICE_ROLE_KEY)
+          # ローカル開発用の固定値だが、鍵をログに残さない原則を守る
+          echo "::add-mask::$ANON"
+          echo "::add-mask::$SRK"
+          test -n "$API_URL" && test -n "$ANON" && test -n "$SRK"
+          echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "SUPABASE_ANON_KEY=$ANON" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SRK" >> "$GITHUB_ENV"
+          echo "接続先: $API_URL"
+
+      # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
+      - name: Run integration suite 3 times
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do
+            echo "===== integration run $i/3 — 接続先 $SUPABASE_URL ====="
+            pnpm exec vitest run tests/integration/ --reporter=verbose
+          done
+
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        run: supabase stop
+
+  # Edge Function の import が解決できることを静的に検証する。
+  # deploy-functions で esm.sh → npm: へ移した変更が、デプロイ前に壊れていないかを見る。
+  # 注意: これは静的検査であり、Edge Runtime 上での実行時挙動は担保しない。
+  edge-functions:
+    runs-on: ubuntu-latest
+    needs: gitleaks
+    steps:
+      - uses: actions/checkout@v4
+
+      # Supabase Edge Runtime と同系メジャー（Deno 2系）に固定する
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.1.4
+
+      - name: Verify check target covers every function and _shared file
+        run: |
+          set -euo pipefail
+          FUNC_DIRS=$(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_shared' | wc -l)
+          INDEXES=$(find supabase/functions -mindepth 2 -maxdepth 2 -name 'index.ts' -not -path '*/_shared/*' | wc -l)
+          SHARED=$(find supabase/functions/_shared -name '*.ts' | wc -l)
+          TOTAL=$(find supabase/functions -name '*.ts' | wc -l)
+          echo "function ディレクトリ: $FUNC_DIRS / index.ts: $INDEXES / _shared: $SHARED / 合計.ts: $TOTAL"
+          find supabase/functions -name '*.ts' | sort
+          # 全 function が index.ts を持ち、検査対象が合計と一致すること
+          test "$FUNC_DIRS" -eq "$INDEXES"
+          test "$TOTAL" -eq "$((INDEXES + SHARED))"
+          test "$TOTAL" -gt 0
+
+      # --node-modules-dir=none: ルートの package.json/node_modules に引きずられず、
+      # Deno のグローバルキャッシュで npm: を解決させる（Edge Runtime と同じ経路）
+      # 値に ": " を含むため引用が要る（無引用だとYAMLのマッピングとして解釈され構文エラー）
+      - name: "deno check — npm: 指定子の解決を実際に走らせる"
+        run: find supabase/functions -name '*.ts' -print0 | xargs -0 deno check --no-lock --node-modules-dir=none
 # 本番反映はmainマージ後の別workflow（deploy.yml, スライス1で作成）のみ。手動デプロイ禁止。

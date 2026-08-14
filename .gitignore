@@ -7,6 +7,7 @@ node_modules/
 next-env.d.ts
 tsconfig.tsbuildinfo
 day0_out.json
+tmp/
 supabase/.branches/
 supabase/.temp/
 .claude/settings.local.json

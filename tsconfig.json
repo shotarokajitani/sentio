@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -17,15 +13,9 @@
     "incremental": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@shared/*": [
-        "./shared/*"
-      ],
-      "@edge/*": [
-        "./supabase/functions/*"
-      ]
+      "@/*": ["./src/*"],
+      "@shared/*": ["./shared/*"],
+      "@edge/*": ["./supabase/functions/*"]
     },
     "plugins": [
       {
@@ -44,8 +34,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "supabase/functions/*/index.ts"
-  ]
+  "exclude": ["node_modules", "supabase/functions/*/index.ts"]
 }

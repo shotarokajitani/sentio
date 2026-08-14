@@ -59,8 +59,6 @@ describe("Baselines (C1)", () => {
     expect(results.get(3)!.is_established).toBe(false);
 
     // Monday median > Friday median
-    expect(results.get(1)!.stats!.median).toBeGreaterThan(
-      results.get(5)!.stats!.median,
-    );
+    expect(results.get(1)!.stats!.median).toBeGreaterThan(results.get(5)!.stats!.median);
   });
 });

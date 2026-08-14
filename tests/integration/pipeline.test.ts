@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { generateSyntheticCompany } from "../../scripts/generate-synthetic-company";
 import { runScan, type Baseline, type ScanCandidate } from "../../src/sense/scanner";
-import { renderWeekly, type FindingSummary, type CompanyState } from "../../src/act/weekly-renderer";
+import {
+  renderWeekly,
+  type FindingSummary,
+  type CompanyState,
+} from "../../src/act/weekly-renderer";
 
 /**
  * Integration test: scan → findings → deliver-weekly pipeline
@@ -73,29 +77,31 @@ describe("Pipeline integration: scan → findings → weekly (D+1, D+2)", () => 
 
     // #2 payment_overdue → deadline scan → immediate
     const overdueCandidate = candidates.find(
-      (c) => c.scanType === "deadline" &&
+      (c) =>
+        c.scanType === "deadline" &&
         c.evidence_event_ids.some((id) => id.startsWith("txn_overdue")),
     );
     expect(overdueCandidate).toBeDefined();
 
     // #8 competitor_hire → external scan
     const competitorCandidate = candidates.find(
-      (c) => c.scanType === "external" &&
+      (c) =>
+        c.scanType === "external" &&
         c.evidence_event_ids.some((id) => id.startsWith("ext_competitor")),
     );
     expect(competitorCandidate).toBeDefined();
 
     // #3 reply_delay → metric change scan (deviation from communication)
     const replyCandidate = candidates.find(
-      (c) => c.source === "communication" &&
+      (c) =>
+        c.source === "communication" &&
         c.evidence_event_ids.some((id) => id.startsWith("comm_reply")),
     );
     expect(replyCandidate).toBeDefined();
 
     // #6 inquiry_decline → metric change scan (deviation from web)
     const inquiryCandidate = candidates.find(
-      (c) => c.source === "web" &&
-        c.evidence_event_ids.some((id) => id.startsWith("web_inquiry")),
+      (c) => c.source === "web" && c.evidence_event_ids.some((id) => id.startsWith("web_inquiry")),
     );
     expect(inquiryCandidate).toBeDefined();
   });
@@ -146,9 +152,7 @@ describe("Pipeline integration: scan → findings → weekly (D+1, D+2)", () => 
     const findingSection = sections.find((s) => s.type === "finding");
 
     // Max 2 findings displayed per E1
-    const findingLines = findingSection!.content
-      .split("\n")
-      .filter((l) => l.startsWith("- "));
+    const findingLines = findingSection!.content.split("\n").filter((l) => l.startsWith("- "));
     expect(findingLines.length).toBeLessThanOrEqual(2);
   });
 

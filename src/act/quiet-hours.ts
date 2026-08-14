@@ -53,10 +53,7 @@ function nextMorning(date: Date): Date {
   return new Date(jstDate.getTime() - JST_OFFSET_MS);
 }
 
-export function shouldDeliverNow(
-  input: DeliveryInput,
-  now: Date,
-): DeliveryResult {
+export function shouldDeliverNow(input: DeliveryInput, now: Date): DeliveryResult {
   // Only immediate urgency is subject to quiet hours
   if (input.urgency !== "immediate") {
     return { deliver: true };

@@ -48,7 +48,9 @@ Deno.serve(async (req: Request) => {
       .eq("company_id", company_id)
       .eq("source", "google_calendar");
 
-    const established = (baselines || []).filter((b: { is_established: boolean }) => b.is_established);
+    const established = (baselines || []).filter(
+      (b: { is_established: boolean }) => b.is_established,
+    );
     const totalBaselines = (baselines || []).length;
     const activeProviders = (connections || [])
       .filter((c: { status: string }) => c.status === "active")
@@ -63,50 +65,61 @@ Deno.serve(async (req: Request) => {
     if (activeProviders.includes("google_calendar")) sources.push(`カレンダー(${calCount ?? 0}件)`);
     if ((csvCount ?? 0) > 0) sources.push(`会計CSV(暫定集計・${csvCount}件)`);
     if (activeProviders.includes("freee")) sources.push("freee会計");
-    const sourceSummary = sources.length > 0
-      ? `データソース: ${sources.join("、")}。`
-      : "データソース: まだ接続されていません。";
+    const sourceSummary =
+      sources.length > 0
+        ? `データソース: ${sources.join("、")}。`
+        : "データソース: まだ接続されていません。";
 
     const sections = [
       {
         type: "digest",
-        content: findingCount > 0
-          ? `今週は${findingCount}件のFindingがあります。${established.length}指標を追跡中です。${sourceSummary}`
-          : `${sourceSummary}${totalBaselines > 0 ? `全${established.length}指標が安定しています。` : "基準値はデータ蓄積後に確立されます。"}`,
+        content:
+          findingCount > 0
+            ? `今週は${findingCount}件のFindingがあります。${established.length}指標を追跡中です。${sourceSummary}`
+            : `${sourceSummary}${totalBaselines > 0 ? `全${established.length}指標が安定しています。` : "基準値はデータ蓄積後に確立されます。"}`,
       },
       {
         type: "finding",
-        content: topFindings.length > 0
-          ? topFindings.map((f: { what: string }) => `- ${f.what}`).join("\n")
-          : "",
+        content:
+          topFindings.length > 0
+            ? topFindings.map((f: { what: string }) => `- ${f.what}`).join("\n")
+            : "",
       },
       {
         type: "followup",
-        content: (findings || [])
-          .filter((f: { status: string }) => f.status === "watching")
-          .map((f: { what: string }) => `- 経過観察中: ${f.what}`)
-          .join("\n") || "",
+        content:
+          (findings || [])
+            .filter((f: { status: string }) => f.status === "watching")
+            .map((f: { what: string }) => `- 経過観察中: ${f.what}`)
+            .join("\n") || "",
       },
       {
         type: "stable_coverage",
-        content: totalBaselines > 0
-          ? `${established.length}指標が平常。カバレッジ: ${totalBaselines}指標中${established.length}指標が確立済み。`
-          : `カバレッジ: ${sources.length}データソース接続済み。基準値はデータ蓄積後に確立されます。`,
+        content:
+          totalBaselines > 0
+            ? `${established.length}指標が平常。カバレッジ: ${totalBaselines}指標中${established.length}指標が確立済み。`
+            : `カバレッジ: ${sources.length}データソース接続済み。基準値はデータ蓄積後に確立されます。`,
       },
       {
         type: "nudge",
-        content: !activeProviders.includes("google_calendar") || (csvCount ?? 0) === 0
-          ? "データソースを追加接続すると、より多くの指標を監視できます。"
-          : (established.length < totalBaselines
+        content:
+          !activeProviders.includes("google_calendar") || (csvCount ?? 0) === 0
             ? "データソースを追加接続すると、より多くの指標を監視できます。"
-            : ""),
+            : established.length < totalBaselines
+              ? "データソースを追加接続すると、より多くの指標を監視できます。"
+              : "",
       },
     ];
 
     // Send via Resend — fail-closed: missing config is an error, not a silent skip
     if (!resendKey) {
       return new Response(
-        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", company_id, sections }),
+        JSON.stringify({
+          status: "error",
+          reason: "RESEND_API_KEY not configured",
+          company_id,
+          sections,
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -128,7 +141,10 @@ Deno.serve(async (req: Request) => {
           created_at: new Date().toISOString(),
         });
         return new Response(
-          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。" }),
+          JSON.stringify({
+            status: "error",
+            reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。",
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -186,14 +202,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({ status: "ok", email_id: emailId, company_id, sections }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", email_id: emailId, company_id, sections }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

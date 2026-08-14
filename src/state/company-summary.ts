@@ -2,13 +2,7 @@ import type { CompanySummary } from "../../shared/contracts/company-summary";
 
 export const MAX_SUMMARY_TOKENS = 4000;
 
-export const CHAPTER_KEYS = [
-  "overview",
-  "financial",
-  "operations",
-  "people",
-  "external",
-] as const;
+export const CHAPTER_KEYS = ["overview", "financial", "operations", "people", "external"] as const;
 
 const CHAPTER_TITLES: Record<(typeof CHAPTER_KEYS)[number], string> = {
   overview: "Overview",

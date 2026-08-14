@@ -77,10 +77,9 @@ export async function refreshToken(
   }
 
   // Vault からリフレッシュトークンを取得
-  const { data: vaultData, error: vaultError } = await supabase.rpc(
-    "read_vault_secret",
-    { p_id: connection.vault_secret_id },
-  );
+  const { data: vaultData, error: vaultError } = await supabase.rpc("read_vault_secret", {
+    p_id: connection.vault_secret_id,
+  });
   if (vaultError || !vaultData) {
     await markReauthRequired(supabase, connection.id, "vault read failed");
     return {
@@ -119,9 +118,7 @@ export async function refreshToken(
 
   if (!tokenRes.ok) {
     const body = await tokenRes.text();
-    console.error(
-      `token refresh failed for ${connection.provider}: ${tokenRes.status} ${body}`,
-    );
+    console.error(`token refresh failed for ${connection.provider}: ${tokenRes.status} ${body}`);
     await markReauthRequired(supabase, connection.id, `token endpoint ${tokenRes.status}`);
     return {
       ok: false,
@@ -140,10 +137,10 @@ export async function refreshToken(
     refresh_token: tokenData.refresh_token ?? refreshTokenValue,
   });
 
-  const { error: updateVaultError } = await supabase.rpc(
-    "update_vault_secret",
-    { p_id: connection.vault_secret_id, p_secret: updatedPayload },
-  );
+  const { error: updateVaultError } = await supabase.rpc("update_vault_secret", {
+    p_id: connection.vault_secret_id,
+    p_secret: updatedPayload,
+  });
   if (updateVaultError) {
     console.error("vault update failed:", updateVaultError.message);
     return { ok: false, reason: `vault update failed: ${updateVaultError.message}` };
@@ -178,9 +175,6 @@ async function markReauthRequired(
     .update({ status: "reauth_required" })
     .eq("id", connectionId);
   if (error) {
-    console.error(
-      `failed to mark reauth_required (${reason}):`,
-      error.message,
-    );
+    console.error(`failed to mark reauth_required (${reason}):`, error.message);
   }
 }

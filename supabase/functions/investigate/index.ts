@@ -56,13 +56,14 @@ async function generate(
 }> {
   const evidenceIds = candidates.flatMap((c) => c.evidence_event_ids);
 
-  const { data: response, response: rawResponse } = await client.messages.create({
-    model,
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: `あなたはSentioのFinding生成器です。以下のシグナルと会社の記憶パケットから、Findingを生成してください。
+  const { data: response, response: rawResponse } = await client.messages
+    .create({
+      model,
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "user",
+          content: `あなたはSentioのFinding生成器です。以下のシグナルと会社の記憶パケットから、Findingを生成してください。
 
 ## 検知されたシグナル
 ${JSON.stringify(candidates, null, 2)}
@@ -88,13 +89,17 @@ ${findingTemplate}
   "next_actions": [{"description": "次の一手", "onetap_type": "calendar|message_draft|employee_check|watch"}],
   "rendered": "テンプレートに従ったレンダリング済みテキスト"
 }`,
-      },
-    ],
-  }).withResponse();
+        },
+      ],
+    })
+    .withResponse();
   warnIfModelDeprecated(rawResponse.headers, model);
 
   const genTextBlock = response.content.find((c: { type: string }) => c.type === "text");
-  const text = genTextBlock && "text" in genTextBlock ? (genTextBlock as { type: "text"; text: string }).text : "";
+  const text =
+    genTextBlock && "text" in genTextBlock
+      ? (genTextBlock as { type: "text"; text: string }).text
+      : "";
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -115,7 +120,10 @@ ${findingTemplate}
         { text: "Low-probability scenario", plausibility: "low" },
       ],
       evidence_event_ids: evidenceIds,
-      urgency: candidates[0]?.suggestedUrgency === "immediate" ? "weekly" : (candidates[0]?.suggestedUrgency || "weekly"),
+      urgency:
+        candidates[0]?.suggestedUrgency === "immediate"
+          ? "weekly"
+          : candidates[0]?.suggestedUrgency || "weekly",
       next_actions: [{ description: "Investigate further", onetap_type: "watch" }],
       rendered: text,
     };
@@ -126,18 +134,23 @@ ${findingTemplate}
 async function evaluate(
   client: Anthropic,
   model: string,
-  finding: { what: string; evidence_event_ids: string[]; hypotheses: Array<{ text: string; plausibility: string }> },
+  finding: {
+    what: string;
+    evidence_event_ids: string[];
+    hypotheses: Array<{ text: string; plausibility: string }>;
+  },
   evidenceSummaries: Array<{ event_id: string; summary: string }>,
   criteriaText: string,
 ): Promise<{ criteria: EvalCriterion[]; result: "pass" | "revise" | "reject" }> {
   // D3 independence: only finding + evidence passed (no generator reasoning)
-  const { data: evalResponse, response: evalRawResponse } = await client.messages.create({
-    model,
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: `あなたはSentioのEvaluatorです。以下のFindingを5つの基準で厳密に判定してください。
+  const { data: evalResponse, response: evalRawResponse } = await client.messages
+    .create({
+      model,
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "user",
+          content: `あなたはSentioのEvaluatorです。以下のFindingを5つの基準で厳密に判定してください。
 
 ## 判定基準
 ${criteriaText}
@@ -150,13 +163,17 @@ ${JSON.stringify(evidenceSummaries, null, 2)}
 
 以下のJSON配列で応答してください（5要素、各基準に対応）:
 [{"name": "基準名", "pass": true/false, "reason": "判定理由"}]`,
-      },
-    ],
-  }).withResponse();
+        },
+      ],
+    })
+    .withResponse();
   warnIfModelDeprecated(evalRawResponse.headers, model);
 
   const evalTextBlock = evalResponse.content.find((c: { type: string }) => c.type === "text");
-  const text = evalTextBlock && "text" in evalTextBlock ? (evalTextBlock as { type: "text"; text: string }).text : "";
+  const text =
+    evalTextBlock && "text" in evalTextBlock
+      ? (evalTextBlock as { type: "text"; text: string }).text
+      : "";
 
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -184,17 +201,17 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { company_id, candidates } = await req.json() as {
+    const { company_id, candidates } = (await req.json()) as {
       company_id: string;
       candidates: Candidate[];
     };
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const client = new Anthropic({
@@ -247,8 +264,13 @@ Deno.serve(async (req: Request) => {
 
       // Evaluator loop (max 2 revisions)
       let evalResult = await evaluate(
-        client, MODEL_EVALUATOR,
-        { what: draft.what, evidence_event_ids: draft.evidence_event_ids, hypotheses: draft.hypotheses },
+        client,
+        MODEL_EVALUATOR,
+        {
+          what: draft.what,
+          evidence_event_ids: draft.evidence_event_ids,
+          hypotheses: draft.hypotheses,
+        },
         evidenceSummaries,
         evaluatorCriteria,
       );
@@ -257,7 +279,13 @@ Deno.serve(async (req: Request) => {
       while (evalResult.result === "revise" && revisions < MAX_REVISIONS) {
         revisions++;
         // Re-generate with feedback
-        const revised = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
+        const revised = await generate(
+          client,
+          MODEL_GENERATOR,
+          group,
+          memoryPacket,
+          findingTemplate,
+        );
         draft.what = revised.what;
         draft.hypotheses = revised.hypotheses;
         draft.evidence_event_ids = revised.evidence_event_ids;
@@ -265,8 +293,13 @@ Deno.serve(async (req: Request) => {
         draft.rendered = revised.rendered;
 
         evalResult = await evaluate(
-          client, MODEL_EVALUATOR,
-          { what: draft.what, evidence_event_ids: draft.evidence_event_ids, hypotheses: draft.hypotheses },
+          client,
+          MODEL_EVALUATOR,
+          {
+            what: draft.what,
+            evidence_event_ids: draft.evidence_event_ids,
+            hypotheses: draft.hypotheses,
+          },
           evidenceSummaries,
           evaluatorCriteria,
         );
@@ -314,10 +347,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ status: "ok", company_id, findings }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", company_id, findings }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({ error: (error as Error).message, model_used: MODEL_GENERATOR }),

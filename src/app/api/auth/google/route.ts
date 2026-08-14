@@ -5,18 +5,12 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 export async function GET(req: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
-    return NextResponse.json(
-      { error: "GOOGLE_CLIENT_ID not set" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "GOOGLE_CLIENT_ID not set" }, { status: 500 });
   }
 
   const companyId = req.nextUrl.searchParams.get("company_id");
   if (!companyId) {
-    return NextResponse.json(
-      { error: "company_id required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "company_id required" }, { status: 400 });
   }
 
   const redirectUri = `${req.nextUrl.origin}/auth/callback/google`;

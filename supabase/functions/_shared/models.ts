@@ -6,10 +6,11 @@ export const MODEL_EVALUATOR = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet
  * Anthropic API応答ヘッダに model-deprecated が含まれる場合に警告ログを出力する。
  * retired予告を早期に検知するためのガードレール。
  */
-export function warnIfModelDeprecated(
-  headers: Headers,
-  modelUsed: string,
-): void {
+// Anthropic SDK が返す headers は @types/node-fetch 由来で、Deno組み込みの Headers とは
+// 別型になる（getSetCookie の有無で非互換）。実際に使うのは get だけなので構造的に受ける。
+type HeaderLike = { get(name: string): string | null };
+
+export function warnIfModelDeprecated(headers: HeaderLike, modelUsed: string): void {
   const deprecated = headers.get("x-model-deprecated") ?? headers.get("model-deprecated");
   if (deprecated) {
     console.warn(

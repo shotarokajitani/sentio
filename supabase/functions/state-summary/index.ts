@@ -22,9 +22,12 @@ Deno.serve(async (req: Request) => {
 
     // Gather data from multiple tables
     const [eventsRes, baselinesRes, narrativesRes, entitiesRes] = await Promise.all([
-      supabase.from("events").select("event_type, metrics, occurred_at")
+      supabase
+        .from("events")
+        .select("event_type, metrics, occurred_at")
         .eq("company_id", company_id)
-        .order("occurred_at", { ascending: false }).limit(100),
+        .order("occurred_at", { ascending: false })
+        .limit(100),
       supabase.from("baselines").select("*").eq("company_id", company_id),
       supabase.from("narratives").select("*").eq("company_id", company_id),
       supabase.from("entities").select("*").eq("company_id", company_id),
@@ -41,19 +44,41 @@ Deno.serve(async (req: Request) => {
     const commEvents = events.filter((e) => e.event_type === "communication");
 
     const chapters = [
-      { key: "overview", title: "Overview", content: `${entities.length} entities tracked. ${baselines.length} baselines configured.` },
-      { key: "financial", title: "Financial", content: txnEvents.length > 0
-        ? `${txnEvents.length} transactions in recent period.`
-        : "(no financial data)" },
-      { key: "operations", title: "Operations", content: schedEvents.length > 0
-        ? `${schedEvents.length} schedule events tracked.`
-        : "(no operations data)" },
-      { key: "people", title: "People", content: commEvents.length > 0
-        ? `${commEvents.length} communication events.`
-        : "(no people data)" },
-      { key: "external", title: "External", content: narratives.length > 0
-        ? narratives.map((n: { content: string }) => n.content).join("; ")
-        : "(no external narratives)" },
+      {
+        key: "overview",
+        title: "Overview",
+        content: `${entities.length} entities tracked. ${baselines.length} baselines configured.`,
+      },
+      {
+        key: "financial",
+        title: "Financial",
+        content:
+          txnEvents.length > 0
+            ? `${txnEvents.length} transactions in recent period.`
+            : "(no financial data)",
+      },
+      {
+        key: "operations",
+        title: "Operations",
+        content:
+          schedEvents.length > 0
+            ? `${schedEvents.length} schedule events tracked.`
+            : "(no operations data)",
+      },
+      {
+        key: "people",
+        title: "People",
+        content:
+          commEvents.length > 0 ? `${commEvents.length} communication events.` : "(no people data)",
+      },
+      {
+        key: "external",
+        title: "External",
+        content:
+          narratives.length > 0
+            ? narratives.map((n: { content: string }) => n.content).join("; ")
+            : "(no external narratives)",
+      },
     ];
 
     // Token limit enforcement
@@ -77,24 +102,26 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
 
     // Upsert company_summary
-    const { error } = await supabase.from("company_summary").upsert({
-      company_id,
-      content,
-      token_count: totalTokens,
-      chapters,
-      generated_at: now,
-    }, { onConflict: "company_id" });
+    const { error } = await supabase.from("company_summary").upsert(
+      {
+        company_id,
+        content,
+        token_count: totalTokens,
+        chapters,
+        generated_at: now,
+      },
+      { onConflict: "company_id" },
+    );
 
     if (error) throw error;
 
-    return new Response(
-      JSON.stringify({ status: "ok", company_id, token_count: totalTokens }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", company_id, token_count: totalTokens }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

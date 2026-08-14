@@ -462,10 +462,7 @@ $$;
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import {
-  validateS2Columns,
-  EVENTS_ALLOWLIST,
-} from "../../scripts/check-allowlist";
+import { validateS2Columns, EVENTS_ALLOWLIST } from "../../scripts/check-allowlist";
 
 describe("S2 allowlist schema check (B6, F1)", () => {
   it("events テーブルの許可カラムリストが spec/08 と一致する", () => {
@@ -539,9 +536,7 @@ export function validateS2Columns(
   allowlist: readonly string[],
 ): { valid: boolean; violations: string[] } {
   const allowSet = new Set(allowlist);
-  const violations = actualColumns.filter(
-    (col) => !allowSet.has(col) || TOKEN_PATTERNS.test(col),
-  );
+  const violations = actualColumns.filter((col) => !allowSet.has(col) || TOKEN_PATTERNS.test(col));
   return { valid: violations.length === 0, violations };
 }
 
@@ -781,65 +776,35 @@ describe("CSV→EventEnvelope (B1-B3)", () => {
   const fileFingerprint = "sha256:abc123";
 
   it("B1: CSVを正しくtransactionイベントに変換する", () => {
-    const envelopes = parseCsvToEnvelopes(
-      sampleCsv,
-      fileFingerprint,
-      "company-uuid",
-    );
+    const envelopes = parseCsvToEnvelopes(sampleCsv, fileFingerprint, "company-uuid");
     expect(envelopes).toHaveLength(2);
     expect(envelopes[0].event_type).toBe("transaction");
     expect(envelopes[0].metrics).toEqual({ amount: 100000, tax: 10000 });
   });
 
   it("B1: 金額合計がCSVと一致する", () => {
-    const envelopes = parseCsvToEnvelopes(
-      sampleCsv,
-      fileFingerprint,
-      "company-uuid",
-    );
-    const total = envelopes.reduce(
-      (sum, e) => sum + (e.metrics.amount as number),
-      0,
-    );
+    const envelopes = parseCsvToEnvelopes(sampleCsv, fileFingerprint, "company-uuid");
+    const total = envelopes.reduce((sum, e) => sum + (e.metrics.amount as number), 0);
     expect(total).toBe(50000); // 100000 + (-50000)
   });
 
   it("B2: 同一CSVの再投入で同じ event_id が生成される（冪等）", () => {
-    const first = parseCsvToEnvelopes(
-      sampleCsv,
-      fileFingerprint,
-      "company-uuid",
-    );
-    const second = parseCsvToEnvelopes(
-      sampleCsv,
-      fileFingerprint,
-      "company-uuid",
-    );
+    const first = parseCsvToEnvelopes(sampleCsv, fileFingerprint, "company-uuid");
+    const second = parseCsvToEnvelopes(sampleCsv, fileFingerprint, "company-uuid");
     expect(first.map((e) => e.event_id)).toEqual(second.map((e) => e.event_id));
   });
 
   it("B3: 修正済みCSVは変更行のみ新しいevent_idになる", () => {
     const modified = sampleCsv.replace("100000", "120000");
-    const original = parseCsvToEnvelopes(
-      sampleCsv,
-      fileFingerprint,
-      "company-uuid",
-    );
-    const updated = parseCsvToEnvelopes(
-      modified,
-      fileFingerprint,
-      "company-uuid",
-    );
+    const original = parseCsvToEnvelopes(sampleCsv, fileFingerprint, "company-uuid");
+    const updated = parseCsvToEnvelopes(modified, fileFingerprint, "company-uuid");
     // 1行目のevent_idが変わり、2行目は同じ
     expect(updated[0].event_id).not.toBe(original[0].event_id);
     expect(updated[1].event_id).toBe(original[1].event_id);
   });
 
   it("event_id = hash(file_fingerprint, row_content)", () => {
-    const id = generateEventId(
-      fileFingerprint,
-      "2026-06-01,売上A,100000,10000",
-    );
+    const id = generateEventId(fileFingerprint, "2026-06-01,売上A,100000,10000");
     expect(id).toMatch(/^[a-f0-9]{64}$/); // SHA-256
   });
 });
@@ -1007,9 +972,7 @@ describe("Memory packet assembler (C3)", () => {
   it("超過時は優先度順に切り詰める", () => {
     const packet = assemblePacket(companyId, { tokenBudget: 500 });
     // summaryは常に含まれる（最優先）
-    expect(packet.sections).toContainEqual(
-      expect.objectContaining({ type: "summary" }),
-    );
+    expect(packet.sections).toContainEqual(expect.objectContaining({ type: "summary" }));
     // 低優先度のevent断片は切られる
   });
 
@@ -1070,9 +1033,7 @@ describe("Scanner (D1-D2, D4)", () => {
 
   it("D4: monitor/期日のcandidateのみimmediateを返す", () => {
     const candidates = runScan(timelineWithSiteDown, baselines);
-    const immediate = candidates.filter(
-      (c) => c.suggestedUrgency === "immediate",
-    );
+    const immediate = candidates.filter((c) => c.suggestedUrgency === "immediate");
     immediate.forEach((c) => {
       expect(["deadline", "monitor"]).toContain(c.source);
     });
@@ -1093,6 +1054,7 @@ describe("Scanner (D1-D2, D4)", () => {
 ### Task 5.2: Investigator ハーネス（D3, D5 テスト先行）
 
 **承認条件の適用:**
+
 - Evaluator 5基準は `prompts/evaluator_criteria.md` をランタイムで読み込む（コード直書き禁止）
 - Findingテンプレは `prompts/finding_template.md` をランタイムで読み込む
 - Anthropic APIのモデルIDは `Deno.env.get("ANTHROPIC_MODEL")` で取得（ハードコード禁止）
@@ -1151,10 +1113,7 @@ describe("Finding evidence links (D5)", () => {
   it("全主張の証拠イベントIDがeventsテーブルに存在する", async () => {
     const finding = await generateFinding(companyId);
     for (const eid of finding.evidence_event_ids) {
-      const { data } = await supabase
-        .from("events")
-        .select("event_id")
-        .eq("event_id", eid);
+      const { data } = await supabase.from("events").select("event_id").eq("event_id", eid);
       expect(data).toHaveLength(1);
     }
   });
@@ -1214,13 +1173,7 @@ describe("Weekly email renderer (E1-E2)", () => {
   it("E1: 構成順が仕様に適合する", () => {
     const sections = renderWeekly(findings, companyState);
     const order = sections.map((s) => s.type);
-    expect(order).toEqual([
-      "digest",
-      "finding",
-      "followup",
-      "stable_coverage",
-      "nudge",
-    ]);
+    expect(order).toEqual(["digest", "finding", "followup", "stable_coverage", "nudge"]);
   });
 
   it("E1: Finding は 0〜2 件", () => {
@@ -1379,9 +1332,7 @@ describe("Day0 pipeline (A1-A5)", () => {
       ...syntheticCompany,
       concern: "売上が3ヶ月連続で減少している",
     });
-    const hypothesisBlock = report.blocks.find(
-      (b: any) => b.key === "initial_hypothesis",
-    );
+    const hypothesisBlock = report.blocks.find((b: any) => b.key === "initial_hypothesis");
     expect(hypothesisBlock).toBeDefined();
     expect(hypothesisBlock!.content).toContain("売上");
   });

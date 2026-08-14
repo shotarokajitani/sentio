@@ -17,18 +17,18 @@ function generateCalendarFixtures(companyId: string) {
   const now = new Date();
   const events = [];
 
-  for (let monthsAgo = 0; monthsAgo < 12; monthsAgo++) {
-    const date = new Date(now);
-    date.setMonth(date.getMonth() - monthsAgo);
-    date.setDate(15); // 各月15日
-
-    const start = new Date(date);
-    start.setHours(10, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(11, 0, 0, 0);
+  // 「過去12ヶ月」なので当月は含めない。当月15日は毎月1〜14日には未来日になり、
+  // 「全てのoccurred_atが過去である」が落ちる。
+  // また、日を15に固定してから月を引く（月末日に setMonth すると2月等で桁溢れし、
+  // 同じ月が二重に生成されて event_id が衝突する）。
+  for (let monthsAgo = 1; monthsAgo <= 12; monthsAgo++) {
+    const y = now.getFullYear();
+    const m = now.getMonth() - monthsAgo;
+    const start = new Date(y, m, 15, 10, 0, 0, 0);
+    const end = new Date(y, m, 15, 11, 0, 0, 0);
 
     events.push({
-      title: `月次定例会議 ${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      title: `月次定例会議 ${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
       start: start.toISOString(),
       end: end.toISOString(),
       attendees: ["member-a", "member-b"],
@@ -48,19 +48,14 @@ describe.skipIf(!canRun)("カレンダーフィクスチャ注入 (B4)", () => {
 
   afterAll(async () => {
     if (canRun) {
-      await admin
-        .from("events")
-        .delete()
-        .eq("company_id", companyId);
+      await admin.from("events").delete().eq("company_id", companyId);
     }
   });
 
   /**
    * ヘルパー: カレンダーフィクスチャをDBに直接UPSERT
    */
-  async function ingestCalendarDirect(
-    fixtures: ReturnType<typeof generateCalendarFixtures>,
-  ) {
+  async function ingestCalendarDirect(fixtures: ReturnType<typeof generateCalendarFixtures>) {
     // Deno Edge Function と同等のロジックをNode側で再現
     const { createHash } = await import("crypto");
 
@@ -68,9 +63,7 @@ describe.skipIf(!canRun)("カレンダーフィクスチャ注入 (B4)", () => {
     const rows = fixtures.map((evt) => {
       const fingerprint = `calendar:${companyId}`;
       const rowContent = `${evt.title}:${evt.start}:${evt.end}`;
-      const eventId = createHash("sha256")
-        .update(`${fingerprint}:${rowContent}`)
-        .digest("hex");
+      const eventId = createHash("sha256").update(`${fingerprint}:${rowContent}`).digest("hex");
 
       return {
         event_id: eventId,
@@ -90,9 +83,7 @@ describe.skipIf(!canRun)("カレンダーフィクスチャ注入 (B4)", () => {
       };
     });
 
-    const { error } = await admin
-      .from("events")
-      .upsert(rows, { onConflict: "event_id" });
+    const { error } = await admin.from("events").upsert(rows, { onConflict: "event_id" });
 
     if (error) throw new Error(`UPSERT failed: ${error.message}`);
     return rows;
@@ -122,9 +113,7 @@ describe.skipIf(!canRun)("カレンダーフィクスチャ注入 (B4)", () => {
     expect(error).toBeNull();
     const now = new Date();
     for (const row of data!) {
-      expect(new Date(row.occurred_at).getTime()).toBeLessThanOrEqual(
-        now.getTime(),
-      );
+      expect(new Date(row.occurred_at).getTime()).toBeLessThanOrEqual(now.getTime());
     }
   });
 });

@@ -44,9 +44,7 @@ export function handleRedetection(
   newEvidenceIds: string[],
 ): FindingRecord {
   // Merge evidence, deduplicating
-  const allEvidence = [
-    ...new Set([...existing.evidence_event_ids, ...newEvidenceIds]),
-  ];
+  const allEvidence = [...new Set([...existing.evidence_event_ids, ...newEvidenceIds])];
 
   return {
     ...existing,

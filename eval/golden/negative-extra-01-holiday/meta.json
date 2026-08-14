@@ -1,1 +1,7 @@
-{"id": 9, "lang": "ja", "type": "negative", "scanType": "none", "description": "祝日による売上変動"}
+{
+  "id": 9,
+  "lang": "ja",
+  "type": "negative",
+  "scanType": "none",
+  "description": "祝日による売上変動"
+}

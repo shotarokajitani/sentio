@@ -1,10 +1,5 @@
 ---
-paths:
-  [
-    "supabase/functions/deliver*/**",
-    "supabase/functions/day0*/**",
-    "src/act/**",
-  ]
+paths: ["supabase/functions/deliver*/**", "supabase/functions/day0*/**", "src/act/**"]
 ---
 
 - 「Sentioは何も勝手に送らない」: ワンタップは下書き/仮登録生成まで。送信・確定APIを直接呼ばない

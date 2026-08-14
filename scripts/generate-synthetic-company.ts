@@ -76,7 +76,9 @@ export function generateSyntheticCompany(): SyntheticCompany {
     events.push({
       event_id: id,
       company_id: COMPANY_ID,
-      occurred_at: daysAgo(intervals.reduce((a, b, idx) => idx <= i ? a + b : a, 0)).toISOString(),
+      occurred_at: daysAgo(
+        intervals.reduce((a, b, idx) => (idx <= i ? a + b : a), 0),
+      ).toISOString(),
       source: "csv:accounting",
       event_type: "transaction",
       metrics: { revenue: 50000 - i * 5000, order_client: "entity_customer_a" },
@@ -84,8 +86,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     });
   }
   plantedSignals.push({
-    id: 1, label: "order_interval_elongation", type: "positive",
-    scanType: "trend", eventIds: signal1Ids,
+    id: 1,
+    label: "order_interval_elongation",
+    type: "positive",
+    scanType: "trend",
+    eventIds: signal1Ids,
   });
 
   // ② Payment overdue (deadline scan) — 1 event
@@ -105,8 +110,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     sensitivity: "S1",
   });
   plantedSignals.push({
-    id: 2, label: "payment_overdue", type: "positive",
-    scanType: "deadline", eventIds: [overdueId],
+    id: 2,
+    label: "payment_overdue",
+    type: "positive",
+    scanType: "deadline",
+    eventIds: [overdueId],
   });
 
   // ③ Reply delay (deviation scan via communication) — 3 weeks worsening
@@ -128,8 +136,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     });
   }
   plantedSignals.push({
-    id: 3, label: "reply_delay", type: "positive",
-    scanType: "deviation", eventIds: signal3Ids,
+    id: 3,
+    label: "reply_delay",
+    type: "positive",
+    scanType: "deviation",
+    eventIds: signal3Ids,
   });
 
   // ④ Overtime creep (trend scan via attendance) — 1 employee
@@ -151,15 +162,21 @@ export function generateSyntheticCompany(): SyntheticCompany {
     });
   }
   plantedSignals.push({
-    id: 4, label: "overtime_creep", type: "positive",
-    scanType: "trend", eventIds: signal4Ids,
+    id: 4,
+    label: "overtime_creep",
+    type: "positive",
+    scanType: "trend",
+    eventIds: signal4Ids,
   });
 
   // ⑤ Seasonal normal decline (NEGATIVE CONTROL — must NOT detect)
   // Already covered by normal baseline seasonal[7] = 93k (Aug dip)
   plantedSignals.push({
-    id: 5, label: "seasonal_normal", type: "negative",
-    scanType: "none", eventIds: [],
+    id: 5,
+    label: "seasonal_normal",
+    type: "negative",
+    scanType: "none",
+    eventIds: [],
   });
 
   // ⑥ Inquiry decline (deviation scan)
@@ -180,8 +197,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     });
   }
   plantedSignals.push({
-    id: 6, label: "inquiry_decline", type: "positive",
-    scanType: "deviation", eventIds: signal6Ids,
+    id: 6,
+    label: "inquiry_decline",
+    type: "positive",
+    scanType: "deviation",
+    eventIds: signal6Ids,
   });
 
   // ⑦ Meeting silence (silence scan) — regular weekly meeting disappeared
@@ -201,8 +221,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     });
   }
   plantedSignals.push({
-    id: 7, label: "meeting_silence", type: "positive",
-    scanType: "silence", eventIds: signal7Ids,
+    id: 7,
+    label: "meeting_silence",
+    type: "positive",
+    scanType: "silence",
+    eventIds: signal7Ids,
   });
 
   // ⑧ Competitor hiring (external scan)
@@ -217,8 +240,11 @@ export function generateSyntheticCompany(): SyntheticCompany {
     sensitivity: "S0",
   });
   plantedSignals.push({
-    id: 8, label: "competitor_hire", type: "positive",
-    scanType: "external", eventIds: [competitorId],
+    id: 8,
+    label: "competitor_hire",
+    type: "positive",
+    scanType: "external",
+    eventIds: [competitorId],
   });
 
   return {
@@ -237,7 +263,9 @@ export function generateSyntheticCompany(): SyntheticCompany {
 // CLI execution
 if (typeof process !== "undefined" && process.argv[1]?.includes("generate-synthetic-company")) {
   const company = generateSyntheticCompany();
-  console.log(`Generated ${company.events.length} events with ${company.plantedSignals.length} planted signals`);
+  console.log(
+    `Generated ${company.events.length} events with ${company.plantedSignals.length} planted signals`,
+  );
   console.log("Positive:", company.plantedSignals.filter((s) => s.type === "positive").length);
   console.log("Negative:", company.plantedSignals.filter((s) => s.type === "negative").length);
 }

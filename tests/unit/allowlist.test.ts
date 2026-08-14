@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  validateS2Columns,
-  EVENTS_ALLOWLIST,
-} from "../../scripts/check-allowlist";
+import { validateS2Columns, EVENTS_ALLOWLIST } from "../../scripts/check-allowlist";
 
 describe("S2 allowlist schema check (B6, F1)", () => {
   it("events テーブルの許可カラムリストが spec/08 と一致する", () => {

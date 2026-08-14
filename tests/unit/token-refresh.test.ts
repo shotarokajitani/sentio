@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  isTokenExpired,
-  EXPIRY_BUFFER_MS,
-  PROVIDER_CONFIG,
-} from "@edge/_shared/token-refresh";
+import { isTokenExpired, EXPIRY_BUFFER_MS, PROVIDER_CONFIG } from "@edge/_shared/token-refresh";
 
 describe("EXPIRY_BUFFER_MS", () => {
   it("should be 5 minutes in milliseconds", () => {
@@ -23,9 +19,7 @@ describe("PROVIDER_CONFIG", () => {
   it("freee config has correct tokenUrl and env vars", () => {
     const freee = PROVIDER_CONFIG.freee;
     expect(freee).toBeDefined();
-    expect(freee.tokenUrl).toBe(
-      "https://accounts.secure.freee.co.jp/public_api/token",
-    );
+    expect(freee.tokenUrl).toBe("https://accounts.secure.freee.co.jp/public_api/token");
     expect(freee.clientIdEnv).toBe("FREEE_CLIENT_ID");
     expect(freee.clientSecretEnv).toBe("FREEE_CLIENT_SECRET");
   });
@@ -52,24 +46,18 @@ describe("isTokenExpired", () => {
 
   it("returns true when token expires within buffer (4 min future)", () => {
     // 4分後 = バッファ(5分)以内なので期限切れ扱い
-    const fourMinFuture = new Date(
-      Date.now() + 4 * 60 * 1000,
-    ).toISOString();
+    const fourMinFuture = new Date(Date.now() + 4 * 60 * 1000).toISOString();
     expect(isTokenExpired(fourMinFuture)).toBe(true);
   });
 
   it("returns false when token expires well beyond buffer (10 min future)", () => {
-    const tenMinFuture = new Date(
-      Date.now() + 10 * 60 * 1000,
-    ).toISOString();
+    const tenMinFuture = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     expect(isTokenExpired(tenMinFuture)).toBe(false);
   });
 
   it("returns true when token expires exactly at buffer boundary", () => {
     // ちょうど5分後 = Date.now() + EXPIRY_BUFFER_MS >= expiryTime → true
-    const exactBuffer = new Date(
-      Date.now() + EXPIRY_BUFFER_MS,
-    ).toISOString();
+    const exactBuffer = new Date(Date.now() + EXPIRY_BUFFER_MS).toISOString();
     expect(isTokenExpired(exactBuffer)).toBe(true);
   });
 });

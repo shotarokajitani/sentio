@@ -89,7 +89,10 @@ describe("Scanner (D1-D2, D4)", () => {
     const events: TimelineEvent[] = [
       makeEvent({
         event_type: "transaction",
-        metrics: { expected_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), is_overdue: true },
+        metrics: {
+          expected_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+          is_overdue: true,
+        },
         occurred_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
       }),
     ];
@@ -130,12 +133,8 @@ describe("Scanner (D1-D2, D4)", () => {
   });
 
   it("baseline not established: no candidates generated", () => {
-    const events: TimelineEvent[] = [
-      makeEvent({ metrics: { revenue: 50000 } }),
-    ];
-    const baselines: Baseline[] = [
-      makeBaseline({ is_established: false }),
-    ];
+    const events: TimelineEvent[] = [makeEvent({ metrics: { revenue: 50000 } })];
+    const baselines: Baseline[] = [makeBaseline({ is_established: false })];
     const candidates = runScan(events, baselines);
     // Deviation scan should not trigger for non-established baselines
     expect(candidates.filter((c) => c.scanType === "deviation")).toHaveLength(0);

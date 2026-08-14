@@ -2,29 +2,29 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Edit|Write",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/block-env-read.mjs || exit 2"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-env-read.mjs\" || exit 2"
           }
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/block-prod-ref.mjs || exit 2"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-prod-ref.mjs\" || exit 2"
           }
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/check-secrets-patterns.mjs || exit 2"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-secrets-patterns.mjs\" || exit 2"
           }
         ]
       }

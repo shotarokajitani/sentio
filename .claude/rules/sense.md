@@ -1,10 +1,5 @@
 ---
-paths:
-  [
-    "supabase/functions/scan*/**",
-    "supabase/functions/investigat*/**",
-    "src/sense/**",
-  ]
+paths: ["supabase/functions/scan*/**", "supabase/functions/investigat*/**", "src/sense/**"]
 ---
 
 - ScannerはLLMを呼ばない。決定的処理のみ

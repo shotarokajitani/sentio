@@ -1,10 +1,5 @@
 ---
-paths:
-  [
-    "supabase/functions/ingest*/**",
-    "supabase/migrations/*event*",
-    "src/ingest/**",
-  ]
+paths: ["supabase/functions/ingest*/**", "supabase/migrations/*event*", "src/ingest/**"]
 ---
 
 - 全取込はイベントエンベロープ（docs/spec/01）に正規化。下流にコネクタ固有の形を漏らさない

@@ -9,11 +9,7 @@ export interface Narrative {
 const HALF_LIFE_DAYS = 30;
 const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
 
-export function createNarrative(
-  key: string,
-  content: string,
-  sourceEventId: string,
-): Narrative {
+export function createNarrative(key: string, content: string, sourceEventId: string): Narrative {
   return {
     key,
     content,

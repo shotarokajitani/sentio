@@ -1,1 +1,7 @@
-{"id": 3, "lang": "ja", "type": "positive", "scanType": "deviation", "description": "特定従業員の返信遅延が3週連続悪化"}
+{
+  "id": 3,
+  "lang": "ja",
+  "type": "positive",
+  "scanType": "deviation",
+  "description": "特定従業員の返信遅延が3週連続悪化"
+}

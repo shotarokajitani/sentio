@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-const WEEKLY_SECTIONS = [
-  "digest",
-  "finding",
-  "followup",
-  "stable_coverage",
-  "nudge",
-] as const;
+const WEEKLY_SECTIONS = ["digest", "finding", "followup", "stable_coverage", "nudge"] as const;
 
 export const WeeklyReportSchema = z.object({
   company_id: z.string().uuid(),

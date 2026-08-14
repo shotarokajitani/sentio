@@ -19,9 +19,7 @@ export const FindingSchema = z.object({
   next_actions: z.array(
     z.object({
       description: z.string(),
-      onetap_type: z
-        .enum(["calendar", "message_draft", "employee_check", "watch"])
-        .optional(),
+      onetap_type: z.enum(["calendar", "message_draft", "employee_check", "watch"]).optional(),
     }),
   ),
   eval_log: z.object({

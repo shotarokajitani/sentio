@@ -11,6 +11,13 @@
 --   - KING OF TIME制約（JST 8:30-10:00接続禁止）は現時点では対象外だが、
 --     将来の勤怠コネクタ追加時にcron時刻の見直しが必要
 
+-- 拡張の有効化。これが無いと、pg_cron/pg_net が未有効な環境（ローカル・新規プロジェクト）で
+-- `schema "cron" does not exist` により 00018 で適用が停止する。
+-- 00001〜00017 はコミット済みのまま残るため、部分適用状態になる。
+-- 本文が cron.schedule と net.http_post の両方を使うので2つとも要る。
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
 SELECT cron.schedule(
   'sync-connections',
   '0 0,6,12,18 * * *',

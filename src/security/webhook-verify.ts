@@ -39,9 +39,7 @@ export function verifyStripeSignature(
   const receivedSig = v1Part.slice(3);
 
   const signedPayload = `${timestamp}.${payload}`;
-  const expectedSig = createHmac("sha256", secret)
-    .update(signedPayload)
-    .digest("hex");
+  const expectedSig = createHmac("sha256", secret).update(signedPayload).digest("hex");
 
   if (safeCompare(receivedSig, expectedSig)) {
     return { valid: true };
@@ -65,9 +63,7 @@ export function verifySlackSignature(
 
   const receivedSig = signature.slice(3);
   const basestring = `v0:${timestamp}:${body}`;
-  const expectedSig = createHmac("sha256", signingSecret)
-    .update(basestring)
-    .digest("hex");
+  const expectedSig = createHmac("sha256", signingSecret).update(basestring).digest("hex");
 
   if (safeCompare(receivedSig, expectedSig)) {
     return { valid: true };
@@ -88,9 +84,7 @@ export function verifyLineSignature(
     return { valid: false, error: "Missing signature" };
   }
 
-  const expectedSig = createHmac("sha256", channelSecret)
-    .update(body)
-    .digest("base64");
+  const expectedSig = createHmac("sha256", channelSecret).update(body).digest("base64");
 
   if (safeCompare(signature, expectedSig)) {
     return { valid: true };

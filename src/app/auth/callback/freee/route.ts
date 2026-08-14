@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
 
-const FREEE_TOKEN_URL =
-  "https://accounts.secure.freee.co.jp/public_api/token";
+const FREEE_TOKEN_URL = "https://accounts.secure.freee.co.jp/public_api/token";
 const FREEE_API_BASE = "https://api.freee.co.jp/api/1";
 
 export async function GET(req: NextRequest) {
@@ -18,17 +17,13 @@ export async function GET(req: NextRequest) {
   }
 
   if (!code || !companyId) {
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=missing_params`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=missing_params`);
   }
 
   const clientId = process.env.FREEE_CLIENT_ID;
   const clientSecret = process.env.FREEE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=freee_not_configured`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=freee_not_configured`);
   }
 
   const supabaseUrl = process.env.SUPABASE_URL!;
@@ -52,9 +47,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok || !tokenData.access_token) {
     console.error("freee token exchange failed:", tokenData.error);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=token_exchange_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=token_exchange_failed`);
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -66,26 +59,19 @@ export async function GET(req: NextRequest) {
     expires_in: tokenData.expires_in,
   });
 
-  const { data: vaultId, error: vaultErr } = await supabase.rpc(
-    "store_vault_secret",
-    {
-      p_name: `freee:${companyId}`,
-      p_secret: tokenPayload,
-      p_description: "freee OAuth token",
-    },
-  );
+  const { data: vaultId, error: vaultErr } = await supabase.rpc("store_vault_secret", {
+    p_name: `freee:${companyId}`,
+    p_secret: tokenPayload,
+    p_description: "freee OAuth token",
+  });
 
   if (vaultErr) {
     console.error("Vault store failed:", vaultErr.message);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=vault_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=vault_failed`);
   }
 
   // 3. Register connection
-  const expiresAt = new Date(
-    Date.now() + (tokenData.expires_in || 86400) * 1000,
-  ).toISOString();
+  const expiresAt = new Date(Date.now() + (tokenData.expires_in || 86400) * 1000).toISOString();
 
   const { error: connErr } = await supabase.from("connections").upsert(
     {
@@ -102,21 +88,13 @@ export async function GET(req: NextRequest) {
 
   if (connErr) {
     console.error("Connection insert failed:", connErr.message);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=connection_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=connection_failed`);
   }
 
   // 4. Sync recent transactions (past 12 months)
-  const syncCount = await syncFreeeTransactions(
-    tokenData.access_token,
-    companyId,
-    supabase,
-  );
+  const syncCount = await syncFreeeTransactions(tokenData.access_token, companyId, supabase);
 
-  return NextResponse.redirect(
-    `${req.nextUrl.origin}/connect?freee_synced=${syncCount}`,
-  );
+  return NextResponse.redirect(`${req.nextUrl.origin}/connect?freee_synced=${syncCount}`);
 }
 
 async function syncFreeeTransactions(
@@ -156,10 +134,9 @@ async function syncFreeeTransactions(
     limit: "100",
   });
 
-  const txRes = await fetch(
-    `${FREEE_API_BASE}/deals?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const txRes = await fetch(`${FREEE_API_BASE}/deals?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!txRes.ok) {
     console.error("freee /deals failed:", txRes.status);
@@ -182,9 +159,7 @@ async function syncFreeeTransactions(
       const amount = detail?.amount || 0;
       const fingerprint = `freee:${companyId}`;
       const rowContent = `${deal.id}:${deal.issue_date}:${amount}`;
-      const eventId = createHash("sha256")
-        .update(`${fingerprint}:${rowContent}`)
-        .digest("hex");
+      const eventId = createHash("sha256").update(`${fingerprint}:${rowContent}`).digest("hex");
 
       return {
         event_id: eventId,
@@ -200,9 +175,7 @@ async function syncFreeeTransactions(
     },
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) {
     console.error("freee events upsert failed:", error.message);

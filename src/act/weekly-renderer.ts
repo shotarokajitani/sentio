@@ -17,10 +17,7 @@ export interface WeeklySection {
 
 const MAX_FINDINGS = 2;
 
-export function renderWeekly(
-  findings: FindingSummary[],
-  state: CompanyState,
-): WeeklySection[] {
+export function renderWeekly(findings: FindingSummary[], state: CompanyState): WeeklySection[] {
   const sections: WeeklySection[] = [];
 
   // 1. Digest
@@ -62,9 +59,10 @@ export function renderWeekly(
   // 5. Nudge (max 1 line)
   sections.push({
     type: "nudge",
-    content: state.coverageCount < state.baselineCount
-      ? `Connect more data sources to increase coverage.`
-      : "",
+    content:
+      state.coverageCount < state.baselineCount
+        ? `Connect more data sources to increase coverage.`
+        : "",
   });
 
   return sections;

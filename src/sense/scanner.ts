@@ -30,10 +30,7 @@ export interface ScanCandidate {
 const TREND_MIN_PERIODS = 4;
 const SILENCE_MULTIPLIER = 3; // alert if gap > median * multiplier
 
-export function runScan(
-  events: TimelineEvent[],
-  baselines: Baseline[],
-): ScanCandidate[] {
+export function runScan(events: TimelineEvent[], baselines: Baseline[]): ScanCandidate[] {
   const candidates: ScanCandidate[] = [];
 
   candidates.push(...scanDeviation(events, baselines));
@@ -47,10 +44,7 @@ export function runScan(
   return candidates;
 }
 
-function scanDeviation(
-  events: TimelineEvent[],
-  baselines: Baseline[],
-): ScanCandidate[] {
+function scanDeviation(events: TimelineEvent[], baselines: Baseline[]): ScanCandidate[] {
   const candidates: ScanCandidate[] = [];
   const established = baselines.filter((b) => b.is_established);
 
@@ -80,10 +74,7 @@ function scanDeviation(
   return candidates;
 }
 
-function scanTrend(
-  events: TimelineEvent[],
-  baselines: Baseline[],
-): ScanCandidate[] {
+function scanTrend(events: TimelineEvent[], baselines: Baseline[]): ScanCandidate[] {
   const candidates: ScanCandidate[] = [];
   const established = baselines.filter((b) => b.is_established);
   if (established.length === 0) return candidates;
@@ -91,10 +82,7 @@ function scanTrend(
   // Sort events by time
   const txnEvents = events
     .filter((e) => e.event_type === "transaction" && e.metrics.revenue !== undefined)
-    .sort(
-      (a, b) =>
-        new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
-    );
+    .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
 
   if (txnEvents.length < TREND_MIN_PERIODS) return candidates;
 
@@ -137,10 +125,7 @@ function scanTrend(
   return candidates;
 }
 
-function scanSilence(
-  events: TimelineEvent[],
-  baselines: Baseline[],
-): ScanCandidate[] {
+function scanSilence(events: TimelineEvent[], baselines: Baseline[]): ScanCandidate[] {
   const candidates: ScanCandidate[] = [];
 
   const intervalBaseline = baselines.find(
@@ -150,17 +135,13 @@ function scanSilence(
 
   const scheduleEvents = events
     .filter((e) => e.event_type === "schedule")
-    .sort(
-      (a, b) =>
-        new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
-    );
+    .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
 
   if (scheduleEvents.length === 0) return candidates;
 
   const lastEvent = scheduleEvents[0];
   const daysSinceLast =
-    (Date.now() - new Date(lastEvent.occurred_at).getTime()) /
-    (24 * 60 * 60 * 1000);
+    (Date.now() - new Date(lastEvent.occurred_at).getTime()) / (24 * 60 * 60 * 1000);
 
   if (daysSinceLast > intervalBaseline.median * SILENCE_MULTIPLIER) {
     candidates.push({
@@ -226,9 +207,15 @@ function scanMetricChange(events: TimelineEvent[]): ScanCandidate[] {
     let isWorsening = true;
     for (let i = 1; i < recent.length; i++) {
       if (ext.direction === "increasing_is_bad") {
-        if (recent[i].value <= recent[i - 1].value) { isWorsening = false; break; }
+        if (recent[i].value <= recent[i - 1].value) {
+          isWorsening = false;
+          break;
+        }
       } else {
-        if (recent[i].value >= recent[i - 1].value) { isWorsening = false; break; }
+        if (recent[i].value >= recent[i - 1].value) {
+          isWorsening = false;
+          break;
+        }
       }
     }
 

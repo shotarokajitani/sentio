@@ -331,8 +331,15 @@ Q1〜Q8 の結果を下表に当てはめ、該当する分岐を1つ選ぶ。
 ## 追加で確認したい前提（分岐に関わらず）
 
 Q5 の結果が「`pg_cron` / `pg_net` 無効」だった場合、これは 00018 の適用を**確実に止める**。
-マイグレーション側に `CREATE EXTENSION` が無いため、拡張の有効化は Dashboard 側の
-先行作業になる。分岐が決まる前でも、この1点は独立して確認・準備できる。
+
+> **2026-08-15 更新: 対処済み。** CIに `supabase start` を入れたところ、この事象が
+> まさに再現した（run 31821819193 / `ERROR: schema "cron" does not exist (SQLSTATE 3F000)`
+> で 00018 が停止し、00001〜00017 適用済みの部分適用状態になった）。
+> 対処として `00018_pg_cron_sync_connections.sql` の冒頭に
+> `CREATE EXTENSION IF NOT EXISTS pg_cron;` / `pg_net;` を追加した。
+> **したがって拡張有効化はDashboard側の先行作業ではなくなった。**
+> 既に有効な本番では `IF NOT EXISTS` により no-op になる。
+> Q5 は「00018 が適用済みか」の判別材料としては引き続き有効。
 
 `docs/runbooks/2026-08-07_token-refresh-verification.md` はこの拡張有効化を
 「トラブルシューティング」節でしか触れていない。本診断の結果次第で

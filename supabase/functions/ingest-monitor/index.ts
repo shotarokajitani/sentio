@@ -19,10 +19,10 @@ serve(async (req: Request) => {
     const { company_id, checks } = await req.json();
 
     if (!company_id || !Array.isArray(checks)) {
-      return new Response(
-        JSON.stringify({ error: "company_id and checks[] required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "company_id and checks[] required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const now = new Date().toISOString();
@@ -52,25 +52,22 @@ serve(async (req: Request) => {
     }
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase
-      .from("events")
-      .upsert(rows, { onConflict: "event_id" });
+    const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
     if (error) {
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(
-      JSON.stringify({ count: rows.length }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ count: rows.length }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

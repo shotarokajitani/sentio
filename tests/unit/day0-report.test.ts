@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  generateDay0Report,
-  DAY0_BLOCK_KEYS,
-  type Day0Input,
-} from "../../src/day0/day0-report";
+import { generateDay0Report, DAY0_BLOCK_KEYS, type Day0Input } from "../../src/day0/day0-report";
 import { Day0ReportSchema } from "../../shared/contracts/day0-report";
 
 function makeInput(overrides: Partial<Day0Input> = {}): Day0Input {
@@ -53,9 +49,7 @@ describe("Day0 report (A1-A5)", () => {
   });
 
   it("A4: concern input produces initial_hypothesis block referencing it", () => {
-    const report = generateDay0Report(
-      makeInput({ concern: "売上が3ヶ月連続で減少している" }),
-    );
+    const report = generateDay0Report(makeInput({ concern: "売上が3ヶ月連続で減少している" }));
     const hypothesis = report.blocks.find((b) => b.key === "initial_hypothesis");
     expect(hypothesis).toBeDefined();
     expect(hypothesis!.hasData).toBe(true);

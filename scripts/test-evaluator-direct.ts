@@ -58,11 +58,7 @@ function extractJson(text: string): Record<string, unknown> | null {
   return JSON.parse(text.substring(jsonStart, jsonEnd));
 }
 
-async function evaluateDirect(
-  client: Anthropic,
-  label: string,
-  content: string,
-) {
+async function evaluateDirect(client: Anthropic, label: string, content: string) {
   console.log(`\n${"=".repeat(60)}`);
   console.log(`テスト: ${label}`);
   console.log("=".repeat(60));
@@ -71,9 +67,7 @@ async function evaluateDirect(
     model: "claude-sonnet-5",
     max_tokens: 16000,
     system: EVALUATOR_SYSTEM,
-    messages: [
-      { role: "user", content: buildEvaluatorPrompt("初期懸念への初期仮説", content) },
-    ],
+    messages: [{ role: "user", content: buildEvaluatorPrompt("初期懸念への初期仮説", content) }],
   });
 
   const textBlock = response.content.find((c) => c.type === "text");
@@ -92,8 +86,7 @@ async function evaluateDirect(
     if (c) scores[`criteria_${i}`] = { pass: !!c.pass, reason: c.reason || "" };
   }
 
-  const allPass = Object.values(scores).length >= 5 &&
-    Object.values(scores).every((s) => s.pass);
+  const allPass = Object.values(scores).length >= 5 && Object.values(scores).every((s) => s.pass);
 
   console.log(`\noverall_pass: ${allPass}`);
   console.log(`scores_count: ${Object.keys(scores).length}/5`);

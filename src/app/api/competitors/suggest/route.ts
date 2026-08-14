@@ -20,10 +20,7 @@ export async function POST(req: NextRequest) {
   };
 
   if (!company_id || !company_name) {
-    return NextResponse.json(
-      { error: "company_id, company_name required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "company_id, company_name required" }, { status: 400 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -37,10 +34,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // 1. Use Claude to suggest competitors
   const client = new Anthropic({ apiKey });
@@ -66,8 +60,7 @@ URL: ${url || "不明"}
     ],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "[]";
+  const text = response.content[0].type === "text" ? response.content[0].text : "[]";
 
   let competitors: CompetitorSuggestion[] = [];
   const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -84,9 +77,7 @@ URL: ${url || "不明"}
     company_id,
     type: "competitor",
     canonical_name: c.name,
-    merge_keys: c.corporate_number
-      ? { corporate_number: c.corporate_number }
-      : {},
+    merge_keys: c.corporate_number ? { corporate_number: c.corporate_number } : {},
     attrs: { reason: c.reason, source: "suggest-competitors" },
     care_only: false,
     first_seen: new Date().toISOString(),
@@ -105,11 +96,7 @@ URL: ${url || "不明"}
   if (gbizToken) {
     for (const competitor of competitors) {
       try {
-        const events = await fetchGbizInfo(
-          gbizToken,
-          competitor.name,
-          competitor.corporate_number,
-        );
+        const events = await fetchGbizInfo(gbizToken, competitor.name, competitor.corporate_number);
         gbizEvents.push(...events);
       } catch (e) {
         console.error(`gBizINFO fetch failed for ${competitor.name}:`, e);
@@ -122,9 +109,7 @@ URL: ${url || "不明"}
       const eventRows = gbizEvents.map((evt) => {
         const fingerprint = `s0:gbizinfo`;
         const rowContent = JSON.stringify(evt.metrics);
-        const eventId = createHash("sha256")
-          .update(`${fingerprint}:${rowContent}`)
-          .digest("hex");
+        const eventId = createHash("sha256").update(`${fingerprint}:${rowContent}`).digest("hex");
 
         return {
           event_id: eventId,
@@ -153,7 +138,8 @@ URL: ${url || "不明"}
   const competitorResults = [];
   for (const c of competitors) {
     const hasGbiz = gbizEvents.some(
-      (evt) => (evt.metrics as Record<string, unknown>).company_name === c.name ||
+      (evt) =>
+        (evt.metrics as Record<string, unknown>).company_name === c.name ||
         (evt.metrics as Record<string, unknown>).name === c.name,
     );
     competitorResults.push({
@@ -166,9 +152,10 @@ URL: ${url || "不明"}
   return NextResponse.json({
     competitors: competitorResults,
     gbiz_events_count: gbizEvents.length,
-    unmatched_note: competitorResults.filter((c) => !c.gbiz_matched).length > 0
-      ? "一部の競合候補はgBizINFOで法人が特定できませんでした"
-      : null,
+    unmatched_note:
+      competitorResults.filter((c) => !c.gbiz_matched).length > 0
+        ? "一部の競合候補はgBizINFOで法人が特定できませんでした"
+        : null,
   });
 }
 
@@ -184,15 +171,12 @@ async function fetchGbizInfo(
     ? `corporate_number=${corporateNumber}`
     : `name=${encodeURIComponent(companyName)}`;
 
-  const res = await fetch(
-    `${GBIZINFO_API}/hojin?${searchParam}`,
-    {
-      headers: {
-        "X-hojinInfo-api-token": token,
-        Accept: "application/json",
-      },
+  const res = await fetch(`${GBIZINFO_API}/hojin?${searchParam}`, {
+    headers: {
+      "X-hojinInfo-api-token": token,
+      Accept: "application/json",
     },
-  );
+  });
 
   if (!res.ok) return events;
 
@@ -204,9 +188,8 @@ async function fetchGbizInfo(
     if (corporateNumber) return true; // corporate_number is exact
     // Normalize full-width to half-width for comparison
     const normalize = (s: string) =>
-      s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) =>
-        String.fromCharCode(c.charCodeAt(0) - 0xfee0),
-      )
+      s
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
         .replace(/[　\s]+/g, "")
         .replace(/株式会社|有限会社|合同会社/g, "")
         .toLowerCase();

@@ -73,11 +73,12 @@ export default function ConnectPage() {
         setLoading(false);
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const getConnection = (provider: string) =>
-    connections.find((c) => c.provider === provider);
+  const getConnection = (provider: string) => connections.find((c) => c.provider === provider);
 
   const formatDate = (iso: string | null) => {
     if (!iso) return "—";
@@ -89,8 +90,7 @@ export default function ConnectPage() {
     });
   };
 
-  const freeeConfigured =
-    typeof window !== "undefined" ? true : true; // freee button always shown; server returns error if unconfigured
+  const freeeConfigured = typeof window !== "undefined" ? true : true; // freee button always shown; server returns error if unconfigured
 
   // CSV file handler
   const handleFileDrop = async (file: File) => {
@@ -233,10 +233,7 @@ export default function ConnectPage() {
                 <span style={badgeStyle("active")}>接続済み</span>
               )
             ) : (
-              <a
-                href={`/api/auth/google?company_id=${COMPANY_ID}`}
-                style={buttonStyle("#4285F4")}
-              >
+              <a href={`/api/auth/google?company_id=${COMPANY_ID}`} style={buttonStyle("#4285F4")}>
                 接続
               </a>
             )}
@@ -273,10 +270,7 @@ export default function ConnectPage() {
                 <span style={badgeStyle("active")}>接続済み</span>
               )
             ) : freeeConfigured ? (
-              <a
-                href={`/api/auth/freee?company_id=${COMPANY_ID}`}
-                style={buttonStyle("#2CA01C")}
-              >
+              <a href={`/api/auth/freee?company_id=${COMPANY_ID}`} style={buttonStyle("#2CA01C")}>
                 接続
               </a>
             ) : (
@@ -382,7 +376,10 @@ export default function ConnectPage() {
                   この割当で取込
                 </button>
                 <button
-                  onClick={() => { setCsvStep("idle"); setMapping(null); }}
+                  onClick={() => {
+                    setCsvStep("idle");
+                    setMapping(null);
+                  }}
                   style={{ ...buttonStyle("#999"), background: "#eee", color: "#333" }}
                 >
                   やり直す
@@ -391,9 +388,7 @@ export default function ConnectPage() {
             </div>
           )}
 
-          {csvStep === "ingesting" && (
-            <p style={{ marginTop: 12, color: "#666" }}>取込中...</p>
-          )}
+          {csvStep === "ingesting" && <p style={{ marginTop: 12, color: "#666" }}>取込中...</p>}
 
           {csvStep === "done" && csvResult && (
             <div style={{ marginTop: 12 }}>
@@ -434,7 +429,10 @@ export default function ConnectPage() {
             <div style={{ marginTop: 12 }}>
               <p style={{ color: "red" }}>{csvError}</p>
               <button
-                onClick={() => { setCsvStep("idle"); setCsvError(""); }}
+                onClick={() => {
+                  setCsvStep("idle");
+                  setCsvError("");
+                }}
                 style={buttonStyle("#999")}
               >
                 やり直す
@@ -470,8 +468,14 @@ function parseCSVLine(line: string): string[] {
 function computeTypeStats(
   lines: string[],
   headers: string[],
-): Record<string, { type: string; digits: number | null; sample_count: number; samples?: string[] }> {
-  const stats: Record<string, { type: string; digits: number | null; sample_count: number; samples?: string[] }> = {};
+): Record<
+  string,
+  { type: string; digits: number | null; sample_count: number; samples?: string[] }
+> {
+  const stats: Record<
+    string,
+    { type: string; digits: number | null; sample_count: number; samples?: string[] }
+  > = {};
   const dataLines = lines.slice(1).filter((l) => l.trim());
   const sampleSize = Math.min(dataLines.length, 20);
 

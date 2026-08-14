@@ -46,17 +46,17 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      return new Response(
-        JSON.stringify({ status: "deferred", reason: "quiet_hours" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "deferred", reason: "quiet_hours" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // E3: Render factual alert — no interpretation
     const metrics = event.metrics || {};
-    const subject = metrics.status === "down"
-      ? `[Alert] サイトダウン: ${metrics.url || "unknown"}`
-      : `[Alert] ${category}: ${metrics.expected_date || event.occurred_at}`;
+    const subject =
+      metrics.status === "down"
+        ? `[Alert] サイトダウン: ${metrics.url || "unknown"}`
+        : `[Alert] ${category}: ${metrics.expected_date || event.occurred_at}`;
 
     const body = Object.entries(metrics)
       .map(([k, v]) => `${k}: ${v}`)
@@ -70,7 +70,11 @@ Deno.serve(async (req: Request) => {
     // Send via Resend — fail-closed: missing config is an error, not a silent skip
     if (!resendKey) {
       return new Response(
-        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", alert: alertContent }),
+        JSON.stringify({
+          status: "error",
+          reason: "RESEND_API_KEY not configured",
+          alert: alertContent,
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -92,7 +96,10 @@ Deno.serve(async (req: Request) => {
           created_at: now.toISOString(),
         });
         return new Response(
-          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。" }),
+          JSON.stringify({
+            status: "error",
+            reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。",
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -150,14 +157,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    return new Response(
-      JSON.stringify({ status: "ok", email_id: emailId, alert: alertContent }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", email_id: emailId, alert: alertContent }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

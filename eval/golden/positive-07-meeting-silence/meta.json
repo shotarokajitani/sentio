@@ -1,1 +1,7 @@
-{"id": 7, "lang": "ja", "type": "positive", "scanType": "silence", "description": "定例会議の消失（途絶）"}
+{
+  "id": 7,
+  "lang": "ja",
+  "type": "positive",
+  "scanType": "silence",
+  "description": "定例会議の消失（途絶）"
+}

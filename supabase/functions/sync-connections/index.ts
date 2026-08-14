@@ -54,10 +54,9 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!connections || connections.length === 0) {
-    return new Response(
-      JSON.stringify({ results: [], message: "no active connections" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ results: [], message: "no active connections" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   // 2. 各接続を処理
@@ -67,11 +66,7 @@ Deno.serve(async (req: Request) => {
 
       // 2a. トークン期限チェック & リフレッシュ
       if (isTokenExpired(conn.expires_at)) {
-        const refreshResult = await refreshToken(
-          conn,
-          supabase,
-          (k) => Deno.env.get(k),
-        );
+        const refreshResult = await refreshToken(conn, supabase, (k) => Deno.env.get(k));
 
         if (!refreshResult.ok) {
           // refreshToken内でreauth_required済み
@@ -90,15 +85,12 @@ Deno.serve(async (req: Request) => {
         accessToken = refreshResult.accessToken;
       } else {
         // トークンまだ有効 → Vaultから読み出し
-        const { data: vaultData, error: vaultError } = await supabase.rpc(
-          "read_vault_secret",
-          { p_id: conn.vault_secret_id },
-        );
+        const { data: vaultData, error: vaultError } = await supabase.rpc("read_vault_secret", {
+          p_id: conn.vault_secret_id,
+        });
 
         if (vaultError || !vaultData) {
-          console.error(
-            `vault read failed: provider=${conn.provider} company=${conn.company_id}`,
-          );
+          console.error(`vault read failed: provider=${conn.provider} company=${conn.company_id}`);
           results.push({
             provider: conn.provider,
             company_id: conn.company_id,
@@ -190,10 +182,9 @@ async function syncCalendarEvents(
     maxResults: "250",
   });
 
-  const res = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!res.ok) {
     throw new Error(`Calendar API returned ${res.status}`);
@@ -214,9 +205,7 @@ async function syncCalendarEvents(
         const title = item.summary || "(無題)";
         const start = item.start?.dateTime || item.start?.date || now.toISOString();
         const end = item.end?.dateTime || item.end?.date || start;
-        const attendees = (item.attendees || []).map(
-          (a: { email: string }) => a.email,
-        );
+        const attendees = (item.attendees || []).map((a: { email: string }) => a.email);
 
         const fingerprint = `calendar:${companyId}`;
         const rowContent = `${title}:${start}:${end}`;
@@ -239,9 +228,7 @@ async function syncCalendarEvents(
     ),
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) {
     throw new Error(`Calendar events upsert failed: ${error.message}`);
@@ -329,9 +316,7 @@ async function syncFreeeTransactions(
     ),
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) {
     throw new Error(`freee events upsert failed: ${error.message}`);

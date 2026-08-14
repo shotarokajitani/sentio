@@ -60,9 +60,13 @@ describe("Engine eval suite (D1-D2)", () => {
     for (const signal of positiveSignals) {
       // Check if any candidate matches this signal's scan type and references its events
       const hasCandidate = candidates.some((c) => {
-        if (signal.scanType === "deviation" || signal.scanType === "trend" ||
-            signal.scanType === "silence" || signal.scanType === "deadline" ||
-            signal.scanType === "external") {
+        if (
+          signal.scanType === "deviation" ||
+          signal.scanType === "trend" ||
+          signal.scanType === "silence" ||
+          signal.scanType === "deadline" ||
+          signal.scanType === "external"
+        ) {
           return c.scanType === signal.scanType;
         }
         return false;
@@ -77,14 +81,10 @@ describe("Engine eval suite (D1-D2)", () => {
     const candidates = runScan(company.events, baselines);
     // All candidates should map to a planted positive signal's scan type
     const plantedScanTypes = new Set(
-      company.plantedSignals
-        .filter((s) => s.type === "positive")
-        .map((s) => s.scanType),
+      company.plantedSignals.filter((s) => s.type === "positive").map((s) => s.scanType),
     );
 
-    const falsePositives = candidates.filter(
-      (c) => !plantedScanTypes.has(c.scanType),
-    );
+    const falsePositives = candidates.filter((c) => !plantedScanTypes.has(c.scanType));
     expect(falsePositives.length).toBeLessThanOrEqual(2);
   });
 

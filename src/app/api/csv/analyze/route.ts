@@ -26,10 +26,7 @@ export async function POST(req: NextRequest) {
   };
 
   if (!headers || headers.length === 0) {
-    return NextResponse.json(
-      { error: "headers required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "headers required" }, { status: 400 });
   }
 
   // Build column description for Claude (no string cell values - PII protection)
@@ -81,16 +78,12 @@ ${columnDescriptions}
     ],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
 
   // Extract JSON from response
   const jsonMatch = text.match(/\{[^}]+\}/);
   if (!jsonMatch) {
-    return NextResponse.json(
-      { error: "マッピング推定に失敗しました", raw: text },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "マッピング推定に失敗しました", raw: text }, { status: 500 });
   }
 
   try {
@@ -103,9 +96,6 @@ ${columnDescriptions}
     }
     return NextResponse.json({ mapping });
   } catch {
-    return NextResponse.json(
-      { error: "JSON解析に失敗しました", raw: text },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "JSON解析に失敗しました", raw: text }, { status: 500 });
   }
 }

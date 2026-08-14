@@ -6,13 +6,8 @@ import type { EventEnvelopeType } from "@shared/contracts/envelope";
  * Same input always produces the same ID (B2 idempotency).
  * Changed rows produce different IDs (B3 diff detection).
  */
-export function generateEventId(
-  fingerprint: string,
-  rowContent: string,
-): string {
-  return createHash("sha256")
-    .update(`${fingerprint}:${rowContent}`)
-    .digest("hex");
+export function generateEventId(fingerprint: string, rowContent: string): string {
+  return createHash("sha256").update(`${fingerprint}:${rowContent}`).digest("hex");
 }
 
 /**

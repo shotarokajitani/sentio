@@ -31,8 +31,7 @@ try {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "フックスクリプト実行エラー（fail-closed）: " + e.message,
+      permissionDecisionReason: "フックスクリプト実行エラー（fail-closed）: " + e.message,
     },
   };
   process.stdout.write(JSON.stringify(result));

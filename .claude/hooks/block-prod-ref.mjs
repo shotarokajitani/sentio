@@ -7,8 +7,7 @@ try {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason:
-          "本番Project Refへの直接操作は禁止。本番反映はCI/CDのみ",
+        permissionDecisionReason: "本番Project Refへの直接操作は禁止。本番反映はCI/CDのみ",
       },
     };
     process.stdout.write(JSON.stringify(result));
@@ -21,8 +20,7 @@ try {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "フックスクリプト実行エラー（fail-closed）: " + e.message,
+      permissionDecisionReason: "フックスクリプト実行エラー（fail-closed）: " + e.message,
     },
   };
   process.stdout.write(JSON.stringify(result));

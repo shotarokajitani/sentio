@@ -13,11 +13,11 @@ describe("Evaluator (D3)", () => {
   it("D3: evaluator input contains exactly 5 criteria names", () => {
     expect(EVALUATOR_CRITERIA_NAMES).toHaveLength(5);
     expect(EVALUATOR_CRITERIA_NAMES).toEqual([
-      "image",      // 像
-      "evidence",   // 証拠
-      "dismissal",  // 棄却
-      "tone",       // トーン
-      "action",     // 行動
+      "image", // 像
+      "evidence", // 証拠
+      "dismissal", // 棄却
+      "tone", // トーン
+      "action", // 行動
     ]);
   });
 
@@ -112,7 +112,8 @@ describe("Day0 Evaluator (D+3)", () => {
 
   it("D+3: vague input must fail specificity criterion", () => {
     // This is the exact test input from the contract D+3
-    const _vagueInput = "御社の事業は順調に推移していると思われます。今後もこの調子で成長が続く可能性があります。";
+    const _vagueInput =
+      "御社の事業は順調に推移していると思われます。今後もこの調子で成長が続く可能性があります。";
     // The input has no numbers, no specific names, no data sources
     // When evaluated by the LLM, criteria_5 (specificity) must fail
     // Here we test the AND logic: even if LLM returns overall_pass:true,

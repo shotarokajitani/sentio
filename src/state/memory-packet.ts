@@ -1,11 +1,6 @@
 import type { MemoryPacket } from "../../shared/contracts/memory-packet";
 
-export type SectionType =
-  | "summary"
-  | "baselines"
-  | "recent_events"
-  | "findings"
-  | "narratives";
+export type SectionType = "summary" | "baselines" | "recent_events" | "findings" | "narratives";
 
 export interface SectionInput {
   type: SectionType;

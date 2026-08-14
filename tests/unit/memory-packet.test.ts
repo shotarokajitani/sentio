@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  assemblePacket,
-  estimateTokens,
-  type SectionInput,
-} from "../../src/state/memory-packet";
+import { assemblePacket, estimateTokens, type SectionInput } from "../../src/state/memory-packet";
 import { MemoryPacketSchema } from "../../shared/contracts/memory-packet";
 
 describe("Memory packet assembler (C3)", () => {
@@ -60,9 +56,7 @@ describe("Memory packet assembler (C3)", () => {
     ];
     const packet = assemblePacket(sections, { companyId, tokenBudget: 4000 });
     for (let i = 1; i < packet.sections.length; i++) {
-      expect(packet.sections[i].priority).toBeGreaterThanOrEqual(
-        packet.sections[i - 1].priority,
-      );
+      expect(packet.sections[i].priority).toBeGreaterThanOrEqual(packet.sections[i - 1].priority);
     }
   });
 

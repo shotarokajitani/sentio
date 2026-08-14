@@ -6,10 +6,7 @@ export const MODEL_EVALUATOR = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet
  * Anthropic API応答ヘッダに model-deprecated が含まれる場合に警告ログを出力する。
  * retired予告を早期に検知するためのガードレール。
  */
-export function warnIfModelDeprecated(
-  headers: Headers,
-  modelUsed: string,
-): void {
+export function warnIfModelDeprecated(headers: Headers, modelUsed: string): void {
   const deprecated = headers.get("x-model-deprecated") ?? headers.get("model-deprecated");
   if (deprecated) {
     console.warn(

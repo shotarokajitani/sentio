@@ -111,21 +111,26 @@ export function renderDay0Html(
   const dataBlocks = blocks.filter((b) => b.hasData);
   const noDataBlocks = blocks.filter((b) => !b.hasData);
 
-  const blockRows = dataBlocks.map((b) => {
-    return `<tr><td style="padding:12px 24px 0 24px;">
+  const blockRows = dataBlocks
+    .map((b) => {
+      return `<tr><td style="padding:12px 24px 0 24px;">
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${BLOCK_BG};border:1px solid ${BORDER};border-radius:4px;">
 <tr><td style="padding:10px 16px;background-color:${ACCENT};font-family:${FONT};font-size:15px;font-weight:bold;color:#ffffff;">${escapeHtml(b.title)}</td></tr>
 ${formatBlockContent(b.content, b.hasData)}
 </table>
 </td></tr>`;
-  }).join("\n");
+    })
+    .join("\n");
 
   // Consolidate no-data blocks into a single "coming soon" section
   let comingSoonRow = "";
   if (noDataBlocks.length > 0) {
     const items = noDataBlocks
       .map((b) => NO_DATA_LABELS[b.key] || b.title)
-      .map((label) => `<tr><td style="padding:3px 0 3px 16px;font-family:${FONT};font-size:14px;color:${TEXT};">&#8226; ${escapeHtml(label)}</td></tr>`)
+      .map(
+        (label) =>
+          `<tr><td style="padding:3px 0 3px 16px;font-family:${FONT};font-size:14px;color:${TEXT};">&#8226; ${escapeHtml(label)}</td></tr>`,
+      )
       .join("\n");
     comingSoonRow = `<tr><td style="padding:12px 24px 0 24px;">
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${BLOCK_BG};border:1px solid ${BORDER};border-radius:4px;">
@@ -221,9 +226,12 @@ export function renderAlertText(subject: string, body: string): string {
 // ──────────────────────────────────────────────────────
 
 export function renderPulseHtml(lines: string[]): string {
-  const rows = lines.map((line) =>
-    `<tr><td style="padding:6px 16px;font-family:${FONT};font-size:14px;line-height:1.6;color:${TEXT};">${escapeHtml(line)}</td></tr>`
-  ).join("\n");
+  const rows = lines
+    .map(
+      (line) =>
+        `<tr><td style="padding:6px 16px;font-family:${FONT};font-size:14px;line-height:1.6;color:${TEXT};">${escapeHtml(line)}</td></tr>`,
+    )
+    .join("\n");
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -287,7 +295,8 @@ export function renderWeeklyHtml(sections: WeeklySection[]): string {
 <tr><td style="padding:12px 16px;font-family:${FONT};font-size:14px;line-height:1.7;color:${TEXT};">${escapeHtml(s.content).replace(/\n/g, "<br>")}</td></tr>
 </table>
 </td></tr>`;
-    }).join("\n");
+    })
+    .join("\n");
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">

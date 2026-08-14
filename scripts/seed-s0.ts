@@ -13,8 +13,7 @@
  * 本番では各APIから取得する。
  */
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || "http://127.0.0.1:54321";
+const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
 const SUPABASE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 

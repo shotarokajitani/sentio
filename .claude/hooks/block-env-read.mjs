@@ -10,8 +10,7 @@ try {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason:
-            ".envの読み取りは禁止（.env.exampleのみ許可）",
+          permissionDecisionReason: ".envの読み取りは禁止（.env.exampleのみ許可）",
         },
       };
       process.stdout.write(JSON.stringify(result));
@@ -25,8 +24,7 @@ try {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "フックスクリプト実行エラー（fail-closed）: " + e.message,
+      permissionDecisionReason: "フックスクリプト実行エラー（fail-closed）: " + e.message,
     },
   };
   process.stdout.write(JSON.stringify(result));

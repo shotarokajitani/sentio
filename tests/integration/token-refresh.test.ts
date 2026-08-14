@@ -110,28 +110,22 @@ describe("token-refresh", () => {
 
         // Assert: fetchが正しいエンドポイントに呼ばれた
         expect(mockFetch).toHaveBeenCalledOnce();
-        expect(mockFetch.mock.calls[0][0]).toBe(
-          "https://oauth2.googleapis.com/token",
-        );
+        expect(mockFetch.mock.calls[0][0]).toBe("https://oauth2.googleapis.com/token");
 
         // Assert: update_vault_secret が新トークンを含む
-        const vaultUpdateCall = calls.find(
-          (c) => c.method === "rpc:update_vault_secret",
-        );
+        const vaultUpdateCall = calls.find((c) => c.method === "rpc:update_vault_secret");
         expect(vaultUpdateCall).toBeDefined();
         const storedPayload = JSON.parse(vaultUpdateCall!.args.p_secret);
         expect(storedPayload.access_token).toBe("new-access-token");
         expect(storedPayload.refresh_token).toBe("new-refresh-token");
 
         // Assert: connections.update が status="active" + expires_at（未来）
-        const connUpdateCall = calls.find(
-          (c) => c.method === "from:connections.update",
-        );
+        const connUpdateCall = calls.find((c) => c.method === "from:connections.update");
         expect(connUpdateCall).toBeDefined();
         expect(connUpdateCall!.args.data.status).toBe("active");
-        expect(
-          new Date(connUpdateCall!.args.data.expires_at).getTime(),
-        ).toBeGreaterThan(Date.now());
+        expect(new Date(connUpdateCall!.args.data.expires_at).getTime()).toBeGreaterThan(
+          Date.now(),
+        );
       });
     }
   });
@@ -161,9 +155,7 @@ describe("token-refresh", () => {
         expect(result.reason).toContain("401");
 
         // Assert: connections.update が status="reauth_required" で呼ばれた
-        const connUpdateCall = calls.find(
-          (c) => c.method === "from:connections.update",
-        );
+        const connUpdateCall = calls.find((c) => c.method === "from:connections.update");
         expect(connUpdateCall).toBeDefined();
         expect(connUpdateCall!.args.data.status).toBe("reauth_required");
       });
@@ -197,9 +189,7 @@ describe("token-refresh", () => {
       expect(mockFetch).not.toHaveBeenCalled();
 
       // connections が reauth_required に更新された
-      const connUpdateCall = calls.find(
-        (c) => c.method === "from:connections.update",
-      );
+      const connUpdateCall = calls.find((c) => c.method === "from:connections.update");
       expect(connUpdateCall).toBeDefined();
       expect(connUpdateCall!.args.data.status).toBe("reauth_required");
     });

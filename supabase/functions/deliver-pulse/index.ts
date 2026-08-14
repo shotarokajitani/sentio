@@ -44,15 +44,11 @@ Deno.serve(async (req: Request) => {
       eventCount > 0
         ? `主な種別: ${[...new Set((events || []).map((e: { event_type: string }) => e.event_type))].join(", ")}`
         : "特記事項なし",
-      watchingCount > 0
-        ? `状態: ${watchingCount}件を経過観察中`
-        : "状態: 平常",
+      watchingCount > 0 ? `状態: ${watchingCount}件を経過観察中` : "状態: 平常",
     ];
 
     // Line 4: anomaly day only
-    const hasAnomaly = (findings || []).some(
-      (f: { status: string }) => f.status === "open",
-    );
+    const hasAnomaly = (findings || []).some((f: { status: string }) => f.status === "open");
     if (hasAnomaly) {
       lines.push(
         `注意: ${(findings || []).filter((f: { status: string }) => f.status === "open").length}件のFindingが未対応`,
@@ -64,7 +60,12 @@ Deno.serve(async (req: Request) => {
     // Send via Resend — fail-closed: missing config is an error, not a silent skip
     if (!resendKey) {
       return new Response(
-        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", company_id, pulse: lines }),
+        JSON.stringify({
+          status: "error",
+          reason: "RESEND_API_KEY not configured",
+          company_id,
+          pulse: lines,
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -86,7 +87,10 @@ Deno.serve(async (req: Request) => {
           created_at: new Date().toISOString(),
         });
         return new Response(
-          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。" }),
+          JSON.stringify({
+            status: "error",
+            reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。",
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -149,9 +153,9 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

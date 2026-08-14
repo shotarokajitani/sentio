@@ -36,10 +36,9 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ status: "ok", draft_id: draftId, action: "created" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "ok", draft_id: draftId, action: "created" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (action === "confirm") {
@@ -53,17 +52,17 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (fetchError || !existing) {
-        return new Response(
-          JSON.stringify({ error: "Draft not found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: "Draft not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       if (existing.status === "confirmed") {
-        return new Response(
-          JSON.stringify({ error: "Already confirmed" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: "Already confirmed" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const { error: updateError } = await supabase
@@ -80,20 +79,19 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) throw updateError;
 
-      return new Response(
-        JSON.stringify({ status: "ok", draft_id, action: "confirmed" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "ok", draft_id, action: "confirmed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(
-      JSON.stringify({ error: "action must be 'create' or 'confirm'" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: "action must be 'create' or 'confirm'" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

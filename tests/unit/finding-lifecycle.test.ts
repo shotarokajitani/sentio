@@ -75,9 +75,7 @@ describe("Finding lifecycle (D6)", () => {
     const existing = makeFinding({ evidence_event_ids: ["evt_001", "evt_002"] });
     const redetected = handleRedetection(existing, ["evt_002", "evt_003"]);
     // evt_002 should not be duplicated
-    const evt002Count = redetected.evidence_event_ids.filter(
-      (id) => id === "evt_002",
-    ).length;
+    const evt002Count = redetected.evidence_event_ids.filter((id) => id === "evt_002").length;
     expect(evt002Count).toBe(1);
     expect(redetected.evidence_event_ids).toHaveLength(3);
   });

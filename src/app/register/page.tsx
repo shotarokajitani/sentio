@@ -9,18 +9,14 @@ export default function RegisterPage() {
   const companyId = "00000000-0000-0000-0000-000000000001";
 
   const error =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("error")
-      : null;
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
 
   return (
     <div style={{ maxWidth: 480, margin: "80px auto", fontFamily: "sans-serif" }}>
       <h1>Sentio — 登録</h1>
 
       {error && (
-        <p style={{ color: "red", border: "1px solid red", padding: 8 }}>
-          エラー: {error}
-        </p>
+        <p style={{ color: "red", border: "1px solid red", padding: 8 }}>エラー: {error}</p>
       )}
 
       <label>

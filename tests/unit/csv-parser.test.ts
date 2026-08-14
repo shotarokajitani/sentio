@@ -18,10 +18,7 @@ describe("CSV→EventEnvelope (B1-B3)", () => {
 
   it("B1: 金額合計がCSVと一致する", () => {
     const envelopes = parseCsvToEnvelopes(sampleCsv, fileFingerprint, companyId);
-    const total = envelopes.reduce(
-      (sum, e) => sum + (e.metrics.amount as number),
-      0,
-    );
+    const total = envelopes.reduce((sum, e) => sum + (e.metrics.amount as number), 0);
     expect(total).toBe(50000); // 100000 + (-50000)
   });
 

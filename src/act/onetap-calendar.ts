@@ -8,10 +8,7 @@ export interface CalendarDraft {
   createdAt: string;
 }
 
-export function createCalendarDraft(
-  findingId: string,
-  recipientId: string,
-): CalendarDraft {
+export function createCalendarDraft(findingId: string, recipientId: string): CalendarDraft {
   return {
     id: crypto.randomUUID(),
     findingId,

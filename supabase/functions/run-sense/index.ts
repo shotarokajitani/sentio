@@ -33,10 +33,10 @@ Deno.serve(async (req: Request) => {
   try {
     const { company_id } = await req.json();
     if (!company_id) {
-      return new Response(
-        JSON.stringify({ error: "company_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "company_id is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabase = getSupabaseAdmin();
@@ -108,7 +108,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step 3: Pass non-immediate candidates to Investigator
-    let investigateResult = { findings: [] as Array<{ id: string; what: string; urgency: string }> };
+    let investigateResult = {
+      findings: [] as Array<{ id: string; what: string; urgency: string }>,
+    };
 
     if (scanResult.candidates.length > 0) {
       const investigateRes = await fetch(`${supabaseUrl}/functions/v1/investigate`, {
@@ -138,17 +140,14 @@ Deno.serve(async (req: Request) => {
         immediates_inserted: insertedImmediates.length,
         findings_from_investigator: investigateResult.findings.length,
         total_findings: insertedImmediates.length + investigateResult.findings.length,
-        finding_ids: [
-          ...insertedImmediates,
-          ...investigateResult.findings.map((f) => f.id),
-        ],
+        finding_ids: [...insertedImmediates, ...investigateResult.findings.map((f) => f.id)],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

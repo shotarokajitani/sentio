@@ -16,9 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!code || !companyId) {
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/register?error=missing_params`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=missing_params`);
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID!;
@@ -44,9 +42,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok || !tokenData.access_token) {
     console.error("Token exchange failed:", tokenData.error);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/register?error=token_exchange_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=token_exchange_failed`);
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -58,26 +54,19 @@ export async function GET(req: NextRequest) {
     expires_in: tokenData.expires_in,
   });
 
-  const { data: vaultId, error: vaultErr } = await supabase.rpc(
-    "store_vault_secret",
-    {
-      p_name: `google_calendar:${companyId}`,
-      p_secret: tokenPayload,
-      p_description: "Google Calendar OAuth token",
-    },
-  );
+  const { data: vaultId, error: vaultErr } = await supabase.rpc("store_vault_secret", {
+    p_name: `google_calendar:${companyId}`,
+    p_secret: tokenPayload,
+    p_description: "Google Calendar OAuth token",
+  });
 
   if (vaultErr) {
     console.error("Vault store failed:", vaultErr.message);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/register?error=vault_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=vault_failed`);
   }
 
   // 3. Register connection
-  const expiresAt = new Date(
-    Date.now() + (tokenData.expires_in || 3600) * 1000,
-  ).toISOString();
+  const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
 
   const { error: connErr } = await supabase.from("connections").upsert(
     {
@@ -94,21 +83,13 @@ export async function GET(req: NextRequest) {
 
   if (connErr) {
     console.error("Connection insert failed:", connErr.message);
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/register?error=connection_failed`,
-    );
+    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=connection_failed`);
   }
 
   // 4. Sync calendar events (past 12 months)
-  const syncCount = await syncCalendarEvents(
-    tokenData.access_token,
-    companyId,
-    supabase,
-  );
+  const syncCount = await syncCalendarEvents(tokenData.access_token, companyId, supabase);
 
-  return NextResponse.redirect(
-    `${req.nextUrl.origin}/register/complete?events=${syncCount}`,
-  );
+  return NextResponse.redirect(`${req.nextUrl.origin}/register/complete?events=${syncCount}`);
 }
 
 async function syncCalendarEvents(
@@ -128,10 +109,9 @@ async function syncCalendarEvents(
     maxResults: "250",
   });
 
-  const res = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!res.ok) {
     console.error("Calendar API failed:", res.status);
@@ -155,15 +135,11 @@ async function syncCalendarEvents(
       const title = item.summary || "(無題)";
       const start = item.start?.dateTime || item.start?.date || now.toISOString();
       const end = item.end?.dateTime || item.end?.date || start;
-      const attendees = (item.attendees || []).map(
-        (a: { email: string }) => a.email,
-      );
+      const attendees = (item.attendees || []).map((a: { email: string }) => a.email);
 
       const fingerprint = `calendar:${companyId}`;
       const rowContent = `${title}:${start}:${end}`;
-      const eventId = createHash("sha256")
-        .update(`${fingerprint}:${rowContent}`)
-        .digest("hex");
+      const eventId = createHash("sha256").update(`${fingerprint}:${rowContent}`).digest("hex");
 
       return {
         event_id: eventId,
@@ -181,9 +157,7 @@ async function syncCalendarEvents(
     },
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) {
     console.error("Calendar events upsert failed:", error.message);

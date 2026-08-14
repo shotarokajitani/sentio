@@ -28,13 +28,7 @@ describe("Weekly email renderer (E1-E2)", () => {
   it("E1: section order matches spec", () => {
     const sections = renderWeekly([makeFinding()], makeCompanyState());
     const order = sections.map((s) => s.type);
-    expect(order).toEqual([
-      "digest",
-      "finding",
-      "followup",
-      "stable_coverage",
-      "nudge",
-    ]);
+    expect(order).toEqual(["digest", "finding", "followup", "stable_coverage", "nudge"]);
   });
 
   it("E1: Finding is 0-2 items", () => {

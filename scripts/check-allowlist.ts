@@ -22,9 +22,7 @@ export function validateS2Columns(
   allowlist: readonly string[],
 ): { valid: boolean; violations: string[] } {
   const allowSet = new Set<string>(allowlist);
-  const violations = actualColumns.filter(
-    (col) => !allowSet.has(col) || TOKEN_PATTERNS.test(col),
-  );
+  const violations = actualColumns.filter((col) => !allowSet.has(col) || TOKEN_PATTERNS.test(col));
   return { valid: violations.length === 0, violations };
 }
 

@@ -9,8 +9,14 @@ import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
-  "external_view", "reputation", "site_health", "public_records",
-  "opportunities", "industry_position", "initial_hypothesis", "coverage_map",
+  "external_view",
+  "reputation",
+  "site_health",
+  "public_records",
+  "opportunities",
+  "industry_position",
+  "initial_hypothesis",
+  "coverage_map",
 ] as const;
 
 const BLOCK_TITLES: Record<string, string> = {
@@ -86,10 +92,7 @@ async function fetchS0Events(supabase: ReturnType<typeof getSupabaseAdmin>) {
   return data || [];
 }
 
-async function fetchConnections(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  companyId: string,
-) {
+async function fetchConnections(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
   const { data } = await supabase
     .from("connections")
     .select("provider, status")
@@ -97,10 +100,7 @@ async function fetchConnections(
   return data || [];
 }
 
-async function fetchCompetitors(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  companyId: string,
-) {
+async function fetchCompetitors(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
   const { data } = await supabase
     .from("entities")
     .select("canonical_name, attrs")
@@ -134,13 +134,23 @@ async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
     if (!cm) {
       const mc = html.match(/<meta[^>]+charset=["']?([^"'\s;>]+)/i);
       if (mc) {
-        try { html = new TextDecoder(mc[1].toLowerCase(), { fatal: false }).decode(bytes); } catch { /* keep */ }
+        try {
+          html = new TextDecoder(mc[1].toLowerCase(), { fatal: false }).decode(bytes);
+        } catch {
+          /* keep */
+        }
       }
     }
 
-    const extract = (re: RegExp) => { const m = html.match(re); return m ? m[1].trim() : null; };
+    const extract = (re: RegExp) => {
+      const m = html.match(re);
+      return m ? m[1].trim() : null;
+    };
     const metaContent = (name: string, attr = "name") => {
-      const re = new RegExp(`<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']*)["']|<meta[^>]+content=["']([^"']*)["'][^>]+${attr}=["']${name}["']`, "i");
+      const re = new RegExp(
+        `<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']*)["']|<meta[^>]+content=["']([^"']*)["'][^>]+${attr}=["']${name}["']`,
+        "i",
+      );
       const m = html.match(re);
       return m ? (m[1] || m[2]).trim() : null;
     };
@@ -169,9 +179,7 @@ function buildPlan(
   concern: string | null,
   siteAnalysis: Record<string, string | null>,
 ): BlockPlan[] {
-  const activeProviders = connections
-    .filter((c) => c.status === "active")
-    .map((c) => c.provider);
+  const activeProviders = connections.filter((c) => c.status === "active").map((c) => c.provider);
 
   const calendarEvents = companyEvents.filter((e) => e.event_type === "schedule");
   const transactionEvents = companyEvents.filter((e) => e.event_type === "transaction");
@@ -181,14 +189,17 @@ function buildPlan(
     switch (key) {
       case "external_view":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: ["analyze-url", "calendar", "transaction"],
           dataAvailable: true, // Always attempt: we have company info + events even if site fetch fails
-          instructions: "URLの実分析結果があれば活用。なくてもカレンダー・入出金データから外部視点で会社を描写。",
+          instructions:
+            "URLの実分析結果があれば活用。なくてもカレンダー・入出金データから外部視点で会社を描写。",
         };
       case "reputation":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: [],
           dataAvailable: false,
           instructions: "Google Places / レビューデータは未接続。正直に表示。",
@@ -196,40 +207,47 @@ function buildPlan(
       case "site_health": {
         const monitorEvents = companyEvents.filter((e) => e.event_type === "monitor");
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: monitorEvents.length > 0 ? ["monitor:health"] : [],
           dataAvailable: monitorEvents.length > 0,
-          instructions: monitorEvents.length > 0
-            ? "モニターデータからSSL残存日数・応答時間を報告。"
-            : "モニターデータは未取得。正直に表示。",
+          instructions:
+            monitorEvents.length > 0
+              ? "モニターデータからSSL残存日数・応答時間を報告。"
+              : "モニターデータは未取得。正直に表示。",
         };
       }
       case "public_records":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: gbizEvents.length > 0 ? ["gbizinfo"] : [],
           dataAvailable: gbizEvents.length > 0,
-          instructions: gbizEvents.length > 0
-            ? "gBizINFOで法人番号が完全一致した企業のみ言及すること。一致しなかった競合は「gBizINFOでは特定できませんでした」の1行で済ませる。一致した企業について補助金採択・認定・事業規模を報告し、自社の入出金・カレンダーデータと交差させて経営者が一枚の絵として掴める描写にする。"
-            : "gBizINFOデータなし。正直に表示。",
+          instructions:
+            gbizEvents.length > 0
+              ? "gBizINFOで法人番号が完全一致した企業のみ言及すること。一致しなかった競合は「gBizINFOでは特定できませんでした」の1行で済ませる。一致した企業について補助金採択・認定・事業規模を報告し、自社の入出金・カレンダーデータと交差させて経営者が一枚の絵として掴める描写にする。"
+              : "gBizINFOデータなし。正直に表示。",
         };
       case "opportunities":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: [],
           dataAvailable: false,
           instructions: "jGrantsデータは未取得。正直に表示。",
         };
       case "industry_position":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: [],
           dataAvailable: false,
           instructions: "e-Stat・日銀データは未取得。正直に表示。",
         };
       case "initial_hypothesis":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: concern
             ? ["registration:concern", "calendar", "transaction", "gbizinfo"]
             : ["calendar", "transaction"],
@@ -240,7 +258,8 @@ function buildPlan(
         };
       case "coverage_map":
         return {
-          key, title: BLOCK_TITLES[key],
+          key,
+          title: BLOCK_TITLES[key],
           dataSources: ["system:coverage"],
           dataAvailable: true,
           instructions: "接続状況と各データソースの件数を動的に報告。",
@@ -273,50 +292,60 @@ async function generateBlock(
 ): Promise<GeneratedBlock> {
   // coverage_map is deterministic (no LLM needed)
   if (plan.key === "coverage_map") {
-    const active = context.connections
-      .filter((c) => c.status === "active")
-      .map((c) => c.provider);
+    const active = context.connections.filter((c) => c.status === "active").map((c) => c.provider);
 
     const connected: string[] = [];
     const notConnected: string[] = [];
 
     if (active.includes("google_calendar")) {
       connected.push(`カレンダー(${context.eventCounts["google_calendar"] || 0}件)`);
-    } else { notConnected.push("カレンダー(予定の異常)"); }
+    } else {
+      notConnected.push("カレンダー(予定の異常)");
+    }
 
     const csvCount = context.eventCounts["csv:accounting"] || 0;
     if (active.includes("freee") || csvCount > 0) {
       connected.push(`入出金CSV[入出金明細からの暫定集計・${csvCount}件]`);
-    } else { notConnected.push("入出金(収支の変化)"); }
+    } else {
+      notConnected.push("入出金(収支の変化)");
+    }
 
     if (!active.includes("slack")) notConnected.push("Slack(コミュニケーション変化)");
     notConnected.push("勤怠(労務リスク)");
 
     const parts: string[] = [];
     if (connected.length > 0) parts.push(`現在の接続: ${connected.join("、")}`);
-    if (notConnected.length > 0) parts.push(`追加接続で見えるようになる領域: ${notConnected.join("、")}`);
+    if (notConnected.length > 0)
+      parts.push(`追加接続で見えるようになる領域: ${notConnected.join("、")}`);
 
     return {
-      key: plan.key, title: plan.title,
+      key: plan.key,
+      title: plan.title,
       content: parts.join("。"),
-      hasData: true, sources: ["system:coverage"],
-      tokensUsed: 0, generationMs: 0,
+      hasData: true,
+      sources: ["system:coverage"],
+      tokensUsed: 0,
+      generationMs: 0,
     };
   }
 
   // Blocks with no data: honest display (no LLM needed)
   if (!plan.dataAvailable && plan.key !== "initial_hypothesis") {
     const noDataMessages: Record<string, string> = {
-      reputation: "評判データ（Google Places等）はまだ接続されていません。接続後に競合との比較が可能になります。",
+      reputation:
+        "評判データ（Google Places等）はまだ接続されていません。接続後に競合との比較が可能になります。",
       site_health: "サイト健全性のモニタリングはまだ開始されていません。",
       opportunities: "補助金・助成金情報（jGrants）はまだ取得されていません。",
       industry_position: "業界統計（e-Stat・日銀）はまだ取得されていません。",
     };
     return {
-      key: plan.key, title: plan.title,
+      key: plan.key,
+      title: plan.title,
       content: noDataMessages[plan.key] || "このブロックのデータはまだ利用できません。",
-      hasData: false, sources: [],
-      tokensUsed: 0, generationMs: 0,
+      hasData: false,
+      sources: [],
+      tokensUsed: 0,
+      generationMs: 0,
     };
   }
 
@@ -366,13 +395,14 @@ ${context.concern ? `\n## 経営者の懸念\n${context.concern}` : "（懸念�
   }
 
   const start = Date.now();
-  const { data: response, response: rawResponse } = await client.messages.create({
-    model,
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: `あなたはSentioのDay0レポート生成器です。以下のブロックの本文を生成してください。
+  const { data: response, response: rawResponse } = await client.messages
+    .create({
+      model,
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "user",
+          content: `あなたはSentioのDay0レポート生成器です。以下のブロックの本文を生成してください。
 
 ## ブロック: ${plan.title}
 ## 会社: ${context.companyName}（${context.industry}）
@@ -393,17 +423,22 @@ ${dataContext}
 - カレンダーデータがある場合: 時間配分、会議相手の傾向を分析すること
 
 日本語で各パート2〜4文。本文のみ出力（ブロックタイトルやマークダウンヘッダーは不要。パート見出し【見えたこと】【根拠】【考えられること】は出力する）。`,
-      },
-    ],
-  }).withResponse();
+        },
+      ],
+    })
+    .withResponse();
   warnIfModelDeprecated(rawResponse.headers, model);
 
   const genTextBlock = response.content.find((c: { type: string }) => c.type === "text");
-  const text = genTextBlock && "text" in genTextBlock ? (genTextBlock as { type: "text"; text: string }).text : "";
+  const text =
+    genTextBlock && "text" in genTextBlock
+      ? (genTextBlock as { type: "text"; text: string }).text
+      : "";
   const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
 
   return {
-    key: plan.key, title: plan.title,
+    key: plan.key,
+    title: plan.title,
     content: text,
     hasData: true,
     sources: plan.dataSources,
@@ -426,13 +461,14 @@ async function reviseBlock(
   attempt: number,
 ): Promise<GeneratedBlock> {
   const start = Date.now();
-  const { data: reviseResponse, response: reviseRawResponse } = await client.messages.create({
-    model,
-    max_tokens: 16000,
-    messages: [
-      {
-        role: "user",
-        content: `あなたはSentioのDay0レポート生成器です。前回生成したブロックがEvaluatorに不合格とされました。フィードバックを反映して書き直してください。
+  const { data: reviseResponse, response: reviseRawResponse } = await client.messages
+    .create({
+      model,
+      max_tokens: 16000,
+      messages: [
+        {
+          role: "user",
+          content: `あなたはSentioのDay0レポート生成器です。前回生成したブロックがEvaluatorに不合格とされました。フィードバックを反映して書き直してください。
 
 ## ブロック: ${plan.title}（リバイズ${attempt}回目）
 ## 会社: ${context.companyName}（${context.industry}）
@@ -451,20 +487,28 @@ ${evaluatorFeedback}
 - 断定表現は不合格
 
 日本語で5〜10文。本文のみ出力。`,
-      },
-    ],
-  }).withResponse();
+        },
+      ],
+    })
+    .withResponse();
   warnIfModelDeprecated(reviseRawResponse.headers, model);
 
   const revTextBlock = reviseResponse.content.find((c: { type: string }) => c.type === "text");
-  const text = revTextBlock && "text" in revTextBlock ? (revTextBlock as { type: "text"; text: string }).text : "";
-  const tokensUsed = (reviseResponse.usage?.input_tokens || 0) + (reviseResponse.usage?.output_tokens || 0);
+  const text =
+    revTextBlock && "text" in revTextBlock
+      ? (revTextBlock as { type: "text"; text: string }).text
+      : "";
+  const tokensUsed =
+    (reviseResponse.usage?.input_tokens || 0) + (reviseResponse.usage?.output_tokens || 0);
 
   return {
-    key: plan.key, title: plan.title,
+    key: plan.key,
+    title: plan.title,
     content: text,
-    hasData: true, sources: plan.dataSources,
-    tokensUsed, generationMs: Date.now() - start,
+    hasData: true,
+    sources: plan.dataSources,
+    tokensUsed,
+    generationMs: Date.now() - start,
   };
 }
 
@@ -487,14 +531,15 @@ async function evaluateBlock(
     };
   }
 
-  const { data: evalBlockResponse, response: evalBlockRawResponse } = await client.messages.create({
-    model,
-    max_tokens: 16000,
-    system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。`,
-    messages: [
-      {
-        role: "user",
-        content: `採点対象ブロック「${block.title}」:
+  const { data: evalBlockResponse, response: evalBlockRawResponse } = await client.messages
+    .create({
+      model,
+      max_tokens: 16000,
+      system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。`,
+      messages: [
+        {
+          role: "user",
+          content: `採点対象ブロック「${block.title}」:
 ${block.content}
 
 ハード基準（全5基準を通過した場合のみpass。1つでもfailならoverall_pass:false）:
@@ -506,14 +551,17 @@ ${block.content}
 
 回答は以下のJSON構造のみ:
 {"criteria_1":{"pass":true,"reason":"..."},"criteria_2":{"pass":true,"reason":"..."},"criteria_3":{"pass":true,"reason":"..."},"criteria_4":{"pass":true,"reason":"..."},"criteria_5":{"pass":true,"reason":"..."},"overall_pass":true,"feedback":"不通過時の改善指示"}`,
-      },
-    ],
-  }).withResponse();
+        },
+      ],
+    })
+    .withResponse();
   warnIfModelDeprecated(evalBlockRawResponse.headers, model);
 
   const textBlock = evalBlockResponse.content.find((c: { type: string }) => c.type === "text");
-  const text = textBlock && "text" in textBlock ? (textBlock as { type: "text"; text: string }).text : "{}";
-  const tokensUsed = (evalBlockResponse.usage?.input_tokens || 0) + (evalBlockResponse.usage?.output_tokens || 0);
+  const text =
+    textBlock && "text" in textBlock ? (textBlock as { type: "text"; text: string }).text : "{}";
+  const tokensUsed =
+    (evalBlockResponse.usage?.input_tokens || 0) + (evalBlockResponse.usage?.output_tokens || 0);
 
   // Robust JSON extraction: find the outermost { ... } handling nested objects
   let braceDepth = 0;
@@ -534,7 +582,8 @@ ${block.content}
 
   if (jsonStart < 0 || jsonEnd < 0) {
     return {
-      key: block.key, pass: false,
+      key: block.key,
+      pass: false,
       scores: { parse_error: { pass: false, reason: "Evaluator出力にJSONが見つからない" } },
       tokensUsed,
     };
@@ -548,8 +597,8 @@ ${block.content}
       if (c) scores[`criteria_${i}`] = { pass: !!c.pass, reason: c.reason || "" };
     }
     // Compute pass from individual criteria AND (not LLM's overall_pass)
-    const allCriteriaPass = Object.values(scores).length >= 5 &&
-      Object.values(scores).every((s) => s.pass);
+    const allCriteriaPass =
+      Object.values(scores).length >= 5 && Object.values(scores).every((s) => s.pass);
     return {
       key: block.key,
       pass: allCriteriaPass,
@@ -558,8 +607,14 @@ ${block.content}
     };
   } catch {
     return {
-      key: block.key, pass: false,
-      scores: { parse_error: { pass: false, reason: `JSON parse failed: ${text.substring(jsonStart, Math.min(jsonStart + 100, jsonEnd))}...` } },
+      key: block.key,
+      pass: false,
+      scores: {
+        parse_error: {
+          pass: false,
+          reason: `JSON parse failed: ${text.substring(jsonStart, Math.min(jsonStart + 100, jsonEnd))}...`,
+        },
+      },
       tokensUsed,
     };
   }
@@ -573,14 +628,16 @@ function summarizeCalendar(events: Record<string, unknown>[]): string {
   const calEvents = events.filter((e) => e.event_type === "schedule");
   if (calEvents.length === 0) return "カレンダーデータなし";
 
-  const titles = calEvents.map((e) => (e.metrics as Record<string, unknown>)?.title as string || "(無題)");
+  const titles = calEvents.map(
+    (e) => ((e.metrics as Record<string, unknown>)?.title as string) || "(無題)",
+  );
   const dates = calEvents.map((e) => (e.occurred_at as string).split("T")[0]);
 
   // Meeting partner analysis
   const partnerCounts: Record<string, number> = {};
   for (const e of calEvents) {
     const m = e.metrics as Record<string, unknown>;
-    const attendees = m?.attendees as string[] || [];
+    const attendees = (m?.attendees as string[]) || [];
     for (const a of attendees) {
       const domain = a.split("@")[1];
       if (domain) partnerCounts[domain] = (partnerCounts[domain] || 0) + 1;
@@ -602,7 +659,9 @@ function summarizeCalendar(events: Record<string, unknown>[]): string {
   const latest = dates[0];
 
   return `全${calEvents.length}件（${earliest}〜${latest}）
-月別分布: ${Object.entries(monthCounts).map(([m, c]) => `${m}: ${c}件`).join("、")}
+月別分布: ${Object.entries(monthCounts)
+    .map(([m, c]) => `${m}: ${c}件`)
+    .join("、")}
 予定タイトル例: ${titles.slice(0, 5).join("、")}
 会議相手ドメイン: ${topPartners.length > 0 ? topPartners.join("、") : "出席者情報なし"}`;
 }
@@ -611,9 +670,12 @@ function summarizeTransactions(events: Record<string, unknown>[]): string {
   const txEvents = events.filter((e) => e.event_type === "transaction");
   if (txEvents.length === 0) return "入出金データなし";
 
-  let totalCredit = 0, totalDebit = 0;
-  let creditCount = 0, debitCount = 0;
-  let maxCredit = 0, maxDebit = 0;
+  let totalCredit = 0,
+    totalDebit = 0;
+  let creditCount = 0,
+    debitCount = 0;
+  let maxCredit = 0,
+    maxDebit = 0;
   const dates: string[] = [];
 
   for (const e of txEvents) {
@@ -657,20 +719,28 @@ function summarizeTransactions(events: Record<string, unknown>[]): string {
 入金: ${creditCount}件・合計¥${fmt(totalCredit)}・最大¥${fmt(maxCredit)}
 出金: ${debitCount}件・合計¥${fmt(totalDebit)}・最大¥${fmt(maxDebit)}
 月別:
-${Object.entries(monthlyNet).map(([m, v]) => `  ${m}: 入金¥${fmt(v.credit)} / 出金¥${fmt(v.debit)} / 差引¥${fmt(v.credit - v.debit)}`).join("\n")}`;
+${Object.entries(monthlyNet)
+  .map(
+    ([m, v]) =>
+      `  ${m}: 入金¥${fmt(v.credit)} / 出金¥${fmt(v.debit)} / 差引¥${fmt(v.credit - v.debit)}`,
+  )
+  .join("\n")}`;
 }
 
 function summarizeGbiz(events: Record<string, unknown>[]): string {
   const gbiz = events.filter((e) => (e.source as string)?.includes("gbizinfo"));
   if (gbiz.length === 0) return "";
 
-  return gbiz.map((e) => {
-    const m = e.metrics as Record<string, unknown>;
-    if (m.type === "subsidy") return `補助金採択: ${m.company_name} — ${m.title}`;
-    if (m.type === "certification") return `認定: ${m.company_name} — ${m.title}`;
-    if (m.type === "corporate_info") return `法人情報: ${m.name}（${m.location || "所在地不明"}）`;
-    return JSON.stringify(m);
-  }).join("\n");
+  return gbiz
+    .map((e) => {
+      const m = e.metrics as Record<string, unknown>;
+      if (m.type === "subsidy") return `補助金採択: ${m.company_name} — ${m.title}`;
+      if (m.type === "certification") return `認定: ${m.company_name} — ${m.title}`;
+      if (m.type === "corporate_info")
+        return `法人情報: ${m.name}（${m.location || "所在地不明"}）`;
+      return JSON.stringify(m);
+    })
+    .join("\n");
 }
 
 // ──────────────────────────────────────────────────────
@@ -693,10 +763,10 @@ Deno.serve(async (req: Request) => {
     const resendKey = Deno.env.get("RESEND_API_KEY");
 
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const client = new Anthropic({ apiKey });
@@ -722,18 +792,38 @@ Deno.serve(async (req: Request) => {
     const calendarSummary = summarizeCalendar(companyEvents);
     const transactionSummary = summarizeTransactions(companyEvents);
     const gbizSummary = summarizeGbiz(s0Events);
-    const competitorsSummary = competitors.length > 0
-      ? competitors.map((c) => `- ${c.canonical_name}: ${(c.attrs as Record<string, string>)?.reason || ""}`).join("\n")
-      : "競合推定なし";
+    const competitorsSummary =
+      competitors.length > 0
+        ? competitors
+            .map(
+              (c) => `- ${c.canonical_name}: ${(c.attrs as Record<string, string>)?.reason || ""}`,
+            )
+            .join("\n")
+        : "競合推定なし";
 
     // ── PLANNER ──
-    const plan = buildPlan(companyEvents, s0Events, connections, competitors, concern, siteAnalysis);
+    const plan = buildPlan(
+      companyEvents,
+      s0Events,
+      connections,
+      competitors,
+      concern,
+      siteAnalysis,
+    );
 
     // ── GENERATOR (parallel) ──
     const generatorContext = {
-      companyName: company_name, url, industry, concern,
-      siteAnalysis, calendarSummary, transactionSummary,
-      gbizSummary, competitorsSummary, connections, eventCounts,
+      companyName: company_name,
+      url,
+      industry,
+      concern,
+      siteAnalysis,
+      calendarSummary,
+      transactionSummary,
+      gbizSummary,
+      competitorsSummary,
+      connections,
+      eventCounts,
     };
 
     const blocks = await Promise.all(
@@ -763,8 +853,13 @@ Deno.serve(async (req: Request) => {
         .join("\n");
 
       const revisedBlock = await reviseBlock(
-        client, model, plan[idx], generatorContext,
-        blocks[idx].content, feedback, 1,
+        client,
+        model,
+        plan[idx],
+        generatorContext,
+        blocks[idx].content,
+        feedback,
+        1,
       );
 
       const revisedEval = await evaluateBlock(client, model, revisedBlock);
@@ -809,8 +904,11 @@ Deno.serve(async (req: Request) => {
     const report = {
       company_id,
       blocks: passedBlocks.map((b) => ({
-        key: b.key, title: b.title, content: b.content,
-        hasData: b.hasData, sources: b.sources,
+        key: b.key,
+        title: b.title,
+        content: b.content,
+        hasData: b.hasData,
+        sources: b.sources,
       })),
       eval_log: evalResults,
       generated_at: new Date().toISOString(),
@@ -847,14 +945,20 @@ Deno.serve(async (req: Request) => {
           created_at: new Date().toISOString(),
         });
         return new Response(
-          JSON.stringify({ status: "error", reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。", report }),
+          JSON.stringify({
+            status: "error",
+            reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。",
+            report,
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       const emailHtml = renderDay0Html(company_name, passedBlocks, {
-        generationTimeMs, totalTokens,
-        passedCount: passedBlocks.length, totalCount: blocks.length,
+        generationTimeMs,
+        totalTokens,
+        passedCount: passedBlocks.length,
+        totalCount: blocks.length,
       });
       const emailText = renderDay0Text(company_name, passedBlocks);
 
@@ -905,20 +1009,19 @@ Deno.serve(async (req: Request) => {
     }
 
     if (emailStatus === "failed") {
-      return new Response(
-        JSON.stringify({ status: "error", reason: sendError, report }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "error", reason: sendError, report }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(
-      JSON.stringify({ status: "ok", email_id: emailId, report }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", email_id: emailId, report }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

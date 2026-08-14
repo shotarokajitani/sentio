@@ -24,13 +24,7 @@ describe("company_summary (C2)", () => {
   });
 
   it("C2: CHAPTER_KEYS constant matches expected", () => {
-    expect(CHAPTER_KEYS).toEqual([
-      "overview",
-      "financial",
-      "operations",
-      "people",
-      "external",
-    ]);
+    expect(CHAPTER_KEYS).toEqual(["overview", "financial", "operations", "people", "external"]);
   });
 
   it("C2: token_count does not exceed MAX_SUMMARY_TOKENS", () => {

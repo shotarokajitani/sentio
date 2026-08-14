@@ -34,36 +34,42 @@ Deno.serve(async (req: Request) => {
 
     if (is_correction && existing) {
       // Correction: immediate confidence reduction
-      const { error } = await supabase.from("narratives").update({
-        content,
-        confidence: 0.0,
-        source_event_id,
-        updated_at: nowIso,
-      }).eq("company_id", company_id).eq("key", key);
+      const { error } = await supabase
+        .from("narratives")
+        .update({
+          content,
+          confidence: 0.0,
+          source_event_id,
+          updated_at: nowIso,
+        })
+        .eq("company_id", company_id)
+        .eq("key", key);
 
       if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ status: "ok", action: "corrected", key }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "ok", action: "corrected", key }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (existing) {
       // Update existing — refresh confidence to 1.0
-      const { error } = await supabase.from("narratives").update({
-        content,
-        confidence: 1.0,
-        source_event_id,
-        updated_at: nowIso,
-      }).eq("company_id", company_id).eq("key", key);
+      const { error } = await supabase
+        .from("narratives")
+        .update({
+          content,
+          confidence: 1.0,
+          source_event_id,
+          updated_at: nowIso,
+        })
+        .eq("company_id", company_id)
+        .eq("key", key);
 
       if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ status: "ok", action: "updated", key }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ status: "ok", action: "updated", key }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Create new
@@ -78,14 +84,13 @@ Deno.serve(async (req: Request) => {
 
     if (error) throw error;
 
-    return new Response(
-      JSON.stringify({ status: "ok", action: "created", key }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ status: "ok", action: "created", key }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

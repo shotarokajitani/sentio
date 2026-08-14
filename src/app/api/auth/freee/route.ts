@@ -13,10 +13,7 @@ export async function GET(req: NextRequest) {
 
   const companyId = req.nextUrl.searchParams.get("company_id");
   if (!companyId) {
-    return NextResponse.json(
-      { error: "company_id required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "company_id required" }, { status: 400 });
   }
 
   const redirectUri = `${req.nextUrl.origin}/auth/callback/freee`;

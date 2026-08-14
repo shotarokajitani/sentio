@@ -11,6 +11,7 @@
 **対象プロバイダ:** Google Calendar, freee（Chatwork/Slackはコネクタ未実装のため今回スコープ外）
 
 **受入基準マッピング:**
+
 - B-s2-1 → Task 4（陽性コントロール: 期限切れトークン→refresh成功→データ取得成功）
 - B-s2-2 → Task 5（陰性コントロール: 無効refresh_token→reauth_required遷移→500系終了）
 - B-s2-3 → Task 4/5のテストで検証
@@ -19,20 +20,21 @@
 
 ## ファイル構成
 
-| ファイル | 責務 | 操作 |
-|---------|------|------|
-| `supabase/migrations/00017_vault_update_helper.sql` | Vault secret更新用SECURITY DEFINER関数 | 新規 |
-| `supabase/functions/_shared/token-refresh.ts` | プロバイダ非依存トークンリフレッシュ共通モジュール | 新規 |
-| `supabase/functions/sync-connections/index.ts` | 全active接続を巡回してsync＋リフレッシュ | 新規 |
-| `src/app/connect/page.tsx` | reauth_required状態の表示対応 | 修正 |
-| `tests/unit/token-refresh.test.ts` | リフレッシュロジックの単体テスト | 新規 |
-| `tests/integration/token-refresh.test.ts` | DB連携テスト（陽性/陰性コントロール） | 新規 |
+| ファイル                                            | 責務                                               | 操作 |
+| --------------------------------------------------- | -------------------------------------------------- | ---- |
+| `supabase/migrations/00017_vault_update_helper.sql` | Vault secret更新用SECURITY DEFINER関数             | 新規 |
+| `supabase/functions/_shared/token-refresh.ts`       | プロバイダ非依存トークンリフレッシュ共通モジュール | 新規 |
+| `supabase/functions/sync-connections/index.ts`      | 全active接続を巡回してsync＋リフレッシュ           | 新規 |
+| `src/app/connect/page.tsx`                          | reauth_required状態の表示対応                      | 修正 |
+| `tests/unit/token-refresh.test.ts`                  | リフレッシュロジックの単体テスト                   | 新規 |
+| `tests/integration/token-refresh.test.ts`           | DB連携テスト（陽性/陰性コントロール）              | 新規 |
 
 ---
 
 ### Task 1: Vault secret更新SQL関数
 
 **Files:**
+
 - Create: `supabase/migrations/00017_vault_update_helper.sql`
 
 現状`store_vault_secret`（INSERT）と`read_vault_secret`（SELECT）のみ存在。
@@ -77,6 +79,7 @@ git commit -m "feat(vault): add update_vault_secret helper for token refresh"
 ### Task 2: 共通トークンリフレッシュモジュール
 
 **Files:**
+
 - Create: `supabase/functions/_shared/token-refresh.ts`
 - Create: `tests/unit/token-refresh.test.ts`
 
@@ -88,10 +91,7 @@ Edge Function (Deno) 環境で動作する。テストはVitest (Node) で純粋
 ```typescript
 // tests/unit/token-refresh.test.ts
 import { describe, it, expect } from "vitest";
-import {
-  isTokenExpired,
-  PROVIDER_CONFIG,
-} from "../../supabase/functions/_shared/token-refresh";
+import { isTokenExpired, PROVIDER_CONFIG } from "../../supabase/functions/_shared/token-refresh";
 
 describe("isTokenExpired", () => {
   it("期限切れのトークンはtrueを返す", () => {
@@ -126,9 +126,7 @@ describe("PROVIDER_CONFIG", () => {
   it("freeeの設定が存在する", () => {
     const config = PROVIDER_CONFIG.freee;
     expect(config).toBeDefined();
-    expect(config.tokenUrl).toBe(
-      "https://accounts.secure.freee.co.jp/public_api/token"
-    );
+    expect(config.tokenUrl).toBe("https://accounts.secure.freee.co.jp/public_api/token");
     expect(config.clientIdEnv).toBe("FREEE_CLIENT_ID");
     expect(config.clientSecretEnv).toBe("FREEE_CLIENT_SECRET");
   });
@@ -229,10 +227,9 @@ export async function refreshToken(
   }
 
   // 1. Vault からトークンペイロードを読む
-  const { data: secretText, error: readErr } = await supabase.rpc(
-    "read_vault_secret",
-    { p_id: connection.vault_secret_id }
-  );
+  const { data: secretText, error: readErr } = await supabase.rpc("read_vault_secret", {
+    p_id: connection.vault_secret_id,
+  });
 
   if (readErr || !secretText) {
     await markReauthRequired(supabase, connection.id, "vault read failed");
@@ -272,11 +269,7 @@ export async function refreshToken(
       body,
     });
   } catch (e) {
-    await markReauthRequired(
-      supabase,
-      connection.id,
-      `fetch failed: ${(e as Error).message}`
-    );
+    await markReauthRequired(supabase, connection.id, `fetch failed: ${(e as Error).message}`);
     return { ok: false, reason: `token endpoint unreachable` };
   }
 
@@ -285,7 +278,7 @@ export async function refreshToken(
     await markReauthRequired(
       supabase,
       connection.id,
-      `refresh failed: ${tokenRes.status} ${errBody}`
+      `refresh failed: ${tokenRes.status} ${errBody}`,
     );
     return {
       ok: false,
@@ -296,11 +289,7 @@ export async function refreshToken(
   const newTokenData = await tokenRes.json();
 
   if (!newTokenData.access_token) {
-    await markReauthRequired(
-      supabase,
-      connection.id,
-      "refresh response missing access_token"
-    );
+    await markReauthRequired(supabase, connection.id, "refresh response missing access_token");
     return { ok: false, reason: "refresh response missing access_token" };
   }
 
@@ -320,15 +309,12 @@ export async function refreshToken(
   if (updateErr) {
     // Vault更新失敗は致命的だが、新しいaccess_tokenは手元にある
     // → reauth_requiredにはしないが、エラーをログに記録
-    console.error(
-      `vault update failed for connection ${connection.id}:`,
-      updateErr.message
-    );
+    console.error(`vault update failed for connection ${connection.id}:`, updateErr.message);
   }
 
   // 4. connectionsテーブルを更新
   const newExpiresAt = new Date(
-    Date.now() + (newTokenData.expires_in || 3600) * 1000
+    Date.now() + (newTokenData.expires_in || 3600) * 1000,
   ).toISOString();
 
   await supabase
@@ -352,10 +338,7 @@ async function markReauthRequired(
   reason: string,
 ): Promise<void> {
   console.error(`reauth_required for connection ${connectionId}: ${reason}`);
-  await supabase
-    .from("connections")
-    .update({ status: "reauth_required" })
-    .eq("id", connectionId);
+  await supabase.from("connections").update({ status: "reauth_required" }).eq("id", connectionId);
 }
 ```
 
@@ -387,6 +370,7 @@ git commit -m "feat(token-refresh): add provider-agnostic token refresh module w
 ### Task 3: sync-connections Edge Function
 
 **Files:**
+
 - Create: `supabase/functions/sync-connections/index.ts`
 
 pg_cronから呼ばれ、全active接続を巡回。トークン期限切れならリフレッシュし、
@@ -402,11 +386,7 @@ pg_cronから呼ばれ、全active接続を巡回。トークン期限切れな�
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { generateEventId } from "../_shared/event-id.ts";
-import {
-  isTokenExpired,
-  refreshToken,
-  PROVIDER_CONFIG,
-} from "../_shared/token-refresh.ts";
+import { isTokenExpired, refreshToken, PROVIDER_CONFIG } from "../_shared/token-refresh.ts";
 
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const FREEE_API_BASE = "https://api.freee.co.jp/api/1";
@@ -524,10 +504,9 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ status: "ok", results }),
-    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ status: "ok", results }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 });
 
 // --- Google Calendar 同期 ---
@@ -549,10 +528,9 @@ async function syncGoogleCalendar(
     maxResults: "250",
   });
 
-  const res = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const res = await fetch(`${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!res.ok) {
     throw new Error(`Calendar API failed: ${res.status}`);
@@ -571,12 +549,9 @@ async function syncGoogleCalendar(
         attendees?: { email: string }[];
       }) => {
         const title = item.summary || "(無題)";
-        const start =
-          item.start?.dateTime || item.start?.date || now.toISOString();
+        const start = item.start?.dateTime || item.start?.date || now.toISOString();
         const end = item.end?.dateTime || item.end?.date || start;
-        const attendees = (item.attendees || []).map(
-          (a: { email: string }) => a.email,
-        );
+        const attendees = (item.attendees || []).map((a: { email: string }) => a.email);
 
         const fingerprint = `calendar:${companyId}`;
         const rowContent = `${title}:${start}:${end}`;
@@ -599,20 +574,14 @@ async function syncGoogleCalendar(
     ),
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) throw new Error(`Calendar events upsert failed: ${error.message}`);
   return rows.length;
 }
 
 // --- freee 同期 ---
-async function syncFreee(
-  accessToken: string,
-  companyId: string,
-  supabase: any,
-): Promise<number> {
+async function syncFreee(accessToken: string, companyId: string, supabase: any): Promise<number> {
   // freee会社IDを取得
   const meRes = await fetch(`${FREEE_API_BASE}/users/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -682,9 +651,7 @@ async function syncFreee(
     ),
   );
 
-  const { error } = await supabase
-    .from("events")
-    .upsert(rows, { onConflict: "event_id" });
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
 
   if (error) throw new Error(`freee events upsert failed: ${error.message}`);
   return rows.length;
@@ -703,6 +670,7 @@ git commit -m "feat(sync): add sync-connections edge function with token refresh
 ### Task 4: 陽性コントロールテスト（B-s2-1 / B-s2-3）
 
 **Files:**
+
 - Create: `tests/integration/token-refresh.test.ts`
 
 期限切れトークンを人為的に設定→sync実行→refresh成功→データ取得成功を検証。
@@ -808,9 +776,7 @@ describe("陽性コントロール: トークンリフレッシュ成功（B-s2-
       );
       expect(connUpdate).toBeDefined();
       expect(connUpdate!.data.expires_at).toBeDefined();
-      expect(new Date(connUpdate!.data.expires_at).getTime()).toBeGreaterThan(
-        Date.now(),
-      );
+      expect(new Date(connUpdate!.data.expires_at).getTime()).toBeGreaterThan(Date.now());
     });
   }
 });
@@ -838,6 +804,7 @@ git commit -m "test(token-refresh): add positive control tests (B-s2-1) — 3x r
 ### Task 5: 陰性コントロールテスト（B-s2-2）
 
 **Files:**
+
 - Modify: `tests/integration/token-refresh.test.ts`
 
 無効なrefresh_token→refresh失敗→reauth_required遷移→500系で終了を検証。
@@ -895,9 +862,7 @@ describe("陰性コントロール: リフレッシュ失敗 → reauth_required
 
       // connectionsのstatusがreauth_requiredに変更された
       const connUpdate = updateCalls.find(
-        (c) =>
-          c.table === "connections" &&
-          c.data.status === "reauth_required",
+        (c) => c.table === "connections" && c.data.status === "reauth_required",
       );
       expect(connUpdate).toBeDefined();
       expect(connUpdate!.filter.id).toBe("conn-002");
@@ -918,9 +883,7 @@ describe("陰性コントロール: リフレッシュ失敗 → reauth_required
       expect(result.reason).toContain("no refresh_token");
     }
 
-    const connUpdate = updateCalls.find(
-      (c) => c.data.status === "reauth_required",
-    );
+    const connUpdate = updateCalls.find((c) => c.data.status === "reauth_required");
     expect(connUpdate).toBeDefined();
   });
 });
@@ -943,6 +906,7 @@ git commit -m "test(token-refresh): add negative control tests (B-s2-2) — reau
 ### Task 6: 接続ページにreauth_required状態を表示
 
 **Files:**
+
 - Modify: `src/app/connect/page.tsx`
 
 reauth_requiredの接続に対して、再接続ボタンとエラーメッセージを表示する。
@@ -971,28 +935,24 @@ function badgeStyle(status: string): React.CSSProperties {
 Google Calendar セクションの表示ロジックを修正:
 
 ```tsx
-{calConn ? (
-  calConn.status === "reauth_required" ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={badgeStyle("reauth_required")}>要再連携</span>
-      <a
-        href={`/api/auth/google?company_id=${COMPANY_ID}`}
-        style={buttonStyle("#4285F4")}
-      >
-        再接続
-      </a>
-    </div>
+{
+  calConn ? (
+    calConn.status === "reauth_required" ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={badgeStyle("reauth_required")}>要再連携</span>
+        <a href={`/api/auth/google?company_id=${COMPANY_ID}`} style={buttonStyle("#4285F4")}>
+          再接続
+        </a>
+      </div>
+    ) : (
+      <span style={badgeStyle("active")}>接続済み</span>
+    )
   ) : (
-    <span style={badgeStyle("active")}>接続済み</span>
-  )
-) : (
-  <a
-    href={`/api/auth/google?company_id=${COMPANY_ID}`}
-    style={buttonStyle("#4285F4")}
-  >
-    接続
-  </a>
-)}
+    <a href={`/api/auth/google?company_id=${COMPANY_ID}`} style={buttonStyle("#4285F4")}>
+      接続
+    </a>
+  );
+}
 ```
 
 freeeセクションにも同様のロジックを追加。
@@ -1036,6 +996,7 @@ Expected: 新規S2カラムを追加していないのでPASS
 - [ ] **Step 5: 最終コミット（必要があれば）**
 
 変更ファイル一覧:
+
 - `supabase/migrations/00017_vault_update_helper.sql` (新規)
 - `supabase/functions/_shared/token-refresh.ts` (新規)
 - `supabase/functions/sync-connections/index.ts` (新規)

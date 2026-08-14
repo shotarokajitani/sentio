@@ -1,9 +1,9 @@
 export const EVALUATOR_CRITERIA_NAMES = [
-  "image",     // 像: 経営者の頭に自社の状態が一枚の絵として浮かぶか
-  "evidence",  // 証拠: 全主張が証拠イベントIDに遡れるか
+  "image", // 像: 経営者の頭に自社の状態が一枚の絵として浮かぶか
+  "evidence", // 証拠: 全主張が証拠イベントIDに遡れるか
   "dismissal", // 棄却: 平凡な説明を検討し排除根拠が残っているか
-  "tone",      // トーン: 断定しない・責めない・用途制限フラグ非抵触
-  "action",    // 行動: 緊急度の判定根拠と次の一手が具体か
+  "tone", // トーン: 断定しない・責めない・用途制限フラグ非抵触
+  "action", // 行動: 緊急度の判定根拠と次の一手が具体か
 ] as const;
 
 export interface EvalCriterion {
@@ -64,10 +64,10 @@ export function shouldReject(revisionCount: number): boolean {
 
 // Day0 Evaluator: compute pass from individual criteria AND (not LLM overall_pass)
 export const DAY0_CRITERIA_NAMES = [
-  "image",       // 像
-  "source",      // 出所
+  "image", // 像
+  "source", // 出所
   "provisional", // 暫定推察
-  "tone",        // トーン
+  "tone", // トーン
   "specificity", // 具体
 ] as const;
 

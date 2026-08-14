@@ -80,9 +80,7 @@ export function generateDay0Report(input: Day0Input): Day0Report {
           return {
             key,
             title: BLOCK_TITLES[key],
-            content: input.publicRecords
-              .map((r) => `${r.content} (${r.source}より)`)
-              .join("\n"),
+            content: input.publicRecords.map((r) => `${r.content} (${r.source}より)`).join("\n"),
             hasData: true,
             sources: input.publicRecords.map((r) => r.source),
           };
@@ -120,9 +118,7 @@ export function generateDay0Report(input: Day0Input): Day0Report {
           return {
             key,
             title: BLOCK_TITLES[key],
-            content: input.industryData
-              .map((d) => `${d.content} (${d.source}より)`)
-              .join("\n"),
+            content: input.industryData.map((d) => `${d.content} (${d.source}より)`).join("\n"),
             hasData: true,
             sources: input.industryData.map((d) => d.source),
           };

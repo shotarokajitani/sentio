@@ -44,7 +44,9 @@ Deno.serve(async (req: Request) => {
       .eq("company_id", company_id);
 
     const candidates: ScanCandidate[] = [];
-    const established = (baselines || []).filter((b: { is_established: boolean }) => b.is_established);
+    const established = (baselines || []).filter(
+      (b: { is_established: boolean }) => b.is_established,
+    );
 
     // 1. Deviation scan
     for (const event of events || []) {
@@ -165,9 +167,15 @@ Deno.serve(async (req: Request) => {
       let isWorsening = true;
       for (let i = 1; i < recent.length; i++) {
         if (extractor.direction === "increasing_is_bad") {
-          if (recent[i].value <= recent[i - 1].value) { isWorsening = false; break; }
+          if (recent[i].value <= recent[i - 1].value) {
+            isWorsening = false;
+            break;
+          }
         } else {
-          if (recent[i].value >= recent[i - 1].value) { isWorsening = false; break; }
+          if (recent[i].value >= recent[i - 1].value) {
+            isWorsening = false;
+            break;
+          }
         }
       }
 
@@ -205,9 +213,9 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

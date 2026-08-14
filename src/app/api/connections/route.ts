@@ -7,10 +7,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "company_id required" }, { status: 400 });
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // Fetch connections
   const { data: connections } = await supabase

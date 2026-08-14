@@ -19,7 +19,9 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck && pnpm lint
-      - run: pnpm test
+      # integration は Supabase 起動が要るため ci.yml の integration ジョブが担う。
+      # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail する
+      - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
       - run: pnpm run check:allowlist
 
   # スキーマを先に反映する。関数が先に出ると「新コードが未適用の関数/カラムを呼ぶ」不整合が起きる

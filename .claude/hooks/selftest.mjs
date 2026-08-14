@@ -131,6 +131,24 @@ const CASES = [
     expect: "deny",
   },
   {
+    name: "陽性: process.env.X を含むGrep（JSのプロパティアクセスは止めない）",
+    script: "block-env-read.mjs",
+    payload: pre("Bash", { command: "grep -rn 'process.env.SUPABASE_URL' tests/" }),
+    expect: "allow",
+  },
+  {
+    name: "陽性: .envrc は対象外",
+    script: "block-env-read.mjs",
+    payload: pre("Read", { file_path: ".envrc" }),
+    expect: "allow",
+  },
+  {
+    name: "陰性: パス区切りの後ろの .env",
+    script: "block-env-read.mjs",
+    payload: pre("Bash", { command: "cat C:/Users/shota/sentio/.env" }),
+    expect: "deny",
+  },
+  {
     name: "陰性: Readでの.env読み取り",
     script: "block-env-read.mjs",
     payload: pre("Read", { file_path: "C:/Users/shota/sentio/.env" }),

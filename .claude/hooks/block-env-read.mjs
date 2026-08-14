@@ -9,8 +9,12 @@ import {
   PATH_KEYS,
 } from "./_input.mjs";
 
-// `.env` / `.env.local` は該当し、`.envrc` は該当しない
-const isEnvPath = (s) => /\.env($|\.)/.test(s) && !s.includes(".env.example");
+// `.env` / `.env.local` / `path/to/.env` は該当する。
+// 該当しないもの:
+//   - `.envrc`         … 別物のファイル
+//   - `process.env.X`  … JSのプロパティアクセス。パス境界（先頭 or / or \）を要求して除外する
+//   - `config.env`     … .gitignore が守る対象は `.env` / `.env.*` のみ
+const isEnvPath = (s) => /(^|[\\/])\.env($|\.)/.test(s) && !s.includes(".env.example");
 
 try {
   const input = readHookInput();

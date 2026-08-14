@@ -112,6 +112,7 @@ jobs:
 
       # --node-modules-dir=none: ルートの package.json/node_modules に引きずられず、
       # Deno のグローバルキャッシュで npm: を解決させる（Edge Runtime と同じ経路）
-      - name: deno check (npm: 指定子の解決を実際に走らせる)
+      # 値に ": " を含むため引用が要る（無引用だとYAMLのマッピングとして解釈され構文エラー）
+      - name: "deno check — npm: 指定子の解決を実際に走らせる"
         run: find supabase/functions -name '*.ts' -print0 | xargs -0 deno check --no-lock --node-modules-dir=none
 # 本番反映はmainマージ後の別workflow（deploy.yml, スライス1で作成）のみ。手動デプロイ禁止。

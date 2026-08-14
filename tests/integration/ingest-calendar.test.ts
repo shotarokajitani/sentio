@@ -17,18 +17,18 @@ function generateCalendarFixtures(companyId: string) {
   const now = new Date();
   const events = [];
 
-  for (let monthsAgo = 0; monthsAgo < 12; monthsAgo++) {
-    const date = new Date(now);
-    date.setMonth(date.getMonth() - monthsAgo);
-    date.setDate(15); // 各月15日
-
-    const start = new Date(date);
-    start.setHours(10, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(11, 0, 0, 0);
+  // 「過去12ヶ月」なので当月は含めない。当月15日は毎月1〜14日には未来日になり、
+  // 「全てのoccurred_atが過去である」が落ちる。
+  // また、日を15に固定してから月を引く（月末日に setMonth すると2月等で桁溢れし、
+  // 同じ月が二重に生成されて event_id が衝突する）。
+  for (let monthsAgo = 1; monthsAgo <= 12; monthsAgo++) {
+    const y = now.getFullYear();
+    const m = now.getMonth() - monthsAgo;
+    const start = new Date(y, m, 15, 10, 0, 0, 0);
+    const end = new Date(y, m, 15, 11, 0, 0, 0);
 
     events.push({
-      title: `月次定例会議 ${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      title: `月次定例会議 ${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
       start: start.toISOString(),
       end: end.toISOString(),
       attendees: ["member-a", "member-b"],

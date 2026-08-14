@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+// 秘密の実値らしき文字列の混入を止める。matcher "*" で全ツールに掛かる。
+// 書き込み内容だけでなくコマンド・検索語も対象にするため、ペイロード全体を走査する。
+import { readHookInput, deny, failClosed } from "./_input.mjs";
 
 try {
   // Build patterns via concatenation to avoid self-triggering the hook
@@ -11,29 +13,12 @@ try {
   ];
   const regex = new RegExp(patterns.join("|"));
 
-  const input = readFileSync(0, "utf8");
-  if (regex.test(input)) {
-    const result = {
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "秘密の実値らしき文字列を検出。値はVault/Secretsへ、文書にはポインタのみ",
-      },
-    };
-    process.stdout.write(JSON.stringify(result));
-    process.exit(2);
+  const { raw } = readHookInput();
+  if (regex.test(raw)) {
+    deny("秘密の実値らしき文字列を検出。値はVault/Secretsへ、文書にはポインタのみ");
   }
+
   process.exit(0);
 } catch (e) {
-  process.stderr.write(`check-secrets-patterns: fail-closed — ${e.message}\n`);
-  const result = {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: "フックスクリプト実行エラー（fail-closed）: " + e.message,
-    },
-  };
-  process.stdout.write(JSON.stringify(result));
-  process.exit(2);
+  failClosed("check-secrets-patterns", e);
 }

@@ -40,7 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # version: latest はCLIの破壊的変更をそのまま踏む（deploy #31559757735）。固定する
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 2.113.0
 

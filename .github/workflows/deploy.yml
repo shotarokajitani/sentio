@@ -38,7 +38,7 @@ jobs:
 
       # version: latest はCLIの破壊的変更をそのまま踏む
       # （`supabase db push --project-ref` 廃止で deploy #31559757735 が失敗した型）
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 2.113.0
 
@@ -74,7 +74,7 @@ jobs:
 
       # version: latest はCLIの破壊的変更をそのまま踏む
       # （`supabase db push --project-ref` 廃止で deploy #31559757735 が失敗した型）
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 2.113.0
 

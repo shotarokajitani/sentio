@@ -36,13 +36,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # version: latest はCLIの破壊的変更をそのまま踏む
+      # （`supabase db push --project-ref` 廃止で deploy #31559757735 が失敗した型）
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
 
       # supabase db push は --project-ref を受け付けない。link してから --linked で押す
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      # 本番履歴に残る孤児バージョン2件を「未適用」に戻す。
+      # 出所はアーカイブ済み旧プロジェクト（archive/legacy の 20260414_*.sql）で、
+      # ローカルに対応ファイルが無いため db push が
+      # `Remote migration versions not found in local migrations directory.` で中断する
+      # （deploy #31576330545 / #31824237712 で実測）。
+      #
+      # 対象2バージョンをハードコードする。将来の別ドリフトは従来どおり失敗として顕在化させたい
+      # （網羅的なrepairにすると、意図しない履歴の食い違いを黙って飲み込んでしまう）。
+      #
+      # 冪等性: repair --status reverted は schema_migrations からの DELETE 相当で、
+      # 対象行が既に無い場合も成功する。2回目以降の実行は no-op。
+      - name: Repair migration history (旧プロジェクト由来の孤児2件)
+        run: supabase migration repair --status reverted 20260414183617 20260414183945 --linked
 
       - name: Apply migrations
         run: supabase db push --linked
@@ -56,9 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # version: latest はCLIの破壊的変更をそのまま踏む
+      # （`supabase db push --project-ref` 廃止で deploy #31559757735 が失敗した型）
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
 
       # function ごとに個別step。`if: !cancelled()` で1件の失敗が後続を止めないようにしつつ、
       # 失敗したstepはそのままジョブ失敗として顕在化させる（|| true / continue-on-error は禁止）

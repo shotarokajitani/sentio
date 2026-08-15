@@ -42,3 +42,28 @@ Gmail CASA・GBPの実装はフェーズ2。BOJ APIは本番公開時にpost.rsd
 ## 既存資産の扱い（スライス1契約で切り分け提示）
 
 Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは流用。旧Edge Functions/スキーマは凍結→新設計で置換。
+
+## 本番public に残存する旧スキーマの処遇（人間の関門・2026-08-15）
+
+診断キットQ1〜Q8（`docs/runbooks/2026-08-12_migration-state-diagnosis.md`）の実測で、
+本番 `public` に**16テーブルが残存**していることが確定した（分岐C）。
+新スキーマ12テーブルは未作成で、これらと**共存させる前提**で修復を進めている。
+**削除・退避の判断は未確定。勝手に確定させない。**
+
+現状の緩和事実（Q2実測）: 16件とも `rls_enabled = true`。
+`click_tokens` / `cron_job_logs` / `error_logs` は `policy_count = 0`＝ポリシー不在のため
+非superuserからは全拒否（fail-closed）。
+`rls_enabled = false` かつ `anon_can_select = true` の即時対応対象は**0件**。
+
+- **旧スキーマ14件**（4月構築・`archive/legacy` 由来と対応）:
+  `click_tokens` / `companies` / `competitors` / `conversations` / `cron_job_logs` /
+  `external_data` / `industry_patterns` / `integrations` / `notification_logs` /
+  `patterns` / `questions` / `signals` / `subscriptions` / `usage_logs`
+- **想定外2件**（旧スキーマ台帳にも新スキーマにも無い）:
+  `api_keys`（RLS有効・policy 1件） / `error_logs`（RLS有効・policy 0件）
+  → 出所と用途が未特定。特に `api_keys` は名称上、秘密を保持している可能性があるため
+  **中身の確認と処遇判断を優先する**（確認は読み取り専用SQLで列構成のみ。値は取得しない）
+
+判断が要るのは「削除 / 別スキーマへ退避 / RLS有効のまま残置」の3択。
+それまでの間、Sentioのマイグレーションは旧テーブルに**触れない**設計にしてある
+（00013の検証対象・00014のGRANT対象をいずれも新スキーマ12テーブルの明示リストに限定済み）。

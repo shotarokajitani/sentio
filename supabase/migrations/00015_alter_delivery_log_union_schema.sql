@@ -11,7 +11,20 @@ ALTER TABLE delivery_log ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'sent';
 ALTER TABLE delivery_log ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 
 -- 既存データの frame → delivery_type マイグレーション
-UPDATE delivery_log SET delivery_type = frame WHERE delivery_type IS NULL AND frame IS NOT NULL;
+--
+-- 列存在ガードで包む理由: 下の DROP COLUMN IF EXISTS frame と対になっているため、
+-- ガード無しだと2回目の適用が `column "frame" does not exist` で失敗する
+-- （00001〜00018で唯一の非冪等箇所だった）。
+-- frame が既に無い＝移行済みなので、その場合は正しく no-op になる。
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'delivery_log' AND column_name = 'frame'
+  ) THEN
+    UPDATE delivery_log SET delivery_type = frame
+    WHERE delivery_type IS NULL AND frame IS NOT NULL;
+  END IF;
+END $$;
 
 -- frame の CHECK 制約を削除してから DROP
 -- (制約名は CREATE TABLE 時の暗黙名)

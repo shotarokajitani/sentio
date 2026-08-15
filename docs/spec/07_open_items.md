@@ -67,3 +67,34 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 判断が要るのは「削除 / 別スキーマへ退避 / RLS有効のまま残置」の3択。
 それまでの間、Sentioのマイグレーションは旧テーブルに**触れない**設計にしてある
 （00013の検証対象・00014のGRANT対象をいずれも新スキーマ12テーブルの明示リストに限定済み）。
+
+### ポリシー内容の実測（2026-08-15・`pg_policies` 読み取り）
+
+**「旧ポリシー内容は未検証」という穴はこの実測で閉じた。** 13ポリシー / 13テーブル
+（＋ポリシー0件が3テーブル）。
+
+| 構成                                                              | 対象                                                                                                                                                                        | 定義                                                                                               |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| own companyスコープ・`FOR ALL`・roles=`public`・`with_check`=null | `api_keys`("own keys") / `competitors` / `conversations` / `external_data` / `integrations` / `patterns` / `questions` / `signals` / `subscriptions` / `usage_logs`（10件） | `qual = (company_id IN (SELECT companies.id FROM companies WHERE companies.user_id = auth.uid()))` |
+| 同上（自テーブルが起点）                                          | `companies`("own company")                                                                                                                                                  | `qual = (user_id = auth.uid())`                                                                    |
+| SELECTのみ・roles=`authenticated`                                 | `industry_patterns`（共有マスタ）                                                                                                                                           | `qual = true`。書き込みポリシー**なし**                                                            |
+| SELECTのみ・roles=`authenticated`                                 | `notification_logs`                                                                                                                                                         | own companyスコープ。書き込みポリシー**なし**                                                      |
+| ポリシー0件                                                       | `click_tokens` / `cron_job_logs` / `error_logs`                                                                                                                             | RLS有効かつポリシー不在＝非superuserから全拒否                                                     |
+
+**評価:**
+
+1. **テナント越境なし。** 全ポリシーが `auth.uid()` 起点のスコープで、`anon` は
+   `auth.uid()` が NULL のため実効0行。`authenticated` の書き込みグラント（既存要因）も、
+   `FOR ALL` の `with_check` が null で USING式を継承するため自社スコープに制限される。
+   **実効的な越境書き込み・NULL書き込みは不可。**
+2. **書き込みの実効遮断。** `industry_patterns` / `notification_logs`（書き込みポリシー不在）と
+   ポリシー0件の3テーブルは、グラントがあってもRLSが全書き込みを拒否する。
+3. **残る負債（緊急性なし・処遇判断の材料）:**
+   - (a) `api_keys` はテナント越境こそ無いが、**秘密をVaultでなくテーブルに保持する旧設計**。
+     旧スキーマ処遇判断で優先的に扱う
+   - (b) 旧ポリシーは `FOR ALL` ＋ WITH CHECK暗黙継承という、新スキーマ監査で指摘され
+     `00019` で修正した型と**同型**。ただし qual に NULL許容が無いため実害なし。
+     旧テーブルは凍結方針のため**修正はせず、この事実の記録のみ**
+
+**未確定のまま維持する点:** 旧スキーマの処遇（削除 / 退避 / 残置）そのもの。
+上記はあくまで「現状が安全か」の確認であり、処遇を確定させるものではない。

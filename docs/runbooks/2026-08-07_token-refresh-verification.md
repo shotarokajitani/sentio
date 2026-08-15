@@ -1,8 +1,21 @@
-# トークンリフレッシュ本番検証手順書
+# トークンリフレッシュ本番検証手順書（最終版）
 
-実施日: 2026-08-07
+実施日: 2026-08-07 / **最終版: 2026-08-15**
 対象: B-s2-1 / B-s2-2 / B-s2-3 の本番実体確認
-前提: deploy.yml によるデプロイ完了後に実施
+実行者: **人間**（本番実測は関門3「本番実測の最終確認」に該当する）
+
+> **2026-08-15: 本手順書の前提はすべて満たされた。実測を開始してよい状態。**
+>
+> 長らく実施できなかった理由は「deployが一度も成功しておらず 00017/00018 が
+> 本番に存在しなかった」こと。deploy run 31889710493（commit `c9f0e7f`）で
+> `00001`〜`00019` の適用と全17functionのデプロイが成功し、この前提が解消した。
+>
+> 診断キットQ1〜Q8（2026-08-15実測）により、下記も確定済み:
+>
+> - `pg_cron` 1.6.4 / `pg_net` 0.20.0 / `supabase_vault` 0.3.1 が**すべて有効**
+>   ⇒ 旧版が「トラブルシューティング」で扱っていた拡張有効化のDashboard先行作業は**不要**
+> - 実測時点で Vault関数0行・`cron.job` に `sync-connections` 0行だったため、
+>   §2 と §3 は「00017/00018 が効いたか」の**初回確認**として意味を持つ（形式確認ではない）
 
 ---
 
@@ -14,6 +27,30 @@ GitHub Actions の `deploy` ワークフロー実行結果を確認:
 
 - `deploy-functions` ジョブ: sync-connections が正常にデプロイされたこと
 - `deploy-migrations` ジョブ: 00017, 00018 が正常に適用されたこと
+
+**2026-08-15 実測（確認済み・再実行不要）:**
+
+| 項目              | 結果                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| deploy run        | [31889710493](https://github.com/shotarokajitani/sentio/actions/runs/31889710493) / commit `c9f0e7f` |
+| repair step       | `Repaired migration history: [20260414183617 20260414183945] => reverted`                            |
+| deploy-migrations | success — `00001`〜`00019` を適用（`00017` / `00018` を含む）                                        |
+| deploy-functions  | success — 17/17 すべて success（`sync-connections` は 14:23:27→14:23:52Z）                           |
+
+先に `docs/runbooks/2026-08-15_post-deploy-schema-verification.sql` を実行し、
+新スキーマ12テーブルが `verdict = 'OK'` であることを確認してから §2 へ進むこと。
+
+> **§2〜§4 は統合版に置き換えた（2026-08-15）。**
+> `docs/runbooks/2026-08-15_token-refresh-prereq-check.sql` を**1回コピペで実行**すれば、
+> §2（Vault権限）・§3（cronジョブ）・§4（GUC）が1つのグリッドで判定される。読み取り専用。
+> 以下の §2〜§4 は各項目の背景と期待値の説明として残す。
+>
+> 特に §2 は、旧版の `SET ROLE` を使う手順を**カタログ参照（`has_function_privilege`）に
+> 変更**した。旧版は読み取り専用でなく、2文目が例外で終わるため1回コピペにできず、
+> `RESET ROLE` の流し忘れでセッションが権限降格したまま残る危険があった。
+>
+> §4 が `NG: 未設定` だった場合の設定手順は、秘密の実値を扱う**関門2**のため
+> `docs/runbooks/2026-08-15_guc-setup-procedure.md` に分離した。
 
 ### 2. Vault権限の確認（SQL Editor）
 
@@ -404,12 +441,11 @@ WHERE id = '<CONNECTION_ID>';
 ### pg_cronジョブが見つからない
 
 → 00018マイグレーションが未適用。GitHub Actions deploy-migrationsジョブを確認。
-→ pg_cronまたはpg_net拡張が有効でない場合:
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-CREATE EXTENSION IF NOT EXISTS pg_net;
-```
+→ **拡張の手動有効化はもう不要**（2026-08-15）。`00018` 自身が冒頭で
+`CREATE EXTENSION IF NOT EXISTS pg_cron; / pg_net;` を実行するようになった。
+本番では実測で3拡張とも有効（Q5）。
+それでもジョブが無い場合は 00018 の適用自体を疑うこと。
 
 ### Vault関数がpermission deniedを返す
 

@@ -5,8 +5,9 @@
 -- 安全性: 読み取り専用。SELECT のみで DDL・DML・SET ROLE を含まない。
 --         秘密の値は返さない（service_role_key は存在有無のみ）。
 --
--- 前提: 00012 / 00017 / 00018 が適用済みであること
---       （deploy run 31889710493 で適用確認済み。pg_cron も有効なので cron.job は参照可能）
+-- 前提: 00012 / 00017 / 00018 / 00020 が適用済みであること
+--       （00001〜00019 は deploy run 31889710493 で適用確認済み。
+--         pg_cron も有効なので cron.job は参照可能）
 --
 -- 期待結果: 全行 verdict = 'OK'。1行でも NG があれば、その行を添えて報告すること。
 --
@@ -27,7 +28,8 @@ WITH vault AS (
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
-    AND p.proname IN ('store_vault_secret', 'read_vault_secret', 'update_vault_secret')
+    AND p.proname IN ('store_vault_secret', 'read_vault_secret', 'update_vault_secret',
+                      'read_vault_secret_by_name')
 ),
 vault_agg AS (
   SELECT
@@ -40,16 +42,24 @@ vault_agg AS (
 ),
 job AS (
   SELECT
-    count(*)              AS n_jobs,
-    min(schedule)         AS schedule,
-    bool_and(active)      AS all_active
+    count(*)                                                          AS n_jobs,
+    min(schedule)                                                     AS schedule,
+    bool_and(active)                                                  AS all_active,
+    -- 00020 で本文が Vault 参照に置き換わったかを実物で確認する。
+    -- GUC 参照が残っていれば 00020 が効いていない
+    bool_and(command LIKE '%read_vault_secret_by_name%')              AS uses_vault,
+    bool_or(command LIKE '%current_setting(''app.settings%')          AS uses_guc
   FROM cron.job
   WHERE jobname = 'sync-connections'
 ),
-guc AS (
+-- 秘密の保管先は Vault（GUC方式は本番で 42501 により経路が塞がっていた。
+-- 経緯は 2026-08-15_guc-setup-procedure.md）。
+-- name のみを数える。decrypted_secrets には触らないので実値は一切返らない。
+secrets AS (
   SELECT
-    current_setting('app.settings.supabase_url', true)     AS url,
-    current_setting('app.settings.service_role_key', true) AS key
+    count(*) FILTER (WHERE name = 'sentio_supabase_url')      AS n_url,
+    count(*) FILTER (WHERE name = 'sentio_service_role_key')  AS n_key
+  FROM vault.secrets
 ),
 runs AS (
   SELECT
@@ -65,8 +75,9 @@ SELECT * FROM (
   -- §2 Vault関数
   SELECT 1 AS seq, '§2 Vault関数の存在' AS check_name,
          format('%s件: %s', n_fns, coalesce(fn_list, '(なし)')) AS observed,
-         '3件 (store/read/update)' AS expected,
-         CASE WHEN n_fns = 3 THEN 'OK'
+         '4件 (store/read/update/read_by_name)' AS expected,
+         CASE WHEN n_fns = 4 THEN 'OK'
+              WHEN n_fns = 3 THEN 'NG: 00020未適用の疑い（read_vault_secret_by_name欠落）'
               WHEN n_fns = 2 THEN 'NG: 00017未適用の疑い'
               ELSE 'NG: 00012未適用の疑い' END AS verdict
   FROM vault_agg
@@ -98,22 +109,33 @@ SELECT * FROM (
               ELSE 'NG: スケジュールまたはactiveが想定と異なる' END
   FROM job
   UNION ALL
-  -- §4 GUC（未設定だとcronだけが6時間ごとに静かに失敗し続ける）
-  SELECT 6, '§4 GUC app.settings.supabase_url',
-         coalesce(url, '(未設定)'), 'https://<project-ref>.supabase.co',
-         CASE WHEN url IS NULL OR url = '' THEN 'NG: 未設定 — cronが毎回失敗する'
-              WHEN url LIKE 'https://%.supabase.co' THEN 'OK'
-              ELSE 'NG: 形式が想定と異なる' END
-  FROM guc
+  -- 00020 が効いているかを cron 本文の実物で確認する
+  SELECT 6, '§3 cron本文が Vault 参照になっているか',
+         format('vault参照=%s / GUC参照=%s',
+                coalesce(uses_vault::text, '-'), coalesce(uses_guc::text, '-')),
+         'vault参照=true / GUC参照=false',
+         CASE WHEN uses_vault AND NOT uses_guc THEN 'OK'
+              WHEN n_jobs = 0 THEN 'NG: ジョブ自体が無い'
+              ELSE 'NG: 00020未適用 — 本文がGUC参照のまま（設定不能なので必ず失敗する）' END
+  FROM job
   UNION ALL
-  SELECT 7, '§4 GUC app.settings.service_role_key',
-         CASE WHEN key IS NULL OR key = '' THEN '(未設定)' ELSE '(設定あり・値は非表示)' END,
-         '設定あり',
-         CASE WHEN key IS NULL OR key = '' THEN 'NG: 未設定 — cronが毎回失敗する' ELSE 'OK' END
-  FROM guc
+  -- §4 Vaultシークレット（未登録だとcronだけが6時間ごとに失敗し続ける）
+  SELECT 7, '§4 Vault sentio_supabase_url',
+         format('%s件', n_url), '1件（値は確認しない）',
+         CASE WHEN n_url = 1 THEN 'OK'
+              WHEN n_url = 0 THEN 'NG: 未登録 — cronが毎回失敗する'
+              ELSE 'NG: 同名が複数 — read_vault_secret_by_name が曖昧エラーで落ちる' END
+  FROM secrets
+  UNION ALL
+  SELECT 8, '§4 Vault sentio_service_role_key',
+         format('%s件', n_key), '1件（値は確認しない）',
+         CASE WHEN n_key = 1 THEN 'OK'
+              WHEN n_key = 0 THEN 'NG: 未登録 — cronが毎回失敗する'
+              ELSE 'NG: 同名が複数 — read_vault_secret_by_name が曖昧エラーで落ちる' END
+  FROM secrets
   UNION ALL
   -- 参考: 初回スケジュール発火前は0件で正常
-  SELECT 8, '(参考) cron実行実績',
+  SELECT 9, '(参考) cron実行実績',
          format('%s件 / 失敗%s件 / 最終=%s / 直近エラー=%s',
                 n_runs, n_failed, coalesce(last_run::text, '-'), coalesce(last_error, '-')),
          '発火後に status=succeeded',

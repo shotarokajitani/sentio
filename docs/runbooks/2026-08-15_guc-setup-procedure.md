@@ -1,4 +1,34 @@
-# GUC設定手順（`app.settings.*`）— 関門2・人間実行
+# GUC設定手順（`app.settings.*`）— **廃止。実行不可と実測**
+
+> ## ⛔ この手順は使えない（2026-08-15 実測）
+>
+> 本番の SQL Editor で実行したところ、次のエラーで**経路自体が塞がっていた**。
+>
+> ```
+> ERROR: 42501: permission denied to set parameter "app.settings.supabase_url"
+> ```
+>
+> PostgreSQL 15 以降のパラメータACLにより、Supabase の `postgres` ロールでは
+> `ALTER DATABASE ... SET app.settings.*` を実行できない。
+> **値の問題でも権限付与漏れでもなく、方式が成立しない。**
+>
+> ### 移行先
+>
+> 本書が「より安全な代替」として挙げていた **Vault方式へ移行した**。
+>
+> - マイグレーション: `supabase/migrations/00020_cron_vault_secrets.sql`
+> - 登録手順（関門2）: **`2026-08-15_vault-secret-setup-procedure.md`**
+> - 前提確認: `2026-08-15_token-refresh-prereq-check.sql` の seq 6/7/8
+>
+> 結果的に、秘密の保管先がVaultに一本化され、絶対規則
+> 「秘密はVault以外のどこにも置かない」とも整合する形に収まった。
+> ダンプへの平文混入・ローテーション時の更新漏れという懸念も同時に解消している。
+>
+> **以下は経緯の記録として残す。実行しないこと。**
+
+---
+
+# （廃止）GUC設定手順（`app.settings.*`）— 関門2・人間実行
 
 **この手順は秘密（`service_role_key`）の実値を扱うため、関門2「秘密・課金・外部アカウントに
 触る操作の承認」に該当する。Claude Code は実行しない。**

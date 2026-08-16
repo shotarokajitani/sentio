@@ -37,20 +37,57 @@ GitHub Actions の `deploy` ワークフロー実行結果を確認:
 | deploy-migrations | success — `00001`〜`00019` を適用（`00017` / `00018` を含む）                                        |
 | deploy-functions  | success — 17/17 すべて success（`sync-connections` は 14:23:27→14:23:52Z）                           |
 
-先に `docs/runbooks/2026-08-15_post-deploy-schema-verification.sql` を実行し、
-新スキーマ12テーブルが `verdict = 'OK'` であることを確認してから §2 へ進むこと。
+### 前提確認の到達状況（2026-08-15 実測・完了）
+
+`2026-08-15_post-deploy-schema-verification.sql`: **12行すべて `verdict = OK`**
+（11テーブルが policy 4件 / `connector_limits` が 1件）。
+補助①は旧16テーブルの `authenticated` 書き込みグラント = true ＝ Supabaseビルトイン付与に
+よる既存要因と判定（`docs/spec/07_open_items.md` に反映済み）。
+補助②は履歴が `00001`〜`00019` の19行で孤児2件が消滅（`00020` 適用後は20行）。
+
+`2026-08-15_token-refresh-prereq-check.sql`: **seq 1〜8 すべて `OK`**（16:13 UTC）。
+
+| seq  | 確定した事実                                                                               |
+| ---- | ------------------------------------------------------------------------------------------ |
+| 1    | Vault関数4件。**`00020` のヘルパー作成が本番に実在**（`read_vault_secret_by_name` を含む） |
+| 2〜3 | 4/4件が security definer かつ `service_role` EXECUTE 可                                    |
+| 4    | `anon`/`authenticated` の EXECUTE 漏れ **0件** ＝ `00017` のREVOKEが本番で有効             |
+| 5    | cronジョブ1件 / `0 0,6,12,18 * * *` / active                                               |
+| 6    | cron本文 **vault参照=true / GUC参照=false** ＝ **`00020` のcron再登録が本番に実在**        |
+| 7〜8 | `sentio_supabase_url` / `sentio_service_role_key` が各1件                                  |
+
+> **seq 1 と seq 6 をもって、`00020` の「ヘルパー作成」「cron再登録」の実在確認は完了とする。**
+> `supabase db push` はファイル単位でしか出力しないため、デプロイログ単独では
+> 「`00020` が完走した」ことまでしか言えなかった。本番の実オブジェクトで確定させた。
+
+**seq 9（cron疎通）も 2026-08-16 に確定した。** `cron.job_run_details` が
+**4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**（`net.http_post` 正常）。
+シークレット登録（16:13 UTC）が初回発火（18:00 UTC）より前に完了していたため、
+予測どおり初回から成功している。
+⇒ `00020` の「Vaultから秘密取得 → Edge Function 呼び出し」経路が本番稼働している。
+
+**前提確認は seq 1〜9 すべて完了。** 残るは実トークンでのリフレッシュ実測
+（検証A〜D）だが、`connections` が0件のため**初回OAuth連携作成後に繰り延べ**
+（2026-08-16 検収者判断）。詳細は `2026-08-16_token-refresh-verification-run.md` の実施記録。
 
 > **§2〜§4 は統合版に置き換えた（2026-08-15）。**
 > `docs/runbooks/2026-08-15_token-refresh-prereq-check.sql` を**1回コピペで実行**すれば、
-> §2（Vault権限）・§3（cronジョブ）・§4（GUC）が1つのグリッドで判定される。読み取り専用。
+> §2（Vault権限）・§3（cronジョブ）・§4（Vaultシークレット）が1つのグリッドで判定される。読み取り専用。
 > 以下の §2〜§4 は各項目の背景と期待値の説明として残す。
 >
 > 特に §2 は、旧版の `SET ROLE` を使う手順を**カタログ参照（`has_function_privilege`）に
 > 変更**した。旧版は読み取り専用でなく、2文目が例外で終わるため1回コピペにできず、
 > `RESET ROLE` の流し忘れでセッションが権限降格したまま残る危険があった。
 >
-> §4 が `NG: 未設定` だった場合の設定手順は、秘密の実値を扱う**関門2**のため
-> `docs/runbooks/2026-08-15_guc-setup-procedure.md` に分離した。
+> **§4 の GUC方式は廃止**（本番で `42501` により設定不能と実測）。Vault方式へ移行済み。
+> 経緯は `2026-08-15_guc-setup-procedure.md`、登録手順は
+> `2026-08-15_vault-secret-setup-procedure.md`（関門2）。
+
+### 検証A〜D の実行手順
+
+**`docs/runbooks/2026-08-16_token-refresh-verification-run.md` を使う。**
+実行順に必要なものだけを並べた作業用で、読み取り専用から始まり書き込みは1文のみ。
+以下の §検証A〜D は背景と根拠の解説として残す。
 
 ### 2. Vault権限の確認（SQL Editor）
 

@@ -44,17 +44,17 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 
 ## 3. 環境定数
 
-| 項目 | 値 |
-| --- | --- |
-| 本番 Project Ref | `kwpldqbnkraftaahnpev`（CLI直接操作は絶対禁止。反映はCIのみ） |
-| リポジトリ | `github.com/shotarokajitani/sentio`（public読み取り） |
-| CI | `ci.yml`（PR時: gitleaks/verify/integration/edge-functions） |
-| デプロイ | `deploy.yml`（main push時: verify→deploy-migrations→deploy-functions） |
-| Supabase CLI | **2.113.0 固定**（latestは破壊的変更で事故実績。dependabot #5 はclose済み） |
-| migration | 00001〜00020 本番適用済み（2026-08-15時点） |
-| Vaultシークレット名 | `sentio_supabase_url` / `sentio_service_role_key`（00020の正本と一致必須） |
-| cron | `sync-connections`、`0 0,6,12,18 * * *`（UTC）＝JST 9/15/21/3時 |
-| SQL Editor | https://supabase.com/dashboard/project/kwpldqbnkraftaahnpev/sql/new |
+| 項目                | 値                                                                          |
+| ------------------- | --------------------------------------------------------------------------- |
+| 本番 Project Ref    | `kwpldqbnkraftaahnpev`（CLI直接操作は絶対禁止。反映はCIのみ）               |
+| リポジトリ          | `github.com/shotarokajitani/sentio`（public読み取り）                       |
+| CI                  | `ci.yml`（PR時: gitleaks/verify/integration/edge-functions）                |
+| デプロイ            | `deploy.yml`（main push時: verify→deploy-migrations→deploy-functions）      |
+| Supabase CLI        | **2.113.0 固定**（latestは破壊的変更で事故実績。dependabot #5 はclose済み） |
+| migration           | 00001〜00020 本番適用済み（2026-08-15時点）                                 |
+| Vaultシークレット名 | `sentio_supabase_url` / `sentio_service_role_key`（00020の正本と一致必須）  |
+| cron                | `sync-connections`、`0 0,6,12,18 * * *`（UTC）＝JST 9/15/21/3時             |
+| SQL Editor          | https://supabase.com/dashboard/project/kwpldqbnkraftaahnpev/sql/new         |
 
 ## 4. 定型の検収手順（Cowork）
 
@@ -65,25 +65,52 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 3. 判定と根拠を人間に返し、Claude Code へ貼るコピペ用指示文を毎回作る
 4. 検収状況の変化は claude.ai プロジェクトナレッジのメモを更新して固定する
 
-## 5. 現在地と残作業（2026-08-16 02:30 JST時点）
+## 5. 現在地と残作業（2026-08-17 時点）
 
-**完了**: フェーズ1（コミット分離・hooks強化）／フェーズ2（RLS 00019・rls.test.ts
-実クエリ化・CI完全化）／フェーズ3（分岐C確定・00013/00014/00015修正・CI repair step・
-00020 Vault化）。migration 00001〜00020 本番適用済み、17function デプロイ済み、
-prereq-check seq 1〜8 OK、Vaultシークレット2件登録済み（16:13 UTC）。
+**CC指示書_03 のフェーズ1〜3は完了。** フェーズ1（コミット分離・hooks強化）／
+フェーズ2（RLS 00019・rls.test.ts実クエリ化・CI完全化）／フェーズ3（分岐C確定・
+00013/00014/00015修正・CI repair step・00020 Vault化）。
+migration 00001〜00020 本番適用済み、17function デプロイ済み、
+Vaultシークレット2件登録済み（2026-08-15 16:13 UTC）。
 
-**残作業**:
-1. **seq 9**（cron疎通）: 初回発火 2026-08-15 18:00 UTC（JST 8/16 03:00）以降に
-   `docs/runbooks/2026-08-15_token-refresh-prereq-check.sql` を再実行して確認
-2. **検証A〜D**: `docs/runbooks/2026-08-16_token-refresh-verification-run.md`（PR #13）。
-   STEP 1で対象選定→検収者確認→STEP 2〜4。STEP 3のみ本番書き込み（人間確認必須）
-3. **PR #13 の merge**: 検証完了後（検収者判断済み）
-4. **dependabot 残5件**（#2/#3/#4/#6/#7）: フェーズ完了後にCI緑確認の上で一括処理
-5. **旧スキーマ16テーブルの処遇**（削除/退避/残置）: 人間の関門。`api_keys` の
-   中身確認を優先（`docs/spec/07_open_items.md` に実測記録済み）
-6. **PC買い替え（8/20以降）**: 移行チェックリストを作成して支援する
-   （repo clone・.env移送・Node/pnpm/Supabase CLI/Docker導入）。
-   それまでディスク残1.5GBのため、ローカル検証はCI代替で運用
+**前提確認は seq 1〜9 すべて完了**（`2026-08-15_token-refresh-prereq-check.sql`）。
+seq 9（cron疎通）は 2026-08-16 に確定: `cron.job_run_details` が
+**4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**。
+⇒ `00020` の「Vaultから秘密取得 → `net.http_post` → Edge Function 呼び出し」が
+本番で4回連続成功。GUC方式が42501で塞がれた後に選んだVault方式が機能している。
+
+### 唯一の前提待ち
+
+**検証A〜D（実トークンでのリフレッシュ実測 / B-s2-1・B-s2-2・B-s2-3）**
+
+- 2026-08-16 に STEP 1 を実行したところ **`connections` が全ステータス0件**で、
+  手順書のSTOP条件に該当。**初回のOAuth連携が作られた時点で実施**（繰り延べ確定）
+- 手順書: `docs/runbooks/2026-08-16_token-refresh-verification-run.md`
+- 再開はSTEP 1から。STEP 3のみ本番書き込み（人間確認必須）
+
+### バックログ（着手は人間の指示待ち）
+
+1. **dependabot 残5件**（#2/#3/#4/#6/#7）: CI緑確認の上で一括処理。
+   なお #5（`supabase/setup-cli` major更新）は**2.113.0固定方針と衝突するためclose済み**。
+   同種の更新が再度上がっても同じ理由でcloseする
+2. **旧スキーマ16テーブルの処遇**（削除/退避/残置）: 人間の関門。
+   `api_keys`（秘密をVaultでなくテーブル保持する旧設計）の中身確認を優先。
+   実測記録は `docs/spec/07_open_items.md`。**現状は安全**（全件RLS有効・越境不可）
+3. **キーローテーション時のVault更新**: `service_role` キーを更新したら
+   `sentio_service_role_key` も **`update_vault_secret` で**更新する
+   （`store_vault_secret` の再実行は禁止＝同名重複で
+   `read_vault_secret_by_name` が曖昧エラーになる）。忘れるとcronだけが静かに止まる。
+   手順は `docs/runbooks/2026-08-15_vault-secret-setup-procedure.md`
+4. **PC買い替え（8/20以降）**: 移行チェックリストを作成して支援
+   （repo clone・.env移送・Node/pnpm/Supabase CLI/Docker導入）
+
+### 環境の制約（運用上の注意）
+
+ローカルのディスクが逼迫しており、**2026-08-16 に0バイト到達で `git rebase` が失敗**した
+（`Out of diskspace` で作業ツリーのファイルが0バイトに破損。`git restore` で復旧済み・
+コミット済みの内容に損失なし）。キャッシュ削除で回復したが、
+**ローカルの `supabase start` / `db reset` は引き続き不可**。
+スキーマ検証はCIの `integration` ジョブ（`supabase db reset` を実行）で代替すること。
 
 ## 6. 過去の主要な実測記録（誤読防止）
 

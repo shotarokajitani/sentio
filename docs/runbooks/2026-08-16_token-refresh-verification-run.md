@@ -4,6 +4,21 @@
 前提: `2026-08-15_token-refresh-prereq-check.sql` の **seq 1〜8 が OK**（2026-08-15 16:13 UTC 達成済み）
 正本の解説: `2026-08-07_token-refresh-verification.md`（背景・実装挙動の根拠はそちら）
 
+> ## 実施記録
+>
+> **2026-08-16: STEP 1実行 → `connections` 0件でSTOP。**
+> 検証A〜Dは**初回OAuth連携作成後に実施**する（繰り延べ確定・検収者判断）。
+> `connections` は全ステータス0件で、STEP 1 の SUMMARY が
+> `STOP: activeな接続が0件` を返した。前提不足であり、実装の問題ではない。
+>
+> **cron疎通は別経路で実証済み。** `cron.job_run_details` が
+> **4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**（`net.http_post` 正常）。
+> ⇒ `00020` の「Vaultから秘密取得 → Edge Function 呼び出し」が本番で4回連続成功しており、
+> prereq-check の seq 9 相当は **OK**。
+>
+> したがって**未確認として残るのは「実際のトークンでリフレッシュが起きるか」だけ**
+> （B-s2-1 / B-s2-2 / B-s2-3）。連携が1件でも作られたら本書のSTEP 1から再開する。
+
 本書は**実行順に必要なものだけ**を並べた作業用。読み取り専用から始まり、
 書き込みは **STEP 3 の1文のみ**。
 

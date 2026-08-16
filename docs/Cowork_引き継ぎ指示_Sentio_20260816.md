@@ -51,7 +51,7 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 | CI                  | `ci.yml`（PR時: gitleaks/verify/integration/edge-functions）                |
 | デプロイ            | `deploy.yml`（main push時: verify→deploy-migrations→deploy-functions）      |
 | Supabase CLI        | **2.113.0 固定**（latestは破壊的変更で事故実績。dependabot #5 はclose済み） |
-| migration           | 00001〜00020 本番適用済み（2026-08-15時点）                                 |
+| migration           | 00001〜00020 本番適用済み。**00021（旧スキーマ削除）はpush可待ち**          |
 | Vaultシークレット名 | `sentio_supabase_url` / `sentio_service_role_key`（00020の正本と一致必須）  |
 | cron                | `sync-connections`、`0 0,6,12,18 * * *`（UTC）＝JST 9/15/21/3時             |
 | SQL Editor          | https://supabase.com/dashboard/project/kwpldqbnkraftaahnpev/sql/new         |
@@ -70,7 +70,7 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 **CC指示書_03 のフェーズ1〜3は完了。** フェーズ1（コミット分離・hooks強化）／
 フェーズ2（RLS 00019・rls.test.ts実クエリ化・CI完全化）／フェーズ3（分岐C確定・
 00013/00014/00015修正・CI repair step・00020 Vault化）。
-migration 00001〜00020 本番適用済み、17function デプロイ済み、
+migration 00001〜00020 本番適用済み（00021 は push 可待ち）、17function デプロイ済み、
 Vaultシークレット2件登録済み（2026-08-15 16:13 UTC）。
 
 **前提確認は seq 1〜9 すべて完了**（`2026-08-15_token-refresh-prereq-check.sql`）。
@@ -90,12 +90,19 @@ seq 9（cron疎通）は 2026-08-16 に確定: `cron.job_run_details` が
 
 ### バックログ（着手は人間の指示待ち）
 
-1. **dependabot 残5件**（#2/#3/#4/#6/#7）: CI緑確認の上で一括処理。
-   なお #5（`supabase/setup-cli` major更新）は**2.113.0固定方針と衝突するためclose済み**。
-   同種の更新が再度上がっても同じ理由でcloseする
-2. **旧スキーマ16テーブルの処遇**（削除/退避/残置）: 人間の関門。
-   `api_keys`（秘密をVaultでなくテーブル保持する旧設計）の中身確認を優先。
-   実測記録は `docs/spec/07_open_items.md`。**現状は安全**（全件RLS有効・越境不可）
+1. ~~dependabot 残5件~~ → **2026-08-17 に全件merge済み**（#2/#3/#4/#6、および
+   #7を作り直した#16）。`actions/checkout@v7` / `actions/setup-node@v7` /
+   `pnpm/action-setup@v6` / `gitleaks/gitleaks-action@v3` /
+   `@anthropic-ai/sdk@0.116.0` / `@supabase/supabase-js@2.112.3`。
+   #5（`supabase/setup-cli` major更新）は**2.113.0固定方針と衝突するためclose済み**。
+   同種の更新が再度上がっても同じ理由でcloseする。
+   **注意**: `gitleaks-action@v3` は組織アカウントでは `GITLEAKS_LICENSE` が必要。
+   現在は個人アカウントのため不要だが、組織へ移管すると秘密検査が止まる
+2. ~~旧スキーマ16テーブルの処遇~~ → **2026-08-17 に「削除」で決着（方針A）。**
+   `00021_drop_legacy_schema.sql` で明示リストの単一 `DROP TABLE`（CASCADE不使用）。
+   バックアップはJSONスナップショットで取得済み（リポジトリ外）。
+   事前調査 `2026-08-17_legacy-drop-preflight.sql` / 適用後確認 `..._postdeploy.sql`。
+   記録は `docs/spec/07_open_items.md`（クローズ済み）
 3. **キーローテーション時のVault更新**: `service_role` キーを更新したら
    `sentio_service_role_key` も **`update_vault_secret` で**更新する
    （`store_vault_secret` の再実行は禁止＝同名重複で
@@ -116,7 +123,10 @@ seq 9（cron疎通）は 2026-08-16 に確定: `cron.job_run_details` が
 
 - 旧スキーマ16テーブルは全件RLS有効・ポリシーは自社スコープで越境不可（実測済み）。
   authenticated の書き込みグラントは4月からの既存状態（Supabaseビルトイン付与）で
-  今回の修復の後退ではない
+  今回の修復の後退ではない。
+  **この安全性の確認があったからこそ削除は「緊急対応」ではなく計画的な整理として
+  扱えた**（2026-08-17に方針Aで削除決定・00021）。削除の決め手は越境リスクではなく、
+  `api_keys` が秘密をテーブル保持する旧設計だったこと
 - GUC方式（ALTER DATABASE ... SET app.settings.*）は本番で 42501 により**経路ごと不可**。
   秘密は Vault 一本化（00020）が現行の正
 - `expires_at` が動かない＝故障ではない（リフレッシュは期限5分前からのみ）。

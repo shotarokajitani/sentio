@@ -16,10 +16,10 @@ function readMigration(prefix: string): string {
  * コメントごと検査すると経緯の記述そのものが書けなくなる。
  */
 function executableSql(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => line.replace(/--.*$/, ""))
-    .join("\n");
+  // `[^\n]` を使う。`.` は \r にマッチしないため、CRLF のファイルでは
+  // `/--.*$/` が1つもマッチせずコメントが素通りする（改行コード依存の空振り）。
+  // 実際に autocrlf で CRLF に変換された作業ツリーで検知漏れが起きた。
+  return sql.replace(/--[^\n]*/g, "");
 }
 
 /**

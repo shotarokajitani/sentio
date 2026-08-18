@@ -224,3 +224,29 @@ OAuth の `state` は 32バイトの乱数に変え、httpOnly cookie と照合�
 
 ~~**未確定のまま維持する点:** 旧スキーマの処遇（削除 / 退避 / 残置）そのもの。~~
 → **2026-08-17 に「削除」で確定（本節冒頭を参照）。この項目はクローズ。**
+
+## `check:allowlist` のCI空洞 — 修正タスク（2026-08-18 登録・本PRでは修正しない）
+
+CLAUDE.md絶対規則「S2テーブルに本文型カラムを追加しない（allowlist外カラムのマイグレーション禁止）」は、
+CIジョブ `verify` の `pnpm run check:allowlist` で担保されている**建て付けになっているが、実際には担保されていない**。
+
+**実測（run 32134357004 / job 95702233426）:** このstepの出力は
+`check:allowlist — run against live DB` の**1行のみ**。`scripts/check-allowlist.ts` のCLI入口は
+`console.log` だけで、実DBの `information_schema.columns` を照会していない。
+純粋関数 `validateS2Columns` は `tests/unit/allowlist.test.ts` の3ケースで検証済みだが、
+**その関数を実スキーマに当てる経路が存在しない**ため、allowlist外カラムが本番に入っても
+CIは必ず緑になる。
+
+### 判断が要ること
+
+1. **どのDBに当てるか。** ローカル（`supabase start`）／CIのSupabaseサービスコンテナ（`integration`
+   ジョブは既にDB接続を持ち、8ファイル44テストをskipなしで実行できている）／本番read-only の3択。
+   本番Refへの直接操作はCLAUDE.md絶対規則で禁止のため、実行するならCI経由に限る
+2. **どのジョブに置くか。** 現状 `verify` にあるがDB接続を持たない。`integration` 側へ移すのが素直だが、
+   その場合「S2規則違反の検知」が統合テストの成否に混ざる
+3. **失敗時の扱い。** allowlist違反はマイグレーションのmerge阻止条件なので、fail-closed（ジョブ失敗）とする
+
+### 暫定の扱い
+
+修正までの間、S2スキーマ変更は `.claude/skills/migration` の手順と schema-reviewer の
+レビューだけが担保になる。**「CIが通ったからallowlistは守られている」と読んではならない。**

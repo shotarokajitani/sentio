@@ -49,8 +49,15 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 `shotaro.kajitani@mdc-diseno.com` の1名のみ。
 
 **この設定の直接の帰結: refresh_token が7日で失効する。**
-2026-08-18 04:41 UTC に作成した検証用の接続は、**2026-08-25 04:41 UTC 頃に失効**し、
-以降の cron 実行で `status = reauth_required` に落ちる見込み。
+
+> **2026-08-18 更新。** ここに書いていた検証用接続（2026-08-18 04:41 UTC 作成・
+> 2026-08-25 頃に失効見込み）は、スライスA本番切替の手順4で**削除済み**。
+> 現在の接続は A-1 実測で作り直した `985e6672…`（company
+> `197f2c0e-aef8-405d-afcc-34d23c771fcd` / `active`）**1件のみ**で、
+> 7日の時計はこちらの連携時刻から数え直しになる。正確な時刻は
+> `select last_refresh, expires_at from connections` で確認すること
+> （`connections` に `created_at` は無い）。
+> 失効すると cron 実行で `status = reauth_required` に落ちる。
 
 - 検証目的では問題ない（B-s2-2 の自然な本番実証として使える）
 - **実ユーザーを1社でも迎えるなら成立しない。** 7日ごとに再連携を強いることになる

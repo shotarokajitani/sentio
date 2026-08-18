@@ -42,3 +42,38 @@ export async function createReadOnlyClient(): Promise<SupabaseClient> {
     },
   });
 }
+
+export interface PendingCookie {
+  name: string;
+  value: string;
+  options?: Record<string, unknown>;
+}
+
+/**
+ * 認証操作（サインイン／サインアップ／サインアウト）専用のクライアント。
+ *
+ * 発行されたセッションcookieを配列に溜め、呼び出し側が作ったレスポンスへ
+ * 明示的に載せる。`next/headers` の cookies() 経由の書き込みが
+ * 自作の NextResponse に載るかどうかはフレームワーク側の合流に依存するため、
+ * ログインという最重要経路ではその依存を持たない。
+ */
+export function createAuthClient(request: {
+  cookies: { getAll: () => { name: string; value: string }[] };
+}): { supabase: SupabaseClient; pending: PendingCookie[] } {
+  const pending: PendingCookie[] = [];
+
+  const supabase = createServerClient(
+    requiredEnv("SUPABASE_URL"),
+    requiredEnv("SUPABASE_ANON_KEY"),
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (list) => {
+          pending.push(...list);
+        },
+      },
+    },
+  );
+
+  return { supabase, pending };
+}

@@ -16,10 +16,10 @@ GBIZINFO_TOKEN / ESTAT_APP_ID / (追加時にここへ行を足す)
 `GOOGLE_CLIENT_SECRET` は**同じ値を2つの保管先が別々に持つ**。片方だけ更新すると、
 更新しなかった側の経路だけが静かに壊れる。
 
-| 保管先 | 使う経路 | 失敗したときの見え方 |
-| --- | --- | --- |
-| **Vercel env**（`sentio-9e2b` / Production and Preview） | 初回連携のコード交換（`/auth/callback/google`） | `/register?error=token_exchange_failed` |
-| **Supabase Function Secrets** | **トークンリフレッシュ**（`sync-connections` → `_shared/token-refresh.ts`） | cron が6時間ごとに静かに失敗。Edge Function Logs に `invalid_client` |
+| 保管先                                                   | 使う経路                                                                    | 失敗したときの見え方                                                 |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Vercel env**（`sentio-9e2b` / Production and Preview） | 初回連携のコード交換（`/auth/callback/google`）                             | `/register?error=token_exchange_failed`                              |
+| **Supabase Function Secrets**                            | **トークンリフレッシュ**（`sync-connections` → `_shared/token-refresh.ts`） | cron が6時間ごとに静かに失敗。Edge Function Logs に `invalid_client` |
 
 ### ローテーション手順（両方を必ず更新する）
 

@@ -43,9 +43,13 @@ Gmail CASA・GBPの実装はフェーズ2。BOJ APIは本番公開時にpost.rsd
 
 Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは流用。旧Edge Functions/スキーマは凍結→新設計で置換。
 
-## ~~本番public に残存する旧スキーマの処遇~~ → **クローズ（2026-08-17・方針A＝削除）**
+## ~~本番public に残存する旧スキーマの処遇~~ → **クローズ（方針A＝削除・2026-08-18 適用完了）**
 
 > **決定: 旧スキーマ16テーブルを削除する（方針A）。2026-08-17 検収者承認。**
+> **2026-08-18 に本番適用完了・最終検収合格**（deploy run 32088752964）。
+> 適用後確認SQLで全行OK: 旧16件消滅 / 新12件無傷 / 想定外テーブルなし /
+> cron は `sync-connections` のみ active / 履歴21件・最新 `00021`。
+> 旧cronジョブ7件の実解除もこの実測で確定した。
 >
 > - 削除は `supabase/migrations/00021_drop_legacy_schema.sql` で実施。明示リストの
 >   単一 `DROP TABLE IF EXISTS`（CASCADE不使用。理由は同ファイル内のコメント）

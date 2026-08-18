@@ -92,13 +92,13 @@ RLS をバイパスするため、company_id を知る／推測できる第三�
 `/api/connections` だけでなく5本あった。読み取りだけでなく**他社への書き込み**も通っていた。
 いずれも同時に塞いだ。
 
-| ルート | 当時の受け取り方 | 影響 |
-|---|---|---|
-| `api/connections` | クエリparam | 他社の接続状態とイベント件数の読み取り |
-| `api/csv/ingest` | JSON body | 他社スコープへの events 書き込み |
-| `api/competitors/suggest` | JSON body | 他社スコープへの entities 書き込み |
-| `api/auth/google` | クエリparam を OAuth `state` に流用 | 他社への接続紐付け／state がCSRFトークンとして無機能 |
-| `api/auth/freee` | 同上 | 同上 |
+| ルート                    | 当時の受け取り方                    | 影響                                                 |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `api/connections`         | クエリparam                         | 他社の接続状態とイベント件数の読み取り               |
+| `api/csv/ingest`          | JSON body                           | 他社スコープへの events 書き込み                     |
+| `api/competitors/suggest` | JSON body                           | 他社スコープへの entities 書き込み                   |
+| `api/auth/google`         | クエリparam を OAuth `state` に流用 | 他社への接続紐付け／state がCSRFトークンとして無機能 |
+| `api/auth/freee`          | 同上                                | 同上                                                 |
 
 OAuth の `state` は 32バイトの乱数に変え、httpOnly cookie と照合するようにした。
 

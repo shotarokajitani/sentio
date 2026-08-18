@@ -361,9 +361,16 @@ a {
   font-size: 0.95rem;
 }
 
+/* body の p は margin 0 が既定なので、条文が続く画面ではここで間を空ける */
+.prose h2 + p,
+.prose p + p,
+.prose ul + p {
+  margin-top: var(--s3);
+}
+
 .prose ul {
   padding-left: 1.2em;
-  margin: var(--s2) 0 0;
+  margin: var(--s3) 0 0;
 }
 
 @media (max-width: 640px) {

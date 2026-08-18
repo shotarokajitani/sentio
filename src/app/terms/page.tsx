@@ -3,7 +3,7 @@ import { t } from "@/i18n";
 
 export const metadata = { title: `${t.legal.termsTitle} — ${t.brand}` };
 
-const UPDATED_AT = "2026-08-18";
+const UPDATED_AT = "2026-08-19";
 
 export default function TermsPage() {
   return (
@@ -21,7 +21,8 @@ export default function TermsPage() {
 
       <h2>1. 本規約について</h2>
       <p>
-        本規約は、Sentio（以下「本サービス」）の提供条件および利用者と提供者の関係を定めるものです。
+        本規約は、株式会社ディセーノ（以下「提供者」）が提供する Sentio（以下「本サービス」）の
+        提供条件および利用者と提供者の関係を定めるものです。
         本サービスを利用した時点で、本規約に同意したものとみなします。
       </p>
 

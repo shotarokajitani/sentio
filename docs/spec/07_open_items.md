@@ -61,6 +61,20 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 > それでも削除を選んだのは、共存を続ける積極的な理由が無く、
 > `api_keys` が秘密をVaultでなくテーブルに保持する旧設計だったため（評価3-a）。
 >
+> **旧cronジョブ7件も同時に解除する**（2026-08-17 preflight 実測）。
+> `daily-trial-check` / `monthly-cleanup-external-data` / `daily-expire-questions` /
+> `daily-expire-signals` / `monthly-delete-expired-companies` /
+> `weekly-summary-email` / `daily-onboarding-mail` が **4月から `active` のまま残存**していた。
+> 解除しないままテーブルを消すと、以後ずっと静かに失敗し続ける。
+> `sync-connections` は新スキーマ側なので解除しない。
+>
+> **要注意 — 旧メール系ジョブ2件**: `weekly-summary-email` と `daily-onboarding-mail` が
+> 4月から `active` だった。**実ユーザーへメールが送られ続けていた可能性がある。**
+> Sentio の絶対規則「何も勝手に送らない」に照らすと看過できない事実だが、
+> 送信の有無・宛先・件数はこの時点では未確認。
+> **`cron_job_logs` のバックアップJSON（リポジトリ外・2026-08-17取得）から後日調査可能**。
+> テーブル削除後は本番から追跡できなくなるため、調査はバックアップが唯一の材料になる。
+>
 > 以下は当時の実測記録。決定の根拠として保存する。
 
 ### （記録）当時の状況

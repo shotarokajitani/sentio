@@ -137,6 +137,16 @@ const CASES = [
     expect: "allow",
   },
   {
+    // 実際にこれでブロックされた。`|` はトークン区切りなので `process\.env` が
+    // 単独トークンになり、旧実装では「バックスラッシュ + .env + 終端」で誤検知した
+    name: "陽性: grepの正規表現 process\.env がトークン末尾に来る形",
+    script: "block-env-read.mjs",
+    payload: pre("Bash", {
+      command: 'grep -nE "process\.env|createClient" src/app/api/connections/route.ts',
+    }),
+    expect: "allow",
+  },
+  {
     name: "陽性: .envrc は対象外",
     script: "block-env-read.mjs",
     payload: pre("Read", { file_path: ".envrc" }),

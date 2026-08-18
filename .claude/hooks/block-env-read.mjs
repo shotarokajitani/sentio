@@ -9,12 +9,26 @@ import {
   PATH_KEYS,
 } from "./_input.mjs";
 
+// 正規表現のエスケープ `\.` を先に畳んでから判定する。
+// grep のパターンに現れる `process\.env` は、素で見ると「バックスラッシュ + .env」で
+// パス区切りの直後と区別できず誤検知していた（実際にブロックされた）。
+const unescapeRegex = (s) => s.replace(/\\./g, ".");
+
 // `.env` / `.env.local` / `path/to/.env` は該当する。
 // 該当しないもの:
-//   - `.envrc`         … 別物のファイル
-//   - `process.env.X`  … JSのプロパティアクセス。パス境界（先頭 or / or \）を要求して除外する
-//   - `config.env`     … .gitignore が守る対象は `.env` / `.env.*` のみ
-const isEnvPath = (s) => /(^|[\\/])\.env($|\.)/.test(s) && !s.includes(".env.example");
+//   - `.envrc`        … 別物のファイル
+//   - `process.env.X` … JSのプロパティアクセス（パス境界を要求して除外）
+//   - `process\.env`  … grepの正規表現（上のエスケープ畳み込みで除外）
+//   - `config.env`    … .gitignore が守る対象は `.env` / `.env.*` のみ
+//
+// 残る制約: バックスラッシュ区切りのWindowsパス（C:\dir\.env）は、
+// エスケープ畳み込みで `.env` 直前の区切りが失われるため検出できない。
+// Git Bash ではバックスラッシュはエスケープ扱いでパスとして機能しないため、
+// 実運用での取りこぼしは想定していない。スラッシュ区切りは従来どおり検出する。
+const isEnvPath = (raw) => {
+  const s = unescapeRegex(raw);
+  return /(^|\/)\.env($|\.)/.test(s) && !s.includes(".env.example");
+};
 
 try {
   const input = readHookInput();

@@ -54,7 +54,7 @@ sprint-evaluator（プレビュー環境＋合成会社でE2E採点）→ エン
 
 ## ポインタ
 
-- 層別規約: `.claude/rules/`（ingest/state/sense/act/security）
+- 層別規約: `.claude/rules/`（ingest/state/sense/act/security ＋ hooks-coverage / nextjs）
 - 手順: `.claude/skills/`（migration / edge-function / synthetic-company / gotchas）
 - 採点者: `.claude/agents/sprint-evaluator.md`（レビューはgapのみ報告、スタイル指摘禁止）
 - 鍵運用: `docs/secrets-runbook.md` / 事故対応: `docs/incident.md`

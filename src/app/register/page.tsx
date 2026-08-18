@@ -1,59 +1,42 @@
-"use client";
+import { Masthead } from "@/components/Masthead";
+import { t, errorMessage } from "@/i18n";
+import { getCompanyId } from "@/lib/auth/company";
 
-import { useState } from "react";
+export const metadata = { title: t.brand };
 
-export default function RegisterPage() {
-  const [companyName, setCompanyName] = useState("");
-  const [url, setUrl] = useState("");
+type Search = Promise<Record<string, string | string[] | undefined>>;
 
-  const companyId = "00000000-0000-0000-0000-000000000001";
-
-  const error =
-    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
+export default async function RegisterPage({ searchParams }: { searchParams: Search }) {
+  const params = await searchParams;
+  const raw = params.e;
+  const failure = errorMessage(Array.isArray(raw) ? raw[0] : raw);
+  const companyId = await getCompanyId();
 
   return (
-    <div style={{ maxWidth: 480, margin: "80px auto", fontFamily: "sans-serif" }}>
-      <h1>Sentio — 登録</h1>
+    <main className="page">
+      <Masthead signedIn={Boolean(companyId)} />
 
-      {error && (
-        <p style={{ color: "red", border: "1px solid red", padding: 8 }}>エラー: {error}</p>
+      <h1>{t.register.title}</h1>
+      <p className="lead">{t.register.lead}</p>
+      <p className="lead" style={{ marginTop: 0 }}>
+        {t.register.lead2}
+      </p>
+
+      {failure && (
+        <div className="failure" role="alert" style={{ marginTop: 24 }}>
+          <p className="failure-title">{failure}</p>
+        </div>
       )}
 
-      <label>
-        会社名
-        <input
-          type="text"
-          value={companyName}
-          onChange={(e) => setCompanyName(e.target.value)}
-          style={{ display: "block", width: "100%", padding: 8, marginBottom: 16 }}
-        />
-      </label>
+      <div className="actions" style={{ marginTop: 40 }}>
+        <a className="btn" href={companyId ? "/connect" : "/login?next=%2Fconnect"}>
+          {t.register.toConnect}
+        </a>
+      </div>
 
-      <label>
-        URL
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com"
-          style={{ display: "block", width: "100%", padding: 8, marginBottom: 24 }}
-        />
-      </label>
-
-      <a
-        href={`/api/auth/google?company_id=${companyId}`}
-        style={{
-          display: "inline-block",
-          padding: "12px 24px",
-          background: "#4285F4",
-          color: "white",
-          textDecoration: "none",
-          borderRadius: 4,
-          fontSize: 16,
-        }}
-      >
-        Google カレンダーを接続
-      </a>
-    </div>
+      <p className="footnote">
+        <a href="/terms">{t.login.terms}</a> ・ <a href="/privacy">{t.login.privacy}</a>
+      </p>
+    </main>
   );
 }

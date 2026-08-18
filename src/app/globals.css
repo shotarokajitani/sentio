@@ -1,0 +1,390 @@
+/*
+ * 「静かな計器板」
+ * 毎朝ちらっと見る計器であって、見せ場ではない。
+ * 装飾ではなく、余白・書体・細い罫線・整列だけで品を出す。
+ * グラデーション／グロー／ネオン／端末風ダークは使わない。
+ */
+
+:root {
+  --paper: #fbfaf7;
+  --surface: #ffffff;
+  --ink: #1a1a18;
+  --ink-muted: #6b6862;
+  --ink-faint: #9a968d;
+  --rule: #e5e1d8;
+  --rule-strong: #cec8ba;
+  --accent: #1f3a5f;
+  --accent-wash: #eef1f6;
+  --attention: #8a5a1b;
+  --attention-wash: #faf3e6;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 16px;
+  --s4: 24px;
+  --s5: 40px;
+  --s6: 64px;
+  --s7: 96px;
+
+  --measure: 46rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), serif;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.75rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+}
+
+h3 {
+  font-size: 1rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 500;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+/* ---- 骨格 ---- */
+
+.page {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--s6) var(--s4) var(--s7);
+}
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: var(--s5);
+}
+
+/* 表記は「Sentio」。全角の大文字組みにしないため uppercase は掛けない。
+   字間は総組み用の広さ（0.24em）だと大小混在で間延びするので詰める */
+.wordmark {
+  font-family: var(--font-display), serif;
+  font-size: 1.15rem;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+
+.masthead-meta {
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+}
+
+.lead {
+  color: var(--ink-muted);
+  margin-top: var(--s3);
+  max-width: 34rem;
+}
+
+.section {
+  margin-top: var(--s5);
+}
+
+.section-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  color: var(--ink-faint);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--s3);
+}
+
+/* ---- 行（接続カードではなく、帳票の行として組む） ---- */
+
+.rows {
+  border-top: 1px solid var(--rule);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row-attention {
+  border-left: 2px solid var(--attention);
+  padding-left: var(--s3);
+  margin-left: -18px;
+}
+
+.row-body {
+  min-width: 0;
+}
+
+.row-name {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.row-desc {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  margin-top: var(--s1);
+}
+
+.row-side {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-shrink: 0;
+}
+
+.row-meta {
+  display: flex;
+  gap: var(--s4);
+  margin-top: var(--s3);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 状態表示 ---- */
+
+.state {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.state-attention {
+  color: var(--attention);
+  background: var(--attention-wash);
+  border: 1px solid #eadcbf;
+  padding: 2px 10px;
+}
+
+/* ---- 操作 ---- */
+
+.btn {
+  display: inline-block;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  padding: 9px 20px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: #16293f;
+  border-color: #16293f;
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--accent);
+}
+
+.btn-quiet:hover {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-plain {
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- 入力 ---- */
+
+.field {
+  display: block;
+  margin-top: var(--s4);
+}
+
+.field-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  margin-bottom: var(--s2);
+}
+
+.field-input {
+  display: block;
+  width: 100%;
+  font: inherit;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+
+.field-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.field-hint {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  margin-top: var(--s1);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  flex-wrap: wrap;
+}
+
+/* ---- 空状態とエラーは別物として見せる（運用ルール§6） ---- */
+
+.empty {
+  padding: var(--s5) 0;
+  color: var(--ink-muted);
+  text-align: center;
+  border-bottom: 1px solid var(--rule);
+}
+
+.empty-title {
+  color: var(--ink);
+}
+
+.empty-body {
+  font-size: 0.875rem;
+  margin-top: var(--s2);
+}
+
+.failure {
+  border: 1px solid var(--attention);
+  background: var(--attention-wash);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s4);
+}
+
+.failure-title {
+  color: var(--attention);
+  font-weight: 500;
+}
+
+.failure-body {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  margin-top: var(--s1);
+}
+
+.notice {
+  border-left: 2px solid var(--accent);
+  background: var(--accent-wash);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s4);
+  font-size: 0.9rem;
+}
+
+.footnote {
+  margin-top: var(--s6);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+
+.footnote a {
+  color: var(--ink-muted);
+}
+
+/* ---- 法務ページ ---- */
+
+.prose h2 {
+  margin-top: var(--s5);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
+}
+
+.prose p,
+.prose li {
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+}
+
+/* body の p は margin 0 が既定なので、条文が続く画面ではここで間を空ける */
+.prose h2 + p,
+.prose p + p,
+.prose ul + p {
+  margin-top: var(--s3);
+}
+
+.prose ul {
+  padding-left: 1.2em;
+  margin: var(--s3) 0 0;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: var(--s5) var(--s3) var(--s6);
+  }
+
+  .row {
+    flex-direction: column;
+    gap: var(--s3);
+  }
+
+  .row-attention {
+    margin-left: 0;
+  }
+}

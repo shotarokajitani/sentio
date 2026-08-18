@@ -71,22 +71,39 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 
 ## /connect スライスで顕在化した2件（2026-08-18 登録）
 
-### 1. `/api/connections` の未認証アクセス — **実ユーザー受け入れ前の必須条件**（認証スライス送り）
+### 1. `/api/connections` の未認証アクセス — **クローズ済み（2026-08-18、スライスA）**
 
-`src/app/api/connections/route.ts` は**認証を持たず**、`company_id` をクエリパラメータで
-受け取り、**service_role キー**で `connections` と `events` を読む。
+**状態: 解消。** 認証スライス（`docs/contracts/slice-auth-ui.md` A-2）で塞いだ。
+
+当時の指摘: `src/app/api/connections/route.ts` は認証を持たず、`company_id` をクエリパラメータで
+受け取り、**service_role キー**で `connections` と `events` を読んでいた。
 RLS をバイパスするため、company_id を知る／推測できる第三者が
-任意の会社の接続状態とイベント件数を取得できる。
+任意の会社の接続状態とイベント件数を取得できた。
 
-**現状の実害はゼロ**: company_id は `/register` と `/connect` にハードコードされた
-デモ用の固定UUID `00000000-0000-0000-0000-000000000001` 1件のみで、
-実ユーザーのデータは存在しない。認証機構自体がまだ無いため、
-このスライスの疎通確認を止める理由にはならない。
+対処:
 
-**ただし実ユーザーを1社でも受け入れる前に必ず塞ぐこと。**
-本番に実データが入った瞬間、この経路は「company_id を知っていれば誰でも読める」になる。
-認証スライスで、セッションから company_id を導出する（クエリパラメータで受け取らない）
-方式へ切り替える。→ **認証スライスの受け入れ条件に含める**
+- `GET /api/connections` は引数を取らなくなった。company_id をクエリパラメータで受け取る経路が
+  構造的に存在しない。company_id はセッション（`auth.uid()`）から導出する
+- service_role をやめ、anon key ＋ ユーザーセッションのクライアントで読む。
+  越境はアプリだけでなく RLS でも止まる（二重化）
+- 未認証は 401
+
+**調査で判明した追加分**: 同じ「クライアント供給の company_id を無検証で信用する」形は
+`/api/connections` だけでなく5本あった。読み取りだけでなく**他社への書き込み**も通っていた。
+いずれも同時に塞いだ。
+
+| ルート                    | 当時の受け取り方                    | 影響                                                 |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `api/connections`         | クエリparam                         | 他社の接続状態とイベント件数の読み取り               |
+| `api/csv/ingest`          | JSON body                           | 他社スコープへの events 書き込み                     |
+| `api/competitors/suggest` | JSON body                           | 他社スコープへの entities 書き込み                   |
+| `api/auth/google`         | クエリparam を OAuth `state` に流用 | 他社への接続紐付け／state がCSRFトークンとして無機能 |
+| `api/auth/freee`          | 同上                                | 同上                                                 |
+
+OAuth の `state` は 32バイトの乱数に変え、httpOnly cookie と照合するようにした。
+
+固定テスト: `tests/unit/connections-api-auth.test.ts`（未認証401）、
+`tests/integration/connections-api.test.ts`（2ユーザー2社の実クエリによる越境不可）。
 
 ### 2. カレンダーの件名・出席者メールを `events.metrics` に保存している（製品判断）
 
@@ -207,3 +224,29 @@ RLS をバイパスするため、company_id を知る／推測できる第三�
 
 ~~**未確定のまま維持する点:** 旧スキーマの処遇（削除 / 退避 / 残置）そのもの。~~
 → **2026-08-17 に「削除」で確定（本節冒頭を参照）。この項目はクローズ。**
+
+## `check:allowlist` のCI空洞 — 修正タスク（2026-08-18 登録・本PRでは修正しない）
+
+CLAUDE.md絶対規則「S2テーブルに本文型カラムを追加しない（allowlist外カラムのマイグレーション禁止）」は、
+CIジョブ `verify` の `pnpm run check:allowlist` で担保されている**建て付けになっているが、実際には担保されていない**。
+
+**実測（run 32134357004 / job 95702233426）:** このstepの出力は
+`check:allowlist — run against live DB` の**1行のみ**。`scripts/check-allowlist.ts` のCLI入口は
+`console.log` だけで、実DBの `information_schema.columns` を照会していない。
+純粋関数 `validateS2Columns` は `tests/unit/allowlist.test.ts` の3ケースで検証済みだが、
+**その関数を実スキーマに当てる経路が存在しない**ため、allowlist外カラムが本番に入っても
+CIは必ず緑になる。
+
+### 判断が要ること
+
+1. **どのDBに当てるか。** ローカル（`supabase start`）／CIのSupabaseサービスコンテナ（`integration`
+   ジョブは既にDB接続を持ち、8ファイル44テストをskipなしで実行できている）／本番read-only の3択。
+   本番Refへの直接操作はCLAUDE.md絶対規則で禁止のため、実行するならCI経由に限る
+2. **どのジョブに置くか。** 現状 `verify` にあるがDB接続を持たない。`integration` 側へ移すのが素直だが、
+   その場合「S2規則違反の検知」が統合テストの成否に混ざる
+3. **失敗時の扱い。** allowlist違反はマイグレーションのmerge阻止条件なので、fail-closed（ジョブ失敗）とする
+
+### 暫定の扱い
+
+修正までの間、S2スキーマ変更は `.claude/skills/migration` の手順と schema-reviewer の
+レビューだけが担保になる。**「CIが通ったからallowlistは守られている」と読んではならない。**

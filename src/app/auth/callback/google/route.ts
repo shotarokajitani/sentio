@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthedContext } from "@/lib/auth/company";
+import { oauthStateCookieName, isMatchingState } from "@/lib/auth/oauth-state";
 import { createClient } from "@supabase/supabase-js";
 import { upsertVaultToken } from "@/security/vault-token";
 
@@ -7,17 +9,37 @@ const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
-  const companyId = req.nextUrl.searchParams.get("state");
-  const error = req.nextUrl.searchParams.get("error");
+  const callbackState = req.nextUrl.searchParams.get("state");
+  const providerError = req.nextUrl.searchParams.get("error");
 
-  if (error) {
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/register?error=${encodeURIComponent(error)}`,
-    );
+  // 全ての離脱経路でstate cookieを片付ける。使い回されたstateはCSRFトークンとして無価値
+  const redirect = (path: string) => {
+    const res = NextResponse.redirect(`${req.nextUrl.origin}${path}`);
+    res.cookies.delete(oauthStateCookieName("google"));
+    return res;
+  };
+
+  if (providerError) {
+    // プロバイダの生のエラーコードは画面に出さない（運用ルール§6）。詳細はサーバログへ
+    console.error("Google OAuth denied:", providerError);
+    return redirect("/connect?e=oauth_denied");
   }
 
-  if (!code || !companyId) {
-    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=missing_params`);
+  // company_id はセッションから取る。stateから取ると第三者が他社に接続を紐付けられる
+  const ctx = await getAuthedContext();
+  if (!ctx) {
+    return redirect("/login?next=%2Fconnect");
+  }
+  const companyId = ctx.companyId;
+
+  const cookieState = req.cookies.get(oauthStateCookieName("google"))?.value ?? null;
+  if (!isMatchingState(cookieState, callbackState)) {
+    console.error("Google OAuth state mismatch");
+    return redirect("/connect?e=oauth_state_mismatch");
+  }
+
+  if (!code) {
+    return redirect("/connect?e=oauth_incomplete");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID!;
@@ -43,7 +65,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok || !tokenData.access_token) {
     console.error("Token exchange failed:", tokenData.error);
-    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=token_exchange_failed`);
+    return redirect("/connect?e=connect_failed");
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -56,15 +78,15 @@ export async function GET(req: NextRequest) {
   });
 
   // 再連携でも同名シークレットを増やさない（既存があれば更新する）
-  const { vaultId, action, error: vaultErr } = await upsertVaultToken(
-    supabase,
-    companyId,
-    tokenPayload,
-  );
+  const {
+    vaultId,
+    action,
+    error: vaultErr,
+  } = await upsertVaultToken(supabase, companyId, tokenPayload);
 
   if (vaultErr || !vaultId) {
     console.error("Vault store failed:", vaultErr);
-    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=vault_failed`);
+    return redirect("/connect?e=connect_failed");
   }
   console.log(`vault token ${action} for company ${companyId}`);
 
@@ -86,13 +108,13 @@ export async function GET(req: NextRequest) {
 
   if (connErr) {
     console.error("Connection insert failed:", connErr.message);
-    return NextResponse.redirect(`${req.nextUrl.origin}/register?error=connection_failed`);
+    return redirect("/connect?e=connect_failed");
   }
 
   // 4. Sync calendar events (past 12 months)
   const syncCount = await syncCalendarEvents(tokenData.access_token, companyId, supabase);
 
-  return NextResponse.redirect(`${req.nextUrl.origin}/register/complete?events=${syncCount}`);
+  return redirect(`/register/complete?events=${syncCount}`);
 }
 
 async function syncCalendarEvents(

@@ -10,13 +10,13 @@
 
 **B-s2-1 / B-s2-3 は本番で実証完了。B-s2-2 は本番未発火（CI統合テストで実証済み）。**
 
-| 段階 | 実測結果 |
-| --- | --- |
-| STEP 0 前提確認 | `prereq-check` seq 1〜9 **すべてOK**（cron 10/10成功） |
-| STEP 1 初回連携 | **成功** `/register/complete?events=15`。2026-08-18 04:41 UTC／`shotaro.kajitani@mdc-diseno.com` |
-| STEP 2 直後の状態 | `connections` 1行 `active` / `has_vault_secret = true`（id `135619bb-ff0b-44a2-885f-65337aa3f4f3`） |
-| STEP 3 手動sync（検証B・C） | `synced` / `refreshed_just_now = true` / **`expires_at` 不変** ＝ 仕様どおり（トークンが有効なため動かないのが正常）。**合格** |
-| STEP 4 検証D | センチネル `2000-01-01` → sync → **`expires_at` が 2026-08-18 06:19 UTC へ前進**・`active` 維持 → **`verdict = PASS: B-s2-1 / B-s2-3 実証完了`** |
+| 段階                        | 実測結果                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| STEP 0 前提確認             | `prereq-check` seq 1〜9 **すべてOK**（cron 10/10成功）                                                                                           |
+| STEP 1 初回連携             | **成功** `/register/complete?events=15`。2026-08-18 04:41 UTC／`shotaro.kajitani@mdc-diseno.com`                                                 |
+| STEP 2 直後の状態           | `connections` 1行 `active` / `has_vault_secret = true`（id `135619bb-ff0b-44a2-885f-65337aa3f4f3`）                                              |
+| STEP 3 手動sync（検証B・C） | `synced` / `refreshed_just_now = true` / **`expires_at` 不変** ＝ 仕様どおり（トークンが有効なため動かないのが正常）。**合格**                   |
+| STEP 4 検証D                | センチネル `2000-01-01` → sync → **`expires_at` が 2026-08-18 06:19 UTC へ前進**・`active` 維持 → **`verdict = PASS: B-s2-1 / B-s2-3 実証完了`** |
 
 ### 確定した事実
 
@@ -34,15 +34,30 @@
 **Dashboard の Test Function UI は1回目が 500 を返した**（UI側の通信エラー。再送で成功）。
 Edge Function 自体の失敗ではないので、1回で判断せず再送すること。
 
-### ⏱ この接続の refresh_token は 2026-08-25 頃に失効する
+### ⏱ B-s2-2 の本番実証は「Google側のアクセス取り消し」で起こす（2026-08-18 方針変更）
 
 同意画面が**テスト中（外部）**のため refresh_token は7日で失効する。
-連携作成が 2026-08-18 04:41 UTC なので、**2026-08-25 04:41 UTC 頃**に失効し、
-以降の cron 実行で `status = reauth_required` に落ちる見込み。
+当初はこの自然失効（当時の接続なら 2026-08-25 04:41 UTC 頃）を B-s2-2 の本番実証に充てる方針だった。
 
-**これは故障ではない。** むしろ **B-s2-2（fail-closed）の自然な本番実証**になる。
-発生したら「壊れた」ではなく「B-s2-2 が本番で実証された」として記録すること。
-`/connect` に「要再連携」バッジと「再接続」ボタンが出ることも併せて確認する。
+**この方針は採らない。** 自然失効は任意のタイミングで再現できず、
+実証がスライスの期間外へずれる日程リスクを負う。
+またスライスA（`docs/contracts/slice-auth-ui.md`）で検証用接続を作り直すため、
+失効予定日そのものが動く。
+
+代わりに、**Google側でアクセスを取り消して意図的に refresh を失敗させる**。
+任意タイミングで再現でき、日程に依存しない。
+
+手順:
+
+1. 対象の Google アカウントで <https://myaccount.google.com/connections> を開く
+2. Sentio のアクセスを取り消す（人間作業）
+3. `sync-connections` を実行する（cron を待つか Dashboard から手動実行）
+4. `connections.status` が `reauth_required` に落ちることを確認する
+5. `/connect` に「要再連携」バッジと「再接続」ボタンが出ることを確認する
+6. 「再接続」から OAuth をやり直し、`status` が `active` に復帰することを確認する
+
+4〜6 はスライスA の A-4-3 の実証そのものでもある。
+記録するときは「壊れた」ではなく「B-s2-2 / A-4-3 が本番で実証された」と書くこと。
 
 本番公開（Google審査）の要否は `docs/spec/07_open_items.md` の未確定項目。
 

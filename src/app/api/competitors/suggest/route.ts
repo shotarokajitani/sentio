@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 
@@ -12,15 +13,19 @@ interface CompetitorSuggestion {
 }
 
 export async function POST(req: NextRequest) {
-  const { company_id, company_name, url, industry } = (await req.json()) as {
-    company_id: string;
+  // company_id はセッション由来。ボディで受け取ると他社に entities を書き込める
+  const ctx = await getAuthedContext();
+  if (!ctx) return unauthorized();
+  const companyId = ctx.companyId;
+
+  const { company_name, url, industry } = (await req.json()) as {
     company_name: string;
     url: string;
     industry: string;
   };
 
-  if (!company_id || !company_name) {
-    return NextResponse.json({ error: "company_id, company_name required" }, { status: 400 });
+  if (!company_name) {
+    return NextResponse.json({ error: "company_name required" }, { status: 400 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -34,7 +39,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  // 自社スコープの書き込みはRLSクライアントで行う
+  const supabase = ctx.supabase;
+  // S0共有行（company_id = null）は設計上 service_role でしか書けない（00019）
+  const shared = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // 1. Use Claude to suggest competitors
   const client = new Anthropic({ apiKey });
@@ -74,7 +82,7 @@ URL: ${url || "不明"}
 
   // 2. Register competitors as entities
   const entityRows = competitors.map((c) => ({
-    company_id,
+    company_id: companyId,
     type: "competitor",
     canonical_name: c.name,
     merge_keys: c.corporate_number ? { corporate_number: c.corporate_number } : {},
@@ -124,7 +132,7 @@ URL: ${url || "不明"}
         };
       });
 
-      const { error: evtErr } = await supabase
+      const { error: evtErr } = await shared
         .from("events")
         .upsert(eventRows, { onConflict: "event_id" });
 

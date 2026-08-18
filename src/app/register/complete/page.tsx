@@ -1,18 +1,34 @@
-"use client";
+import { Masthead } from "@/components/Masthead";
+import { t } from "@/i18n";
 
-export default function CompletePage() {
-  const params =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search)
-      : new URLSearchParams();
+export const metadata = { title: `${t.complete.title} — ${t.brand}` };
 
-  const eventCount = params.get("events") || "0";
+type Search = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function CompletePage({ searchParams }: { searchParams: Search }) {
+  const params = await searchParams;
+  const raw = params.events;
+  const parsed = Number(Array.isArray(raw) ? raw[0] : raw);
+  const events = Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 
   return (
-    <div style={{ maxWidth: 480, margin: "80px auto", fontFamily: "sans-serif" }}>
-      <h1>接続完了</h1>
-      <p>Google カレンダーの接続が完了しました。</p>
-      <p>{eventCount} 件のカレンダーイベントを取り込みました。</p>
-    </div>
+    <main className="page">
+      <Masthead signedIn />
+
+      <h1>{t.complete.title}</h1>
+      <p className="lead">{t.complete.lead}</p>
+
+      {events !== null && (
+        <div className="notice" style={{ marginTop: 40 }}>
+          {t.complete.syncedEvents(events)}
+        </div>
+      )}
+
+      <div className="actions" style={{ marginTop: 40 }}>
+        <a className="btn btn-quiet" href="/connect">
+          {t.complete.backToConnect}
+        </a>
+      </div>
+    </main>
   );
 }

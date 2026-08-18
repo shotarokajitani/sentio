@@ -17,6 +17,14 @@
 --   1回コピペにできない (c) RESET ROLE の流し忘れでセッションが権限降格したまま残る、
 --   という3つの問題がある。
 --   has_function_privilege() でカタログを直接見れば同じ判定が読み取り専用・1文で得られる。
+--
+-- 【2026-08-18 追記・重要な限界】
+--   このカタログ参照は「関数が在る・service_roleが実行できる」までしか見ていない。
+--   **存在と実行可能性は、正しく動くことを意味しない。**
+--   実際 update_vault_secret は seq1〜4 が全てOKだった状態で
+--   `permission denied for table secrets` により動作しなかった（00022で修正）。
+--   関数の動作確認は、カタログではなく実際に呼ぶテストで担保すること
+--   （tests/integration/vault-token-rotation.test.ts が実DBに対して呼んでいる）。
 
 WITH vault AS (
   SELECT

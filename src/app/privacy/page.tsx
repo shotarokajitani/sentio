@@ -15,10 +15,6 @@ export default function PrivacyPage() {
         {t.legal.updatedAt} {UPDATED_AT}
       </p>
 
-      <div className="notice" style={{ marginTop: 24 }}>
-        {t.legal.draftNotice}
-      </div>
-
       <h2>1. 取得する情報</h2>
       <p>Sentio は、お客様が接続を許可した会社情報から次の情報を取得します。</p>
       <ul>

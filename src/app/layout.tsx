@@ -19,7 +19,7 @@ const body = Zen_Kaku_Gothic_New({
 
 export const metadata: Metadata = {
   title: "Sentio",
-  description: "報告なしで、会社の状態が見えるようにする",
+  description: "報告なしで、会社の状況が見えるようにする",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

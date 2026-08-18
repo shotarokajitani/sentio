@@ -99,11 +99,12 @@ a {
   margin-bottom: var(--s5);
 }
 
+/* 表記は「Sentio」。全角の大文字組みにしないため uppercase は掛けない。
+   字間は総組み用の広さ（0.24em）だと大小混在で間延びするので詰める */
 .wordmark {
   font-family: var(--font-display), serif;
-  font-size: 1.05rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
+  font-size: 1.15rem;
+  letter-spacing: 0.1em;
   color: var(--ink);
 }
 

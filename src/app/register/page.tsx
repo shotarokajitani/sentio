@@ -18,6 +18,9 @@ export default async function RegisterPage({ searchParams }: { searchParams: Sea
 
       <h1>{t.register.title}</h1>
       <p className="lead">{t.register.lead}</p>
+      <p className="lead" style={{ marginTop: 0 }}>
+        {t.register.lead2}
+      </p>
 
       {failure && (
         <div className="failure" role="alert" style={{ marginTop: 24 }}>

@@ -2,8 +2,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
 
+/**
+ * 新規作成するVaultシークレットの名前。
+ *
+ * vault.secrets.name には一意制約（secrets_name_idx）が**実在する**
+ * （2026-08-18 のCIで duplicate key 違反として実測）。
+ * そのため固定名にすると、接続行が失われた状態からの再作成が必ず衝突する。
+ *
+ * name はもう検索キーではない（正本は connections.vault_secret_id）ので、
+ * 人間が読める識別子＋一意サフィックスで足りる。
+ */
 export function vaultSecretName(companyId: string): string {
-  return `${GOOGLE_CALENDAR_PROVIDER}:${companyId}`;
+  return `${GOOGLE_CALENDAR_PROVIDER}:${companyId}:${crypto.randomUUID()}`;
 }
 
 export type UpsertVaultTokenResult = {
@@ -28,9 +38,9 @@ export type UpsertVaultTokenResult = {
  * connections.vault_secret_id（(company_id, provider) は00016で一意）なので、
  * name の一意制約の有無に挙動が依存しない。
  *
- * 残る例外: 接続行だけ手動削除され、同名シークレットが孤児として残った場合は
- * 新規作成側に進むため、一意制約がある環境では失敗しうる。
- * 通常のフロー（再連携）では接続行が upsert で残るため発生しない。
+ * 接続行だけが失われ、シークレットが孤児として残った場合も新規作成側で回復する
+ * （名前を一意にしてあるため衝突しない）。孤児シークレットはVaultに残るが、
+ * 参照されないだけで実害はない。
  */
 export async function upsertVaultToken(
   supabase: SupabaseClient,

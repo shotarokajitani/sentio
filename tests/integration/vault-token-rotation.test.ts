@@ -28,8 +28,9 @@ if (mode === "skip") {
 if (mode === "run") {
   describe("Vaultトークンの再連携で同名シークレットが増えない", () => {
     let admin: SupabaseClient;
-    // 実ユーザーIDと衝突しない固定UUID（テスト専用）
-    const COMPANY_ID = "0000000a-0000-4000-8000-00000000d001";
+    // CIは同一DBに対してスイートを3回実行する。固定IDだと前回の残骸と
+    // 干渉するため、実行ごとに一意なIDを使う
+    const COMPANY_ID = crypto.randomUUID();
 
     /** OAuthコールバックと同じ順序を再現する: Vault保存 → connections upsert */
     async function simulateReconnect(payload: string): Promise<string> {

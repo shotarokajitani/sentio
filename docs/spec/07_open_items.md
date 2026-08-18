@@ -52,10 +52,13 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 
 > **2026-08-18 更新。** ここに書いていた検証用接続（2026-08-18 04:41 UTC 作成・
 > 2026-08-25 頃に失効見込み）は、スライスA本番切替の手順4で**削除済み**。
-> 現在の接続は A-1 実測で作り直した `985e6672…`（company
-> `197f2c0e-aef8-405d-afcc-34d23c771fcd` / `active`）**1件のみ**で、
-> 7日の時計はこちらの連携時刻から数え直しになる。正確な時刻は
-> `select last_refresh, expires_at from connections` で確認すること
+> 現在の接続は `985e6672…`（company
+> `197f2c0e-aef8-405d-afcc-34d23c771fcd` / `active`）**1件のみ**。
+>
+> **2026-08-19 再更新。** A-4 実証で一度 `reauth_required` まで落としてから
+> 再接続したため、**7日の時計は 2026-08-19 00:29 JST から数え直し**になった
+> （失効見込みは 2026-08-26 頃）。以後も再連携するたびに起点は動くので、
+> 実際の値は `select last_refresh, expires_at from connections` で確認すること
 > （`connections` に `created_at` は無い）。
 > 失効すると cron 実行で `status = reauth_required` に落ちる。
 
@@ -257,3 +260,37 @@ CIは必ず緑になる。
 
 修正までの間、S2スキーマ変更は `.claude/skills/migration` の手順と schema-reviewer の
 レビューだけが担保になる。**「CIが通ったからallowlistは守られている」と読んではならない。**
+
+## 「取り消し済みだが期限内」の窓で接続済みに見えたままになる（2026-08-19 登録・実装未着手）
+
+A-4 の本番実証（`docs/runbooks/2026-08-18_slice-a-cutover.md` 手順5）で検収者が発見した。
+
+**症状:** 利用者が Google 側で Sentio のアクセスを取り消しても、発行済みアクセストークンは
+自身の期限まで有効なままなので、Sentio はリフレッシュに行かない。その間 Calendar API は
+**401** を返し取り込みは止まっているのに、`/connect` は**「接続済み」を表示し続ける**。
+窓の長さは最長で「アクセストークンの寿命（約1時間）− 期限バッファ5分」。
+
+**原因（実装どおりで、故障ではない）:**
+
+- `markReauthRequired` を呼ぶのは `supabase/functions/_shared/token-refresh.ts` の
+  **リフレッシュ失敗経路だけ**（vault read 失敗 / payload不正 / token fetch 失敗 /
+  token endpoint 非200 の4箇所）
+- `supabase/functions/sync-connections/index.ts` の同期本体が投げた例外は
+  末尾の catch で `results` に `status: "error"` を積むだけで、
+  `connections.status` を触らない
+- 期限判定は `EXPIRY_BUFFER_MS = 5 * 60 * 1000`
+
+**改善候補:** Calendar / freee API が **401** を返したときも `reauth_required` へ落とす。
+
+### 判断が要ること
+
+1. **401 だけを対象にするか。** 403（スコープ不足・APIが無効）や 429 を巻き込むと、
+   一時的な事象で「要再連携」を出して利用者に不要な再連携を強いる。
+   Sentio は入力を求めない製品なので、**誤検知のコストは取りこぼしより高い**
+2. **どこで落とすか。** 同期関数それぞれに置くと重複する。
+   `token-refresh.ts` と同じく共有ヘルパーに寄せるのが素直
+3. **fail-closed の向き。** 401 を受けた回数で落とすか、1回で落とすか。
+   Google 側の一過性 401 を踏むと、1回で落とす実装は誤検知しやすい
+
+**着手前に必要なもの:** 実装より先に、401 を返す接続を作る統合テスト。
+A-4 の実証は手作業で1回通っただけで、回帰を止める仕掛けが無い。

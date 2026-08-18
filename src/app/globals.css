@@ -108,6 +108,12 @@ a {
   color: var(--ink);
 }
 
+/* 「Sentio」の e だけを深紺で差す。色は既存のアクセント変数を参照し、
+   ここで新しい色を作らない（計器板の配色を1箇所に保つ） */
+.wordmark-accent {
+  color: var(--accent);
+}
+
 .masthead-meta {
   font-size: 0.8rem;
   color: var(--ink-faint);

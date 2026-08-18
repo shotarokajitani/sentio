@@ -71,22 +71,39 @@ Stripe本番・認証・ドメイン・Resend・Sentry・登録済みSecretsは�
 
 ## /connect スライスで顕在化した2件（2026-08-18 登録）
 
-### 1. `/api/connections` の未認証アクセス — **実ユーザー受け入れ前の必須条件**（認証スライス送り）
+### 1. `/api/connections` の未認証アクセス — **クローズ済み（2026-08-18、スライスA）**
 
-`src/app/api/connections/route.ts` は**認証を持たず**、`company_id` をクエリパラメータで
-受け取り、**service_role キー**で `connections` と `events` を読む。
+**状態: 解消。** 認証スライス（`docs/contracts/slice-auth-ui.md` A-2）で塞いだ。
+
+当時の指摘: `src/app/api/connections/route.ts` は認証を持たず、`company_id` をクエリパラメータで
+受け取り、**service_role キー**で `connections` と `events` を読んでいた。
 RLS をバイパスするため、company_id を知る／推測できる第三者が
-任意の会社の接続状態とイベント件数を取得できる。
+任意の会社の接続状態とイベント件数を取得できた。
 
-**現状の実害はゼロ**: company_id は `/register` と `/connect` にハードコードされた
-デモ用の固定UUID `00000000-0000-0000-0000-000000000001` 1件のみで、
-実ユーザーのデータは存在しない。認証機構自体がまだ無いため、
-このスライスの疎通確認を止める理由にはならない。
+対処:
 
-**ただし実ユーザーを1社でも受け入れる前に必ず塞ぐこと。**
-本番に実データが入った瞬間、この経路は「company_id を知っていれば誰でも読める」になる。
-認証スライスで、セッションから company_id を導出する（クエリパラメータで受け取らない）
-方式へ切り替える。→ **認証スライスの受け入れ条件に含める**
+- `GET /api/connections` は引数を取らなくなった。company_id をクエリパラメータで受け取る経路が
+  構造的に存在しない。company_id はセッション（`auth.uid()`）から導出する
+- service_role をやめ、anon key ＋ ユーザーセッションのクライアントで読む。
+  越境はアプリだけでなく RLS でも止まる（二重化）
+- 未認証は 401
+
+**調査で判明した追加分**: 同じ「クライアント供給の company_id を無検証で信用する」形は
+`/api/connections` だけでなく5本あった。読み取りだけでなく**他社への書き込み**も通っていた。
+いずれも同時に塞いだ。
+
+| ルート | 当時の受け取り方 | 影響 |
+|---|---|---|
+| `api/connections` | クエリparam | 他社の接続状態とイベント件数の読み取り |
+| `api/csv/ingest` | JSON body | 他社スコープへの events 書き込み |
+| `api/competitors/suggest` | JSON body | 他社スコープへの entities 書き込み |
+| `api/auth/google` | クエリparam を OAuth `state` に流用 | 他社への接続紐付け／state がCSRFトークンとして無機能 |
+| `api/auth/freee` | 同上 | 同上 |
+
+OAuth の `state` は 32バイトの乱数に変え、httpOnly cookie と照合するようにした。
+
+固定テスト: `tests/unit/connections-api-auth.test.ts`（未認証401）、
+`tests/integration/connections-api.test.ts`（2ユーザー2社の実クエリによる越境不可）。
 
 ### 2. カレンダーの件名・出席者メールを `events.metrics` に保存している（製品判断）
 

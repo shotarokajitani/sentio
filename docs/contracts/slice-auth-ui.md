@@ -55,13 +55,13 @@ A-2-3 をその延長で書ける。またメール送達設定（Custom SMTP）
 対象は `/api/connections` だけではない。**クライアント供給の company_id を無検証で信用している
 5本すべて**を、セッション由来に統一する。
 
-| ルート | 現状の受け取り方 | 影響 |
-|---|---|---|
-| `src/app/api/connections/route.ts` | クエリparam | 読み取り越境（07_open_items §1） |
-| `src/app/api/csv/ingest/route.ts` | JSON body | 他社に events を書き込める |
-| `src/app/api/competitors/suggest/route.ts` | JSON body | 他社に events を書き込める |
-| `src/app/api/auth/google/route.ts` | クエリparam を OAuth `state` にそのまま入れる | 他社に接続を紐付けられる／stateがCSRFトークンとして機能していない |
-| `src/app/api/auth/freee/route.ts` | 同上 | 同上 |
+| ルート                                     | 現状の受け取り方                              | 影響                                                              |
+| ------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------- |
+| `src/app/api/connections/route.ts`         | クエリparam                                   | 読み取り越境（07_open_items §1）                                  |
+| `src/app/api/csv/ingest/route.ts`          | JSON body                                     | 他社に events を書き込める                                        |
+| `src/app/api/competitors/suggest/route.ts` | JSON body                                     | 他社に events を書き込める                                        |
+| `src/app/api/auth/google/route.ts`         | クエリparam を OAuth `state` にそのまま入れる | 他社に接続を紐付けられる／stateがCSRFトークンとして機能していない |
+| `src/app/api/auth/freee/route.ts`          | 同上                                          | 同上                                                              |
 
 - A-2-1 対象APIが未認証リクエストに 401（または403）を返す
 - A-2-2 company_id をクエリパラメータ／リクエストボディで受け取らない。セッションから導出する

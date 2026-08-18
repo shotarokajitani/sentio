@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthedContext } from "@/lib/auth/company";
+import { oauthStateCookieName, isMatchingState } from "@/lib/auth/oauth-state";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
 
@@ -7,23 +9,40 @@ const FREEE_API_BASE = "https://api.freee.co.jp/api/1";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
-  const companyId = req.nextUrl.searchParams.get("state");
-  const error = req.nextUrl.searchParams.get("error");
+  const callbackState = req.nextUrl.searchParams.get("state");
+  const providerError = req.nextUrl.searchParams.get("error");
 
-  if (error) {
-    return NextResponse.redirect(
-      `${req.nextUrl.origin}/connect?error=${encodeURIComponent(error)}`,
-    );
+  const redirect = (path: string) => {
+    const res = NextResponse.redirect(`${req.nextUrl.origin}${path}`);
+    res.cookies.delete(oauthStateCookieName("freee"));
+    return res;
+  };
+
+  if (providerError) {
+    console.error("freee OAuth denied:", providerError);
+    return redirect("/connect?e=oauth_denied");
   }
 
-  if (!code || !companyId) {
-    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=missing_params`);
+  const ctx = await getAuthedContext();
+  if (!ctx) {
+    return redirect("/login?next=%2Fconnect");
+  }
+  const companyId = ctx.companyId;
+
+  const cookieState = req.cookies.get(oauthStateCookieName("freee"))?.value ?? null;
+  if (!isMatchingState(cookieState, callbackState)) {
+    console.error("freee OAuth state mismatch");
+    return redirect("/connect?e=oauth_state_mismatch");
+  }
+
+  if (!code) {
+    return redirect("/connect?e=oauth_incomplete");
   }
 
   const clientId = process.env.FREEE_CLIENT_ID;
   const clientSecret = process.env.FREEE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=freee_not_configured`);
+    return redirect("/connect?e=freee_unavailable");
   }
 
   const supabaseUrl = process.env.SUPABASE_URL!;
@@ -47,7 +66,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok || !tokenData.access_token) {
     console.error("freee token exchange failed:", tokenData.error);
-    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=token_exchange_failed`);
+    return redirect("/connect?e=connect_failed");
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -67,7 +86,7 @@ export async function GET(req: NextRequest) {
 
   if (vaultErr) {
     console.error("Vault store failed:", vaultErr.message);
-    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=vault_failed`);
+    return redirect("/connect?e=connect_failed");
   }
 
   // 3. Register connection
@@ -88,13 +107,13 @@ export async function GET(req: NextRequest) {
 
   if (connErr) {
     console.error("Connection insert failed:", connErr.message);
-    return NextResponse.redirect(`${req.nextUrl.origin}/connect?error=connection_failed`);
+    return redirect("/connect?e=connect_failed");
   }
 
   // 4. Sync recent transactions (past 12 months)
   const syncCount = await syncFreeeTransactions(tokenData.access_token, companyId, supabase);
 
-  return NextResponse.redirect(`${req.nextUrl.origin}/connect?freee_synced=${syncCount}`);
+  return redirect(`/connect?freee_synced=${syncCount}`);
 }
 
 async function syncFreeeTransactions(

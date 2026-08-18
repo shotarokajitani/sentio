@@ -1,0 +1,83 @@
+import { Masthead } from "@/components/Masthead";
+import { t } from "@/i18n";
+
+export const metadata = { title: `${t.legal.privacyTitle} — ${t.brand}` };
+
+const UPDATED_AT = "2026-08-18";
+
+export default function PrivacyPage() {
+  return (
+    <main className="page prose">
+      <Masthead />
+
+      <h1>{t.legal.privacyTitle}</h1>
+      <p className="lead">
+        {t.legal.updatedAt} {UPDATED_AT}
+      </p>
+
+      <div className="notice" style={{ marginTop: 24 }}>
+        {t.legal.draftNotice}
+      </div>
+
+      <h2>1. 取得する情報</h2>
+      <p>Sentio は、お客様が接続を許可したデータ源から次の情報を取得します。</p>
+      <ul>
+        <li>
+          Google カレンダー:
+          予定の開始・終了時刻、参加者数、件名、参加者のメールアドレス（読み取りのみ）
+        </li>
+        <li>freee 会計: 取引の日付・金額・入出金区分・摘要（読み取りのみ）</li>
+        <li>会計CSV: お客様がアップロードしたファイルに含まれる日付・金額・摘要・残高</li>
+        <li>アカウント情報: メールアドレス、認証に用いるパスワードのハッシュ</li>
+      </ul>
+      <p>
+        メール本文・チャット本文は取得しません。カレンダーとの連携は読み取り専用の権限のみを要求し、
+        予定の作成・変更・削除は行いません。
+      </p>
+
+      <h2>2. 利用目的</h2>
+      <p>
+        取得した情報は、お客様の会社の状態を把握し、変化や注意すべき事象をお客様にお伝えするためにのみ
+        利用します。広告配信、第三者への販売、他のお客様への提供は行いません。
+      </p>
+
+      <h2>3. 認証情報の取り扱い</h2>
+      <p>
+        Google および freee のアクセストークン・リフレッシュトークンは、Supabase Vault
+        に暗号化して保管します。アプリケーションのログ、データベースの一般のテーブル、
+        ソースコード、設定ファイルには保存しません。
+      </p>
+
+      <h2>4. 保管場所と保管期間</h2>
+      <p>
+        データは Supabase（PostgreSQL）および Vercel の提供するインフラ上に保管します。
+        アカウントの削除をご依頼いただいた場合、当該アカウントに紐づくデータと認証情報を削除します。
+      </p>
+
+      <h2>5. 第三者提供</h2>
+      <p>
+        法令に基づく場合を除き、お客様のデータを第三者に提供しません。
+        サービスの提供に必要な範囲で、以下の事業者の設備を利用します。
+      </p>
+      <ul>
+        <li>Supabase（データベース・認証・秘密情報の保管）</li>
+        <li>Vercel（アプリケーションの実行）</li>
+        <li>Anthropic（文章の生成。送信する情報は分析に必要な範囲に限ります）</li>
+        <li>Resend（メールの送信）</li>
+      </ul>
+
+      <h2>6. アクセス権限の取り消し</h2>
+      <p>
+        Google との連携は、お客様の Google アカウント設定からいつでも取り消せます。
+        取り消し後、Sentio は当該データ源からの取得を停止し、画面上は「要再連携」と表示されます。
+      </p>
+
+      <h2>7. お問い合わせ</h2>
+      <p>本ポリシーに関するお問い合わせ先は、正式版の公開時に記載します。</p>
+
+      <p className="footnote">
+        <a href="/terms">{t.legal.termsTitle}</a> ・ <a href="/login">{t.login.title}</a>
+      </p>
+    </main>
+  );
+}

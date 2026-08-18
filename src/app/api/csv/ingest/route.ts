@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { createHash } from "crypto";
 
 interface ColumnMapping {
@@ -18,18 +18,19 @@ interface SkipReason {
 }
 
 export async function POST(req: NextRequest) {
-  const { csv_text, company_id, file_name, mapping } = (await req.json()) as {
+  // company_id はセッション由来。ボディで受け取ると他社に書き込める
+  const ctx = await getAuthedContext();
+  if (!ctx) return unauthorized();
+  const companyId = ctx.companyId;
+
+  const { csv_text, file_name, mapping } = (await req.json()) as {
     csv_text: string;
-    company_id: string;
     file_name: string;
     mapping: ColumnMapping;
   };
 
-  if (!csv_text || !company_id || !mapping || !mapping.date) {
-    return NextResponse.json(
-      { error: "csv_text, company_id, mapping (date) required" },
-      { status: 400 },
-    );
+  if (!csv_text || !mapping || !mapping.date) {
+    return NextResponse.json({ error: "csv_text, mapping (date) required" }, { status: 400 });
   }
 
   const hasAmount = !!mapping.amount;
@@ -41,7 +42,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  // RLSが効くクライアント。自社スコープ外のINSERTはDB側でも弾かれる
+  const supabase = ctx.supabase;
 
   const lines = csv_text.trim().split("\n");
   if (lines.length < 2) {
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const fileFingerprint = `csv:${company_id}:${file_name}`;
+  const fileFingerprint = `csv:${companyId}:${file_name}`;
   const rows = [];
   const skipReasons: SkipReason[] = [];
   const totalDataLines = lines.slice(1).filter((l) => l.trim()).length;
@@ -173,7 +175,7 @@ export async function POST(req: NextRequest) {
 
     rows.push({
       event_id: eventId,
-      company_id: company_id,
+      company_id: companyId,
       occurred_at: `${normalizedDate}T00:00:00.000Z`,
       ingested_at: now,
       source: "csv:accounting",

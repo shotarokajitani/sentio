@@ -31,6 +31,14 @@ describe("トップページ", () => {
     const html = render();
     expect(html).toContain(ja.landing.title);
     expect(html).toContain(ja.landing.lead);
+    expect(html).toContain(ja.landing.lead2);
+    expect(html).toContain(ja.landing.start);
+  });
+
+  // 検収で「登録画面と語彙を統一する」と決めた。
+  // 片方だけ直すと画面をまたいで言い方がずれるが、単体では誰も気づけない
+  it("2文目は登録画面と同一文言（語彙統一）", () => {
+    expect(ja.landing.lead2).toBe(ja.register.lead2);
   });
 
   it("ワードマークが出る", () => {

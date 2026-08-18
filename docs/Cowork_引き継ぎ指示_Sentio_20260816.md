@@ -51,7 +51,7 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 | CI                  | `ci.yml`（PR時: gitleaks/verify/integration/edge-functions）                |
 | デプロイ            | `deploy.yml`（main push時: verify→deploy-migrations→deploy-functions）      |
 | Supabase CLI        | **2.113.0 固定**（latestは破壊的変更で事故実績。dependabot #5 はclose済み） |
-| migration           | **00001〜00021 本番適用済み**（00021＝旧スキーマ削除・2026-08-18完了）     |
+| migration           | **00001〜00022 本番適用済み**（00022＝update_vault_secret修正・2026-08-18） |
 | Vaultシークレット名 | `sentio_supabase_url` / `sentio_service_role_key`（00020の正本と一致必須）  |
 | cron                | `sync-connections` **のみ**、`0 0,6,12,18 * * *`（UTC）＝JST 9/15/21/3時    |
 | SQL Editor          | https://supabase.com/dashboard/project/kwpldqbnkraftaahnpev/sql/new         |
@@ -65,34 +65,48 @@ Sentio の Cowork セッションをブートストラップする正本。新�
 3. 判定と根拠を人間に返し、Claude Code へ貼るコピペ用指示文を毎回作る
 4. 検収状況の変化は claude.ai プロジェクトナレッジのメモを更新して固定する
 
-## 5. 現在地と残作業（2026-08-18 時点）
+## 5. 現在地と残作業（2026-08-18 時点・/connectスライス完了）
 
-**CC指示書_03 のフェーズ1〜3は完了。** フェーズ1（コミット分離・hooks強化）／
+**/connectスライス完了。検証A〜D 完走（2026-08-18）。**
+初回OAuth連携を本番で作成し（`/register/complete?events=15`）、
+**B-s2-1 / B-s2-3 を本番実証**。B-s2-2 は本番未発火（CI統合テストで実証済み）。
+実測記録は `docs/runbooks/2026-08-07_token-refresh-verification.md` 冒頭。
+
+この過程で本番の重大バグを1件検出・修正した: `update_vault_secret` が
+`permission denied for table secrets` で **00017 適用以降ずっと動いていなかった**
+（＝トークンリフレッシュの保存が失敗し続けていた）。`00022` で修正し、実トークンで実証済み。
+カタログ参照（`has_function_privilege`）では捕まらず、実DBに対して実際に呼ぶ
+統合テストで初めて顕在化した。
+
+**CC指示書_03 のフェーズ1〜3も完了。** フェーズ1（コミット分離・hooks強化）／
 フェーズ2（RLS 00019・rls.test.ts実クエリ化・CI完全化）／フェーズ3（分岐C確定・
 00013/00014/00015修正・CI repair step・00020 Vault化）。
-migration **00001〜00021 本番適用済み**、17function デプロイ済み、
+migration **00001〜00022 本番適用済み**、17function デプロイ済み、
 Vaultシークレット2件登録済み（2026-08-15 16:13 UTC）。
 
 **前提確認は seq 1〜9 すべて完了**（`2026-08-15_token-refresh-prereq-check.sql`）。
-seq 9（cron疎通）は 2026-08-16 に確定: `cron.job_run_details` が
-**4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**。
+seq 9（cron疎通）は 2026-08-18 時点で **10/10 成功**。
 ⇒ `00020` の「Vaultから秘密取得 → `net.http_post` → Edge Function 呼び出し」が
-本番で4回連続成功。GUC方式が42501で塞がれた後に選んだVault方式が機能している。
+本番で継続稼働している。GUC方式が42501で塞がれた後に選んだVault方式が機能している。
 
-### 唯一の前提待ち
+> ⚠️ このSQLは **カタログ参照（`has_function_privilege`）に留まる**点に注意。
+> 「関数が在る・実行できる」しか見ておらず、**正しく動くことは保証しない**。
+> 実際 `update_vault_secret` は seq1〜4 が全てOKの状態で壊れていた（00022で修正）。
+> 関数の動作確認は実DBに対して実際に呼ぶ統合テストで担保すること。
 
-**検証A〜D（実トークンでのリフレッシュ実測 / B-s2-1・B-s2-2・B-s2-3）**
+### 前提待ち — なし（2026-08-18 時点）
 
-- 2026-08-16 に STEP 1 を実行したところ **`connections` が全ステータス0件**で、
-  手順書のSTOP条件に該当。**初回のOAuth連携が作られた時点で実施**（繰り延べ確定）
-- 手順書: `docs/runbooks/2026-08-16_token-refresh-verification-run.md`
-- 再開はSTEP 1から。STEP 3のみ本番書き込み（人間確認必須）
+検証A〜Dは完走した。着手を止めている前提条件は無い。
+
+**ただし2026-08-25 04:41 UTC 頃に、検証用接続の refresh_token が7日失効する。**
+同意画面がテスト中（外部）のため。以降の cron 実行で `status = reauth_required` に
+落ちる見込みだが、**これは故障ではなく B-s2-2（fail-closed）の自然な本番実証**になる。
+発生したらその旨を記録し、`/connect` に「要再連携」バッジと「再接続」ボタンが
+出ることも確認すること。本番公開（Google審査）の要否は `07_open_items.md` の未確定項目。
 
 ### バックログ
 
-**2026-08-18 時点で、着手可能な作業は残っていない。** 完了2件と、前提待ち2件のみ。
-新しいCoworkセッションは「次に何をやるか」を探す必要はなく、
-下記の前提が満たされた通知を待つ状態にある。
+**2026-08-18 時点。** 完了3件と、着手可能1件・イベント駆動1件・日付ゲート1件。
 
 1. ~~dependabot 残5件~~ → **2026-08-17 に全件merge済み**（#2/#3/#4/#6、および
    #7を作り直した#16）。`actions/checkout@v7` / `actions/setup-node@v7` /
@@ -114,7 +128,13 @@ seq 9（cron疎通）は 2026-08-16 に確定: `cron.job_run_details` が
    （`store_vault_secret` の再実行は禁止＝同名重複で
    `read_vault_secret_by_name` が曖昧エラーになる）。忘れるとcronだけが静かに止まる。
    手順は `docs/runbooks/2026-08-15_vault-secret-setup-procedure.md`
-4. **【前提待ち・8/20以降】PC買い替え**: 移行チェックリストを作成して支援
+4. **【着手可能】`/register` と `/connect` のUIデザイン改善**:
+   現状は動作確認用の最小実装（インラインstyle、装飾のみの入力欄、
+   `/register` の会社名・URL欄はどこにも送信されない）。
+   検証A〜Dが完走し機能面の疎通が取れたので、体験の作り込みに進める段階。
+   認証スライス（`/api/connections` の未認証アクセス修正・`07_open_items.md`）と
+   同時に扱うと、company_id のハードコード解消とまとめて設計できる
+5. **【前提待ち・8/20以降】PC買い替え**: 移行チェックリストを作成して支援
    （repo clone・.env移送・Node/pnpm/Supabase CLI/Docker導入）。
    移行完了でローカル `supabase start` / `db reset` が復活し、
    下記「環境の制約」が解消する見込み

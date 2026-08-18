@@ -15,10 +15,6 @@ export default function TermsPage() {
         {t.legal.updatedAt} {UPDATED_AT}
       </p>
 
-      <div className="notice" style={{ marginTop: 24 }}>
-        {t.legal.draftNotice}
-      </div>
-
       <h2>1. 本規約について</h2>
       <p>
         本規約は、株式会社ディセーノ（以下「提供者」）が提供する Sentio（以下「本サービス」）の

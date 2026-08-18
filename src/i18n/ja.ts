@@ -116,7 +116,6 @@ export const ja = {
   legal: {
     termsTitle: "利用規約",
     privacyTitle: "プライバシーポリシー",
-    draftNotice: "本文面は草案です。正式版は法務確認後に差し替えます。",
     updatedAt: "最終更新",
   },
 

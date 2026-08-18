@@ -15,27 +15,18 @@ export async function GET(req: NextRequest) {
     .select("provider, status, last_refresh, expires_at")
     .eq("company_id", companyId);
 
-  // Fetch event counts per source
-  const { data: eventCounts } = await supabase.rpc("get_event_counts", {
-    p_company_id: companyId,
-  });
-
-  // Fallback: count directly if RPC doesn't exist
+  // source別のイベント件数。
+  // 以前は get_event_counts RPC を先に試していたが、この関数はマイグレーションに
+  // 定義が無く、毎回「関数が無い」エラーを1往復ぶん出してからフォールバックしていた。
+  // 常に失敗する経路なので削除し、直接カウントに一本化する。
   const counts: Record<string, number> = {};
-  if (eventCounts) {
-    for (const row of eventCounts as { source: string; count: number }[]) {
-      counts[row.source] = row.count;
-    }
-  } else {
-    // Direct query fallback
-    for (const source of ["google_calendar", "csv:accounting", "freee"]) {
-      const { count } = await supabase
-        .from("events")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .eq("source", source);
-      counts[source] = count ?? 0;
-    }
+  for (const source of ["google_calendar", "csv:accounting", "freee"]) {
+    const { count } = await supabase
+      .from("events")
+      .select("*", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .eq("source", source);
+    counts[source] = count ?? 0;
   }
 
   return NextResponse.json({ connections: connections ?? [], counts });

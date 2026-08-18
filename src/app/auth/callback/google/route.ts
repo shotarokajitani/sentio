@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { upsertVaultToken } from "@/security/vault-token";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -54,16 +55,18 @@ export async function GET(req: NextRequest) {
     expires_in: tokenData.expires_in,
   });
 
-  const { data: vaultId, error: vaultErr } = await supabase.rpc("store_vault_secret", {
-    p_name: `google_calendar:${companyId}`,
-    p_secret: tokenPayload,
-    p_description: "Google Calendar OAuth token",
-  });
+  // 再連携でも同名シークレットを増やさない（既存があれば更新する）
+  const { vaultId, action, error: vaultErr } = await upsertVaultToken(
+    supabase,
+    companyId,
+    tokenPayload,
+  );
 
-  if (vaultErr) {
-    console.error("Vault store failed:", vaultErr.message);
+  if (vaultErr || !vaultId) {
+    console.error("Vault store failed:", vaultErr);
     return NextResponse.redirect(`${req.nextUrl.origin}/register?error=vault_failed`);
   }
+  console.log(`vault token ${action} for company ${companyId}`);
 
   // 3. Register connection
   const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();

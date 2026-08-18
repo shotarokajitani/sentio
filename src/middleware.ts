@@ -51,6 +51,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // 静的アセットと画像最適化は認証判定の対象外
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // 静的アセットと画像最適化は認証判定の対象外。
+  // api / auth も外す。これらは getAuthedContext() で自前に認証しており、
+  // middleware でも getUser() を呼ぶと1リクエストで2回セッションを解決し、
+  // サインイン中（/api/auth/session）にトークン更新が競合しうる
+  matcher: [
+    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

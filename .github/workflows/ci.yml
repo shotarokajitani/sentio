@@ -19,6 +19,25 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+
+      # 送信事故の防止（契約 S-2-10）。CI に Resend の設定を持ち込んでいないことを
+      # テストより先に事実として確かめる。ローカルでは vitest.config.ts が
+      # `.env` 由来の値を落とすが、CI 側は「そもそも渡していない」ことを実測で示す。
+      - name: "Resend の設定が CI に載っていないことを確かめる"
+        run: |
+          set -uo pipefail
+          fail=0
+          for k in RESEND_API_KEY RESEND_FROM; do
+            v=$(printenv "$k" || true)
+            if [ -n "$v" ]; then
+              echo "::error::$k が CI 環境に載っている。deliver 系のテストが実送信しうる"
+              fail=1
+            else
+              echo "$k: 未設定"
+            fi
+          done
+          exit $fail
+
       - run: pnpm typecheck && pnpm lint
       # integration は Supabase 起動が要るため専用ジョブ（integration）で実行する。
       # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail するため明示除外する。

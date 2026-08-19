@@ -46,7 +46,7 @@ const NON_DB_RECEIVERS = new Set([
  * **除外リストの代わり**に置いている。除外リストは次に足す人が増やす対象になるが、
  * 「エラーを必ず受け取る形」を増やすぶんには穴が広がらない。
  */
-const GUARD_NAMES = new Set(["mustData", "mustOk", "takeError"]);
+const GUARD_NAMES = new Set(["mustData", "mustOk", "mustCount", "takeError"]);
 
 export interface Violation {
   file: string;
@@ -55,8 +55,89 @@ export interface Violation {
 }
 
 /**
- * コメントと文字列リテラルを同じ長さの空白に置き換える。
+ * `/` の直前がこれらの語なら、その `/` は除算ではなく正規表現の開始である。
+ * （`return /re/.test(x)` のような形。識別子で終わっていれば除算とみなす）
+ */
+const KEYWORDS_BEFORE_REGEX = new Set([
+  "return",
+  "typeof",
+  "instanceof",
+  "in",
+  "of",
+  "new",
+  "delete",
+  "void",
+  "throw",
+  "case",
+  "do",
+  "else",
+  "yield",
+  "await",
+]);
+
+/**
+ * `source[i] === "/"` が正規表現リテラルの開始かどうかを、直前の意味のあるトークンで判定する。
+ *
+ * 完全な字句解析はしていない。判定を誤ったときの向きだけは意識してある:
+ * **除算を正規表現と読むと後続コードを飲み込んで見えなくなる**（＝静かな見逃し）ので、
+ * 迷ったら除算に倒す。識別子・数値・`)`・`]`・閉じ引用符の直後は除算とする。
+ */
+function isRegexStart(code: readonly string[], i: number): boolean {
+  let j = i - 1;
+  while (j >= 0 && /\s/.test(code[j])) j--;
+  if (j < 0) return true;
+
+  const ch = code[j];
+
+  // 文字列リテラルの直後（引用符は blankOutNonCode が残す）は除算
+  if (ch === '"' || ch === "'" || ch === "`") return false;
+  if (ch === ")" || ch === "]") return false;
+
+  if (/[\w$]/.test(ch)) {
+    let start = j + 1;
+    while (start > 0 && /[\w$]/.test(code[start - 1])) start--;
+    return KEYWORDS_BEFORE_REGEX.has(code.slice(start, j + 1).join(""));
+  }
+
+  return true;
+}
+
+/** 正規表現リテラルの終端（閉じ `/` の位置）。文字クラス `[...]` 内の `/` では終端しない。 */
+function endOfRegex(source: string, start: number): number {
+  let i = start + 1;
+  let inClass = false;
+
+  while (i < source.length) {
+    const ch = source[i];
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
+    // 正規表現リテラルは改行をまたげない。またぐなら読み違えているので打ち切る
+    if (ch === "\n") return -1;
+    if (inClass) {
+      if (ch === "]") inClass = false;
+    } else if (ch === "[") {
+      inClass = true;
+    } else if (ch === "/") {
+      return i;
+    }
+    i++;
+  }
+
+  return -1;
+}
+
+/**
+ * コメント・文字列リテラル・正規表現リテラルを同じ長さの空白に置き換える。
  * 長さを保つのは、後段で算出する行番号を元ソースとずらさないため。
+ *
+ * **正規表現を扱うのは飾りではない。** 2026-08-19 に `day0/index.ts:142` の
+ * `/<meta[^>]+charset=["']?([^"'\s;>]+)/i` を文字列の開始と読み違え、
+ * 142行目以降のほぼ全域が「文字列の中身」として空白化されていた。
+ * その結果 `day0` の握りつぶし2件（`:953` / `:1009` — どちらも送信部の
+ * `delivery_log` 書き込み）が**検出されないまま緑になっていた**。
+ * 検査が落ちるのではなく静かに見えなくなる形なので、テストで固定してある。
  */
 function blankOutNonCode(source: string): string {
   const out = source.split("");
@@ -89,6 +170,17 @@ function blankOutNonCode(source: string): string {
     }
 
     const ch = source[i];
+
+    if (ch === "/" && isRegexStart(out, i)) {
+      const end = endOfRegex(source, i);
+      if (end !== -1) {
+        // 区切りの `/` ごと潰す。中身に `.from(` や引用符があっても拾わせない
+        blank(i, end + 1);
+        i = end + 1;
+        continue;
+      }
+    }
+
     if (ch === '"' || ch === "'" || ch === "`") {
       let j = i + 1;
       while (j < n) {

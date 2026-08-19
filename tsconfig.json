@@ -11,6 +11,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
+    // supabase/functions/_shared は Deno から読まれるため import に .ts 拡張子が要る。
+    // tsc は _shared だけを型検査対象に含めている（index.ts は exclude）ので、
+    // 拡張子付き import を許可しないと _shared 同士の import が書けない。
+    // noEmit: true との併用が前提のオプション
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],

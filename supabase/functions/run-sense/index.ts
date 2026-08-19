@@ -5,6 +5,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
 
 interface ScanCandidate {
   scanType: string;
@@ -30,14 +32,16 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id } = await req.json();
-    if (!company_id) {
-      return new Response(JSON.stringify({ error: "company_id is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { company_id: bodyCompanyId } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
 
     const supabase = getSupabaseAdmin();
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -68,43 +72,52 @@ Deno.serve(async (req: Request) => {
     const insertedImmediates: string[] = [];
     for (const imm of scanResult.immediates) {
       // Dedup: check if an open finding already exists for same evidence
-      const { data: existing } = await supabase
-        .from("findings")
-        .select("id")
-        .eq("company_id", company_id)
-        .in("status", ["open", "watching"])
-        .contains("evidence_event_ids", imm.evidence_event_ids)
-        .limit(1);
+      const existing = await mustData(
+        supabase
+          .from("findings")
+          .select("id")
+          .eq("company_id", company_id)
+          .in("status", ["open", "watching"])
+          .contains("evidence_event_ids", imm.evidence_event_ids)
+          .limit(1),
+        "run-sense: findings dedup",
+      );
 
       if (existing && existing.length > 0) {
         // D6: same event → update, not new finding
-        await supabase
-          .from("findings")
-          .update({ updated_at: new Date().toISOString() })
-          .eq("id", existing[0].id);
+        await mustOk(
+          supabase
+            .from("findings")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", existing[0].id),
+          "run-sense: findings touch",
+        );
         continue;
       }
 
       const findingId = crypto.randomUUID();
-      const { error: insertErr } = await supabase.from("findings").insert({
-        id: findingId,
-        company_id,
-        status: "open",
-        urgency: "immediate",
-        what: imm.description,
-        evidence_event_ids: imm.evidence_event_ids,
-        confidence: 1.0, // Mechanical fact, no uncertainty
-        hypotheses: {},
-        next_actions: {},
-        eval_log: { source: "fast_path", scanType: imm.scanType },
-        parent_finding_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      // 挿入の失敗を握りつぶさない。修復前は if (!insertErr) で握りつぶしており、
+      // 「findings が0件」の原因が挿入失敗なのか候補ゼロなのか区別できなかった
+      await mustOk(
+        supabase.from("findings").insert({
+          id: findingId,
+          company_id,
+          status: "open",
+          urgency: "immediate",
+          what: imm.description,
+          evidence_event_ids: imm.evidence_event_ids,
+          confidence: 1.0, // Mechanical fact, no uncertainty
+          hypotheses: {},
+          next_actions: {},
+          eval_log: { source: "fast_path", scanType: imm.scanType },
+          parent_finding_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
+        "run-sense: findings insert",
+      );
 
-      if (!insertErr) {
-        insertedImmediates.push(findingId);
-      }
+      insertedImmediates.push(findingId);
     }
 
     // Step 3: Pass non-immediate candidates to Investigator
@@ -122,10 +135,21 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ company_id, candidates: scanResult.candidates }),
       });
 
-      if (investigateRes.ok) {
-        investigateResult = await investigateRes.json();
+      // investigate の失敗を握りつぶさない。修復前は静かに findings 0件で 200 を返しており、
+      // 「調査が落ちた」と「調査対象が無かった」が応答から区別できなかった（S-2-3）
+      if (!investigateRes.ok) {
+        const detail = await investigateRes.text();
+        return new Response(
+          JSON.stringify({
+            error: `investigate failed: ${investigateRes.status}`,
+            detail,
+            immediates_inserted: insertedImmediates.length,
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
-      // If investigate fails, we still return scan results + immediates
+
+      investigateResult = await investigateRes.json();
     }
 
     return new Response(
@@ -145,9 +169,6 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

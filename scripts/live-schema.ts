@@ -32,14 +32,17 @@ export function fetchPublicColumns(dbUrl = process.env.SUPABASE_DB_URL): ColumnR
     );
   }
 
+  // 区切りは psql の -F に渡す。SQL 側で '\t' と書くと、標準の文字列リテラルでは
+  // タブではなく「バックスラッシュ + t」の2文字になり、JS 側の split("\t") と噛み合わない。
+  // 2026-08-19 CI で実測: この不整合により全259参照が「存在しない列」と誤判定された
   const sql =
-    "SELECT table_name || '\\t' || column_name " +
+    "SELECT table_name, column_name " +
     "FROM information_schema.columns WHERE table_schema = 'public' " +
     "ORDER BY table_name, ordinal_position";
 
   let out: string;
   try {
-    out = execFileSync("psql", [dbUrl, "-At", "-c", sql], {
+    out = execFileSync("psql", [dbUrl, "-A", "-t", "-F", "\t", "-c", sql], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -41,7 +41,12 @@ const NON_DB_RECEIVERS = new Set([
   "Float64Array",
 ]);
 
-const GUARD_NAMES = new Set(["mustData", "mustOk"]);
+/**
+ * 正規形は3つ。`takeError` は throw が正しくない場所（呼び出し元に理由を返す経路）用で、
+ * **除外リストの代わり**に置いている。除外リストは次に足す人が増やす対象になるが、
+ * 「エラーを必ず受け取る形」を増やすぶんには穴が広がらない。
+ */
+const GUARD_NAMES = new Set(["mustData", "mustOk", "takeError"]);
 
 export interface Violation {
   file: string;

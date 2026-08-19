@@ -8,6 +8,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller } from "../_shared/caller.ts";
+import { mustData, mustOk } from "../_shared/db.ts";
 import { isTokenExpired, refreshToken } from "../_shared/token-refresh.ts";
 import { generateEventId } from "../_shared/event-id.ts";
 
@@ -133,10 +135,13 @@ Deno.serve(async (req: Request) => {
       }
 
       // 2f. last_refresh を更新
-      await supabase
-        .from("connections")
-        .update({ last_refresh: new Date().toISOString() })
-        .eq("id", conn.id);
+      await mustOk(
+        supabase
+          .from("connections")
+          .update({ last_refresh: new Date().toISOString() })
+          .eq("id", conn.id),
+        "sync-connections: last_refresh",
+      );
 
       results.push({
         provider: conn.provider,
@@ -228,11 +233,10 @@ async function syncCalendarEvents(
     ),
   );
 
-  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-  if (error) {
-    throw new Error(`Calendar events upsert failed: ${error.message}`);
-  }
+  await mustOk(
+    supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+    "sync-connections: calendar events upsert",
+  );
 
   return rows.length;
 }
@@ -316,11 +320,10 @@ async function syncFreeeTransactions(
     ),
   );
 
-  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-  if (error) {
-    throw new Error(`freee events upsert failed: ${error.message}`);
-  }
+  await mustOk(
+    supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+    "sync-connections: freee events upsert",
+  );
 
   return rows.length;
 }

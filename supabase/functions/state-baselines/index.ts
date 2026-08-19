@@ -3,6 +3,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
 
 const MIN_OBS = 5;
 
@@ -20,19 +22,29 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id } = await req.json();
+    const { company_id: bodyCompanyId } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
+
     const supabase = getSupabaseAdmin();
 
     // Fetch transaction events for this company
-    const { data: events, error } = await supabase
-      .from("events")
-      .select("event_id, occurred_at, event_type, metrics")
-      .eq("company_id", company_id)
-      .eq("event_type", "transaction")
-      .order("occurred_at", { ascending: true });
-
-    if (error) throw error;
+    const events = await mustData(
+      supabase
+        .from("events")
+        .select("event_id, occurred_at, event_type, metrics")
+        .eq("company_id", company_id)
+        .eq("event_type", "transaction")
+        .order("occurred_at", { ascending: true }),
+      "state-baselines: events",
+    );
 
     // Extract revenue values
     const revenues = (events || [])
@@ -53,22 +65,23 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
 
     // Upsert baseline
-    const { error: upsertError } = await supabase.from("baselines").upsert(
-      {
-        company_id,
-        metric_key: "revenue",
-        is_established: isEstablished,
-        median,
-        iqr: p25 !== null && p75 !== null ? p75 - p25 : null,
-        p25,
-        p75,
-        observation_count: revenues.length,
-        updated_at: now,
-      },
-      { onConflict: "company_id,metric_key" },
+    await mustOk(
+      supabase.from("baselines").upsert(
+        {
+          company_id,
+          metric_key: "revenue",
+          is_established: isEstablished,
+          median,
+          iqr: p25 !== null && p75 !== null ? p75 - p25 : null,
+          p25,
+          p75,
+          observation_count: revenues.length,
+          updated_at: now,
+        },
+        { onConflict: "company_id,metric_key" },
+      ),
+      "state-baselines: baselines upsert",
     );
-
-    if (upsertError) throw upsertError;
 
     return new Response(
       JSON.stringify({
@@ -80,9 +93,6 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

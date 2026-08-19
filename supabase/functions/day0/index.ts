@@ -6,6 +6,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { MODEL_GENERATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, errorResponse } from "../_shared/db.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
@@ -72,41 +74,46 @@ async function fetchCompanyEvents(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
 ) {
-  const { data } = await supabase
-    .from("events")
-    .select("event_id, occurred_at, source, event_type, metrics, sensitivity")
-    .eq("company_id", companyId)
-    .order("occurred_at", { ascending: false })
-    .limit(200);
-  return data || [];
+  return await mustData(
+    supabase
+      .from("events")
+      .select("event_id, occurred_at, source, event_type, metrics, sensitivity")
+      .eq("company_id", companyId)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    "day0: company events",
+  );
 }
 
 async function fetchS0Events(supabase: ReturnType<typeof getSupabaseAdmin>) {
-  const { data } = await supabase
-    .from("events")
-    .select("event_id, occurred_at, source, event_type, metrics")
-    .is("company_id", null)
-    .eq("sensitivity", "S0")
-    .order("occurred_at", { ascending: false })
-    .limit(50);
-  return data || [];
+  return await mustData(
+    supabase
+      .from("events")
+      .select("event_id, occurred_at, source, event_type, metrics")
+      .is("company_id", null)
+      .eq("sensitivity", "S0")
+      .order("occurred_at", { ascending: false })
+      .limit(50),
+    "day0: S0 events",
+  );
 }
 
 async function fetchConnections(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
-  const { data } = await supabase
-    .from("connections")
-    .select("provider, status")
-    .eq("company_id", companyId);
-  return data || [];
+  return await mustData(
+    supabase.from("connections").select("provider, status").eq("company_id", companyId),
+    "day0: connections",
+  );
 }
 
 async function fetchCompetitors(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
-  const { data } = await supabase
-    .from("entities")
-    .select("canonical_name, attrs")
-    .eq("company_id", companyId)
-    .eq("type", "competitor");
-  return data || [];
+  return await mustData(
+    supabase
+      .from("entities")
+      .select("canonical_name, attrs")
+      .eq("company_id", companyId)
+      .eq("type", "competitor"),
+    "day0: competitors",
+  );
 }
 
 async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
@@ -752,11 +759,19 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   const start = Date.now();
 
   try {
     const input: Day0Input = await req.json();
-    const { company_id, company_name, url, industry, concern, email } = input;
+    const { company_name, url, industry, concern, email } = input;
+
+    const scope = resolveCompanyId(caller.caller, input.company_id);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
 
     const model = MODEL_GENERATOR;
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -1019,9 +1034,6 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

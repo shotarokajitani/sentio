@@ -20,6 +20,7 @@
  */
 
 import { DbError, mustData, mustMaybe, mustOk, takeError } from "./db.ts";
+import { isoWeekKey, jstDateKey } from "./jst.ts";
 
 /** `00024` の CHECK 制約と同じ集合。片方を変えたらもう片方も変える。 */
 export const DELIVERY_STATUSES = [
@@ -46,8 +47,6 @@ export const MAX_SEND_ATTEMPTS = 3;
 /** PostgreSQL の一意制約違反。予約が衝突したことの唯一の判定材料 */
 const UNIQUE_VIOLATION = "23505";
 
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
 /** 対象期間の指定が不正。**DBにも外部にも触る前に**落とすために使う */
 export class InvalidPeriodError extends Error {
   constructor(message: string) {
@@ -62,26 +61,9 @@ export function isInvalidPeriodError(e: unknown): e is InvalidPeriodError {
 
 // ── 対象期間 ────────────────────────────────────────────────
 
-/** JST に寄せた `YYYY-MM-DD`。 */
-export function jstDateKey(at: Date): string {
-  return new Date(at.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-/** JST に寄せた ISO 週（`YYYY-Www`）。 */
-export function isoWeekKey(at: Date): string {
-  const jst = new Date(at.getTime() + JST_OFFSET_MS);
-  // ISO 8601: 週は月曜始まり。その週の木曜が属する年を「週の年」とする
-  const thursday = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()));
-  const dayOfWeek = (thursday.getUTCDay() + 6) % 7; // 月曜=0
-  thursday.setUTCDate(thursday.getUTCDate() - dayOfWeek + 3);
-
-  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
-  const firstDayOfWeek = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayOfWeek + 3);
-
-  const week = 1 + Math.round((thursday.getTime() - firstThursday.getTime()) / (7 * 86400000));
-  return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
+// 日付キーの基準は `_shared/jst.ts` に1本化してある（**常に JST 基準**）。
+// ここから再輸出しているのは、対象期間の解決とキーの組み立てが同じ場所で読めるようにするため
+export { isoWeekKey, jstDateKey } from "./jst.ts";
 
 function assertValidDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {

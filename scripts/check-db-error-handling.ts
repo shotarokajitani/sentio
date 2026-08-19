@@ -226,6 +226,24 @@ function isGuarded(code: string, receiverStart: number): boolean {
   i--;
   skipSpace();
 
+  // 型引数つきの呼び出し（`mustMaybe<{ id: string }>(...)`）を飛ばす。
+  // `mustMaybe` は期待する行の形を型引数で明示する契約なので、
+  // ここを見ないと**正しく包んだ箇所を握りつぶしとして報告する**（2026-08-20 実測）
+  if (i >= 0 && code[i] === ">" && code[i - 1] !== "=") {
+    let depth = 0;
+    while (i >= 0) {
+      if (code[i] === ">" && code[i - 1] !== "=") depth++;
+      else if (code[i] === "<") {
+        depth--;
+        if (depth === 0) break;
+      }
+      i--;
+    }
+    if (i < 0) return false;
+    i--;
+    skipSpace();
+  }
+
   const end = i + 1;
   let start = end;
   while (start > 0 && /[\w$]/.test(code[start - 1])) start--;

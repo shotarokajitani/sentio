@@ -628,6 +628,29 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
   S-4 は残り（呼び出し元ごとの `company_id` の出所・`ALLOWED_CALLERS` の宣言・
   ゲートウェイ側の `verify_jwt`・手動実行経路・適用漏れ検出の CI 常設）を担う
 
+### merge 前の停止点（2026-08-20 検収者提示。**S-2 完了時点では解けていない**）
+
+`docs/contracts/roadmap.md` へ進む前に、以下2件を必ず片付ける。
+S-2 が17本すべて閉じても、この2件が未了なら merge しない。
+
+1. **`00023` の欠番。**
+   本スライスは冪等キーを `00024_delivery_log_idempotency.sql` に置いたが、
+   `00023` は S-1（baselines の一意索引・列修正。契約 S-1-6）のために予約したまま**空いている**。
+   マイグレーションは辞書順に適用されるので欠番自体は動作を壊さないが、
+   「番号が飛んでいる理由」を知らない人が後から埋めると衝突する。
+   **どちらかを満たしてから merge する**:
+   - **S-1 を同一PRに入れて `00023` を実際に埋める**（既定。実装順どおり）
+   - S-1 を別PRに分けるなら、S-1 の migration を **`00025` に採番**して欠番を解消する
+
+2. **cron の Bearer と関数側 `SUPABASE_SERVICE_ROLE_KEY` の一致をデプロイ後に実測する。**
+   S-2-9 で `resolveCaller` を17本すべてに入れた結果、**呼び出し元が service_role キーを
+   持っていなければ 401 になる**。`00020` の pg_cron ジョブが Vault から取り出して
+   `Authorization: Bearer` に載せている値と、Function 側の `SUPABASE_SERVICE_ROLE_KEY` が
+   食い違っていると、**`sync-connections` が毎日 401 で静かに止まる**。
+   ローカルの実DBテストでは両者が同じ値になるため、この不一致は**本番でしか出ない**。
+   デプロイ後に cron の実行ログ（`cron.job_run_details`）で 401 が出ていないことを
+   実測して runbook に残すこと。
+
 - A-2（cron 登録の migration）は**本スライスの後**。壊れたFunctionを cron に載せない
 - 本番実測（S-3-5）は**検収者関門**
 - 進行順序: 契約承認 → plan mode → 実装 → commit → 停止。停止点を越えて先に進まない

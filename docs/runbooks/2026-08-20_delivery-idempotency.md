@@ -49,6 +49,52 @@ select count(*) as null_status_rows from delivery_log where status is null;
 
 ---
 
+## 0-2. 予算日付の基準を UTC → JST に変えたことの確認（2026-08-20）
+
+`_shared/budget.ts` の `budgetDateKey` は `toISOString().slice(0, 10)` ＝ **UTC 基準**だった。
+配信の冪等キーは JST 基準（`pulse:<company_id>:<JST日付>`）なので、
+**同じコードベースの中に「日次」の意味が2つ**あった（検収者指摘）。
+
+JST に寄せた。上限は運用者（日本）が「今日はもう回さない」と読む単位であり、
+配信の対象日と一致していないと突合できない。UTC 基準だと上限のリセットが
+**毎朝 9時 JST** になり、1日の切れ目が配信とずれる。
+
+実装は `_shared/jst.ts` に1本化した（`jstDateKey` / `isoWeekKey`）。
+**新しく日付キーを作るときは必ずここを使う。**
+
+### 移行の要否（デプロイ前に人間が確認）
+
+`budget_usage.date` は DATE 型なので、既存行があると基準変更で**1日ぶんずれる**
+（UTC 基準で書かれた行が、JST 基準の読み取りと噛み合わなくなる）。
+
+Dashboard の SQL Editor で読み取り専用 SELECT を実行する:
+
+```sql
+select count(*) as budget_usage_rows from budget_usage;
+
+-- 行がある場合は日付の分布も見る（どの範囲がずれるかの把握）
+select date, count(*) as rows, sum(full_runs) as full_runs
+  from budget_usage
+ group by date
+ order by date desc
+ limit 14;
+```
+
+| 項目                  | 値         | 実施日 | 実施者 |
+| --------------------- | ---------- | ------ | ------ |
+| `budget_usage` の行数 | **未実施** |        |        |
+
+**0件なら移行不要**（この表に「0件だったので移行不要」と記録して完了）。
+**1件以上なら**、ずれるのは高々1日ぶんで、影響は「その日の `full_runs` が
+2行に分かれて上限判定が甘くなる」こと。実害の大きさに応じて次のどちらかを選ぶ:
+
+- 放置する（翌 JST 日から正しくなる。既存行は 10回上限に対して最大でもう10回ぶん甘くなる）
+- 該当日の行を統合する移行SQLを `00025` として足す
+
+**どちらを選んだかをこの表の下に1行残すこと。** 黙って放置しない。
+
+---
+
 ## 1. 冪等キーの構成要素
 
 | Function          | 冪等キー                                                            |

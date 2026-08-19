@@ -155,37 +155,30 @@ jobs:
         if: ${{ always() }}
         run: supabase stop
 
-  # Edge Function の import が解決できることを静的に検証する。
-  # deploy-functions で esm.sh → npm: へ移した変更が、デプロイ前に壊れていないかを見る。
-  # 注意: これは静的検査であり、Edge Runtime 上での実行時挙動は担保しない。
+  # Edge Function の型検査。tsconfig が各 Function の index.ts を除外しているため、
+  # index.ts に型検査が掛かるのは**このジョブだけ**である
+  # （2026-08-19: typecheck / lint / unit が全部緑の状態で deno check が28件で落ちた）。
+  #
+  # コマンドをここに書き写さず `pnpm run check:edge-types` を呼ぶ。
+  # 同じ内容を CI とローカルの2箇所に持つと、片方だけ更新されたときに
+  # 「検査対象から漏れているのに緑」が起きる（check:allowlist が1行 log で
+  # 緑を返していたのと同型の空洞）。実体は scripts/check-edge-types.ts の1本だけ。
+  # 対象網羅のアサーションも同じスクリプトに入っている。
   edge-functions:
     runs-on: ubuntu-latest
     needs: gitleaks
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
 
-      # Supabase Edge Runtime と同系メジャー（Deno 2系）に固定する
+      # Supabase Edge Runtime と同系メジャー（Deno 2系）に固定する。
+      # scripts/check-edge-types.ts の REQUIRED_DENO_VERSION と同じ値にすること
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.1.4
 
-      - name: Verify check target covers every function and _shared file
-        run: |
-          set -euo pipefail
-          FUNC_DIRS=$(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_shared' | wc -l)
-          INDEXES=$(find supabase/functions -mindepth 2 -maxdepth 2 -name 'index.ts' -not -path '*/_shared/*' | wc -l)
-          SHARED=$(find supabase/functions/_shared -name '*.ts' | wc -l)
-          TOTAL=$(find supabase/functions -name '*.ts' | wc -l)
-          echo "function ディレクトリ: $FUNC_DIRS / index.ts: $INDEXES / _shared: $SHARED / 合計.ts: $TOTAL"
-          find supabase/functions -name '*.ts' | sort
-          # 全 function が index.ts を持ち、検査対象が合計と一致すること
-          test "$FUNC_DIRS" -eq "$INDEXES"
-          test "$TOTAL" -eq "$((INDEXES + SHARED))"
-          test "$TOTAL" -gt 0
-
-      # --node-modules-dir=none: ルートの package.json/node_modules に引きずられず、
-      # Deno のグローバルキャッシュで npm: を解決させる（Edge Runtime と同じ経路）
-      # 値に ": " を含むため引用が要る（無引用だとYAMLのマッピングとして解釈され構文エラー）
-      - name: "deno check — npm: 指定子の解決を実際に走らせる"
-        run: find supabase/functions -name '*.ts' -print0 | xargs -0 deno check --no-lock --node-modules-dir=none
+      - run: pnpm run check:edge-types
 # 本番反映はmainマージ後の別workflow（deploy.yml, スライス1で作成）のみ。手動デプロイ禁止。

@@ -125,3 +125,47 @@ describe("findSwallowedDbCalls — 正規表現リテラル", () => {
     expect(findSwallowedDbCalls(src, "x.ts").map((v) => v.table)).toEqual(["baselines"]);
   });
 });
+
+/**
+ * 型引数つきの包み（2026-08-20 実測）。
+ *
+ * `mustMaybe` は呼び出し元が期待する行の形を型引数で明示する契約にしたが、
+ * 検査器が `mustMaybe<{ id: string }>(` を「包み」と認識せず、
+ * **正しく包んだ7箇所を握りつぶしとして報告した**。
+ * 検査が緩む向きではなく厳しすぎる向きの誤りだが、放置すると
+ * 「検査を通すために包みを外す」圧力になるので直す。
+ */
+describe("findSwallowedDbCalls — 型引数つきの包み", () => {
+  it("mustMaybe<T>( を包みとして認識する", () => {
+    const src = `const r = await mustMaybe<{ id: string }>(supabase.from("events").select("id"), "ctx");`;
+    expect(findSwallowedDbCalls(src, "x.ts")).toEqual([]);
+  });
+
+  it("入れ子の型引数でも認識する", () => {
+    const src = `const r = await mustData<Array<{ a: Map<string, number> }>>(supabase.from("events").select("a"), "ctx");`;
+    expect(findSwallowedDbCalls(src, "x.ts")).toEqual([]);
+  });
+
+  it("複数行にまたがる型引数でも認識する", () => {
+    const src = `
+      const r = await mustMaybe<{
+        id: string;
+        status: string;
+      }>(supabase.from("delivery_log").select("id, status").maybeSingle(), "ctx");
+    `;
+    expect(findSwallowedDbCalls(src, "x.ts")).toEqual([]);
+  });
+
+  it("型引数を付けても包みでない名前は認めない", () => {
+    const src = `const x = mustDataMaybe<{ id: string }>(supabase.from("events").select("id"), "ctx");`;
+    expect(findSwallowedDbCalls(src, "x.ts").map((v) => v.table)).toEqual(["events"]);
+  });
+
+  it("比較演算子を型引数の閉じと読み違えない", () => {
+    const src = `
+      const flag = a > b;
+      const { data } = await supabase.from("findings").select("id");
+    `;
+    expect(findSwallowedDbCalls(src, "x.ts").map((v) => v.table)).toEqual(["findings"]);
+  });
+});

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MAX_FULL_RUNS_PER_DAY, canRunFullHarness, budgetDateKey } from "@edge/_shared/budget";
+import { jstDateKey } from "@edge/_shared/jst";
 
 /**
  * S-6-2 〜 S-6-6: 調査予算。
@@ -43,14 +44,30 @@ describe("canRunFullHarness", () => {
   });
 });
 
+/**
+ * **上限の1日は JST 基準**（2026-08-19 検収者指摘で UTC から変更）。
+ *
+ * 上限は運用者（日本）が「今日はもう回さない」と読む単位であり、
+ * 配信の冪等キー（`pulse:<company_id>:<JST日付>`）と1日の切れ目が揃っていないと突合できない。
+ * UTC 基準だとリセットが毎朝 9時 JST になり、配信の対象日と1日ずれる。
+ */
 describe("budgetDateKey", () => {
-  it("budget_usage.date に入れる YYYY-MM-DD を返す", () => {
-    expect(budgetDateKey(new Date("2026-08-19T23:30:00.000Z"))).toBe("2026-08-19");
+  it("budget_usage.date に入れる YYYY-MM-DD を JST 基準で返す", () => {
+    // UTC 23:30 = JST 翌日 08:30
+    expect(budgetDateKey(new Date("2026-08-19T23:30:00.000Z"))).toBe("2026-08-20");
+    // UTC 14:59 = JST 同日 23:59
+    expect(budgetDateKey(new Date("2026-08-19T14:59:00.000Z"))).toBe("2026-08-19");
   });
 
-  it("同じ日の別時刻で同じキーになる（1日1行に収束する）", () => {
-    const a = budgetDateKey(new Date("2026-08-19T00:00:00.000Z"));
-    const b = budgetDateKey(new Date("2026-08-19T23:59:59.000Z"));
+  it("同じ JST 日の別時刻で同じキーになる（1日1行に収束する）", () => {
+    const a = budgetDateKey(new Date("2026-08-19T15:00:00.000Z")); // JST 8/20 00:00
+    const b = budgetDateKey(new Date("2026-08-20T14:59:59.000Z")); // JST 8/20 23:59
     expect(a).toBe(b);
+    expect(a).toBe("2026-08-20");
+  });
+
+  it("配信の日付キーと同じ実装に寄っている（日次の意味を2つ持たない）", () => {
+    const at = new Date("2026-08-19T23:30:00.000Z");
+    expect(budgetDateKey(at)).toBe(jstDateKey(at));
   });
 });

@@ -10,6 +10,8 @@
  * 値をプラン階層と結び付けるのはスライス5。
  */
 
+import { jstDateKey } from "./jst.ts";
+
 /**
  * フルハーネス（Planner→Generator→Evaluator）の日次起動上限。
  *
@@ -34,7 +36,14 @@ export function canRunFullHarness(fullRuns: number | null | undefined): boolean 
   return fullRuns < MAX_FULL_RUNS_PER_DAY;
 }
 
-/** `budget_usage.date`（DATE 型）に入れるキー。 */
+/**
+ * `budget_usage.date`（DATE 型）に入れるキー。
+ *
+ * **JST 基準**（`_shared/jst.ts`）。2026-08-19 まで `toISOString().slice(0, 10)` の
+ * UTC 基準で、上限のリセットが毎朝 9時 JST になっていた。
+ * 上限は運用者（日本）が「今日はもう回さない」と読む単位であり、
+ * 配信の冪等キー（`pulse:<company_id>:<JST日付>`）と1日の切れ目が揃っていないと突合できない。
+ */
 export function budgetDateKey(now: Date): string {
-  return now.toISOString().slice(0, 10);
+  return jstDateKey(now);
 }

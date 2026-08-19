@@ -15,7 +15,8 @@
     "check:allowlist": "tsx scripts/check-allowlist.ts",
     "check:db-errors": "tsx scripts/check-db-error-handling.ts",
     "check:caller-guard": "tsx scripts/check-caller-guard.ts",
-    "check:schema": "tsx scripts/check-schema-contract.ts"
+    "check:schema": "tsx scripts/check-schema-contract.ts",
+    "check:edge-types": "tsx scripts/check-edge-types.ts"
   },
   "keywords": [],
   "author": "",

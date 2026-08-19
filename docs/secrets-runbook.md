@@ -28,12 +28,30 @@ GBIZINFO_TOKEN / ESTAT_APP_ID / (追加時にここへ行を足す)
    リフレッシュが即座に落ちる）
 2. **Vercel env** の `GOOGLE_CLIENT_SECRET` を新しい値に更新 → Redeploy
 3. **Supabase Function Secrets** の `GOOGLE_CLIENT_SECRET` を新しい値に更新
-4. 次の cron 発火（UTC 0/6/12/18時）を待ち、`cron.job_run_details` が
-   `succeeded` であることを確認する
+4. 次の cron 発火（UTC 0/6/12/18時 ＝ JST 9/15/21/3時）を待ち、
+   **`net._http_response` の `status_code` が 200 である**ことを確認する
+
+   ```sql
+   select id, status_code, error_msg, created
+     from net._http_response
+    order by created desc
+    limit 20;
+   ```
+
+   > **cron の実行記録（`cron.job_run_details`）では判定できない**（2026-08-20 判明）。
+   > `net.http_post` は**リクエストをキューに入れて即座に `request_id` を返す非同期関数**で、
+   > cron が実行する SQL は `SELECT net.http_post(...)`。**HTTP応答を待たずに成功する。**
+   > つまり**リフレッシュが 401 や 500 で落ちていても cron 側は成功のまま**であり、
+   > それを根拠に旧シークレットを削除すると、**気づかないまま連携が全滅する。**
+   > `net._http_response` は**数時間で刈られる**ので、発火直後に見ること。
+   > 刈られていた場合は Supabase ダッシュボードの `sync-connections` の
+   > Invocations / Logs を代替経路として使う。
+
 5. 4 を確認して初めて、GCP 側の旧シークレットを削除する
 
 **手順4を飛ばして旧シークレットを消さないこと。** リフレッシュ側の更新漏れは
-cron が失敗するまで表面化せず、`cron.job_run_details` を見ない限り気づけない。
+cron が失敗するまで表面化せず、**しかも cron は失敗しない**（上記のとおり非同期のため）。
+`net._http_response` かダッシュボードの Logs を見ない限り気づけない。
 
 > 関連: `sentio_service_role_key`（Vault）のローテーションも同種の落とし穴がある。
 > `docs/runbooks/2026-08-15_vault-secret-setup-procedure.md` の「値を更新する場合」を参照。

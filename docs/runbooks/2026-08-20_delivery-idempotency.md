@@ -219,6 +219,55 @@ select id, company_id, delivery_type, attempts, idempotency_key, content->>'send
 
 ---
 
+## 3-2. cron から呼んだ Function が本当に成功したかの確認
+
+> **cron の実行記録は使えない。** `net.http_post` は**リクエストをキューに入れて
+> 即座に `request_id` を返す非同期関数**である。cron ジョブが実行する SQL は
+> `SELECT net.http_post(...)` なので、**HTTP応答を待たずに成功する**。
+> したがって **Function が 401 を返しても cron 側の実行記録は成功のまま**になる。
+> **「cron が成功している」は「関数が成功した」を意味しない。**
+>
+> これは「cron の HTTP 応答を誰も読んでいない」（`docs/spec/07_open_items.md`）
+> そのものであり、2026-08-20 には**検証手順の側が同じ穴を踏んでいた**
+> （契約書の停止点に「cron の実行ログで 401 が出ていないことを実測」と書いていた）。
+> 仕組みで検知していない以上、**この手順書が唯一の防波堤**である。
+
+### 3-2-1. `net._http_response` を見る（第一の確認先）
+
+実際のHTTPステータスはここにしか入らない。
+
+```sql
+select id, status_code, error_msg, created
+  from net._http_response
+ order by created desc
+ limit 20;
+```
+
+- `status_code` が **200** であること
+- **401 なら Vault の `sentio_service_role_key` が現行キーと食い違っている。**
+  `resolveCaller`（S-2-9）は service_role キーと一致しない Bearer を通さないため、
+  ここが食い違うと `sync-connections` が**毎日 401 で静かに止まる**
+
+**保持期間が短い**（既定で数時間で刈られる）。**cron 発火の直後に見ること。**
+発火は **JST 9 / 15 / 21 / 3 時**（`0 0,6,12,18 * * *` UTC。`00020` の `cron.schedule`）。
+
+### 3-2-2. Supabase ダッシュボードの Invocations / Logs（第二の確認先）
+
+`net._http_response` が既に刈られていた場合の代替経路。
+`sync-connections` の Invocations / Logs を開き、**401 が出ていない**ことを確認する。
+
+### 3-2-3. 実測記録
+
+| 発火時刻（JST） | `status_code` | 確認先 | 実施日 | 実施者 |
+| --------------- | ------------- | ------ | ------ | ------ |
+| **未実施**      |               |        |        |        |
+
+> **デプロイ後にこの表を埋めるまで、`sync-connections` が動いている証拠は無い。**
+> ローカルの実DBテストでは cron の Bearer と関数の `SUPABASE_SERVICE_ROLE_KEY` が
+> 同じ値になるため、**この不一致は本番でしか出ない。**
+
+---
+
 ## 4. 手動での再送（明示指定で厳密に冪等にする）
 
 再送は**対象期間を明示して**行う。導出に任せると、実行時刻によって別キーになり、

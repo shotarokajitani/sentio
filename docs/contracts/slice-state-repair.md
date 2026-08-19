@@ -648,8 +648,33 @@ S-2 が17本すべて閉じても、この2件が未了なら merge しない。
    `Authorization: Bearer` に載せている値と、Function 側の `SUPABASE_SERVICE_ROLE_KEY` が
    食い違っていると、**`sync-connections` が毎日 401 で静かに止まる**。
    ローカルの実DBテストでは両者が同じ値になるため、この不一致は**本番でしか出ない**。
-   デプロイ後に cron の実行ログ（`cron.job_run_details`）で 401 が出ていないことを
-   実測して runbook に残すこと。
+
+   **確認先は次の2つ。cron の実行記録では判定できない**（2026-08-20 検収者指摘）:
+
+   `net.http_post` は**リクエストをキューに入れて即座に `request_id` を返す非同期関数**である。
+   cron ジョブが実行する SQL は `SELECT net.http_post(...)` なので、**HTTP応答を待たずに成功する**。
+   したがって **Function が 401 を返しても cron 側の実行記録は成功のまま**であり、
+   それを見て安心する経路になる。**「cron が成功している」は「関数が成功した」を意味しない。**
+
+   1. **`net._http_response`（実際のHTTPステータスが入る）**
+
+      ```sql
+      select id, status_code, error_msg, created
+        from net._http_response
+       order by created desc
+       limit 20;
+      ```
+
+      `status_code` が **200** であること。**401 なら Vault の `sentio_service_role_key` が
+      現行キーと食い違っている。**
+      **保持期間が短い**（既定で数時間で刈られる）ので、**cron 発火の直後に見ること**。
+      発火は **JST 9 / 15 / 21 / 3 時**（`0 0,6,12,18 * * *` UTC）。
+
+   2. **Supabase ダッシュボードの `sync-connections` の Invocations / Logs**
+
+      401 が出ていないこと。`net._http_response` が既に刈られていた場合の代替経路。
+
+   手順の実体は `docs/runbooks/2026-08-20_delivery-idempotency.md` の §3-2 に置く。
 
 - A-2（cron 登録の migration）は**本スライスの後**。壊れたFunctionを cron に載せない
 - 本番実測（S-3-5）は**検収者関門**

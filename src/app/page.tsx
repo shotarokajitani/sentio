@@ -29,6 +29,16 @@ export default function LandingPage() {
         </a>
       </div>
 
+      {/* 審査は「アプリの目的の説明」をホームページ本文に求める。
+          上の見出し・lead は情緒の文なので、事実記述はここに分けて置く */}
+      <section className="section">
+        <h2>{t.landing.aboutTitle}</h2>
+        <p className="lead">{t.landing.about}</p>
+        <p className="lead" style={{ marginTop: 0 }}>
+          {t.landing.about2}
+        </p>
+      </section>
+
       <p className="footnote">
         <a href="/terms">{t.login.terms}</a> ・ <a href="/privacy">{t.login.privacy}</a>
       </p>

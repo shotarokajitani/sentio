@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { WORDMARK_SEGMENTS } from "@/components/Masthead";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Masthead, WORDMARK_SEGMENTS } from "@/components/Masthead";
 import { ja } from "@/i18n/ja";
 
 /**
@@ -21,5 +23,21 @@ describe("ワードマークの分割", () => {
   it("アクセント以外の文字は地の色のまま", () => {
     const plain = WORDMARK_SEGMENTS.filter((s) => !s.accent).map((s) => s.text);
     expect(plain).toEqual(["S", "ntio"]);
+  });
+});
+
+/**
+ * 分割は人間の目には1語に見えるが、機械には見えない。
+ * Google の OAuth ブランディング審査は題字要素のテキストを走査して
+ * 「同意画面のアプリ名がホームページに無い」と判定した（2026-08-19 指摘）。
+ * 分割を保ったまま、属性で平文のブランド名を与えることで機械可読にする。
+ */
+describe("題字の機械可読性", () => {
+  it("ワードマークの外側要素が平文のブランド名を属性で持つ", () => {
+    const html = renderToStaticMarkup(createElement(Masthead));
+    const tag = html.match(/<span class="wordmark"[^>]*>/)?.[0] ?? "";
+
+    expect(tag).toContain(`aria-label="${ja.brand}"`);
+    expect(tag).toContain(`title="${ja.brand}"`);
   });
 });

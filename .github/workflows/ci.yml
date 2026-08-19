@@ -66,26 +66,36 @@ jobs:
           API_URL=$(get API_URL)
           ANON=$(get ANON_KEY)
           SRK=$(get SERVICE_ROLE_KEY)
+          # DB_URL は check:allowlist / check:schema が実DBの列を引くのに使う。
+          # PostgREST は information_schema を公開しないため、psql で直接つなぐ
+          # （scripts/live-schema.ts の冒頭に理由を記載）
+          DB_URL=$(get DB_URL)
           # ローカル開発用の固定値だが、鍵をログに残さない原則を守る
           echo "::add-mask::$ANON"
           echo "::add-mask::$SRK"
-          test -n "$API_URL" && test -n "$ANON" && test -n "$SRK"
+          echo "::add-mask::$DB_URL"
+          test -n "$API_URL" && test -n "$ANON" && test -n "$SRK" && test -n "$DB_URL"
           echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "SUPABASE_ANON_KEY=$ANON" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SRK" >> "$GITHUB_ENV"
+          echo "SUPABASE_DB_URL=$DB_URL" >> "$GITHUB_ENV"
           echo "接続先: $API_URL"
+          echo "psql: $(psql --version 2>&1 || echo '見つからない')"
 
       # 実DBに当たる検査。ここに置くのは Supabase が起きているのがこのジョブだけのため。
       - name: "check:allowlist — S2 allowlist を実DBの列と突合する"
+        if: ${{ !cancelled() }}
         run: pnpm run check:allowlist
 
       - name: "check:schema — Edge Function の参照列を実DBと突合する"
+        if: ${{ !cancelled() }}
         run: pnpm run check:schema
 
       # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する。
       # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
       # 「動いているはず」で進めずここで実測する（契約 S-5-2）。
       - name: Probe Edge Runtime reachability
+        if: ${{ !cancelled() }}
         run: |
           set -uo pipefail
           code=$(curl -s -o /tmp/probe.txt -w '%{http_code}' -X POST \
@@ -102,6 +112,7 @@ jobs:
 
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           for i in 1 2 3; do

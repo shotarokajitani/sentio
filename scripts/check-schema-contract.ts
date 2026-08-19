@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createClient } from "@supabase/supabase-js";
+import { fetchPublicColumns, toColumnMap } from "./live-schema";
 
 export type AccessKind = "read" | "filter" | "write" | "conflict";
 
@@ -366,34 +366,6 @@ export function scanDirectory(root: string): ExtractResult {
   return merged;
 }
 
-/** 実DBから public スキーマの テーブル→列 を取る。 */
-async function fetchLiveColumns(): Promise<Map<string, Set<string>>> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  // env が無ければ「検査せず緑」ではなく失敗させる（S-5-4 と同じ fail-closed）
-  if (!url || !key) {
-    throw new Error(
-      "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が未設定。実DBに当たれないため検査を成立させない",
-    );
-  }
-
-  const supabase = createClient(url, key, { db: { schema: "information_schema" } });
-  const { data, error } = await supabase
-    .from("columns")
-    .select("table_name, column_name")
-    .eq("table_schema", "public");
-
-  if (error) throw new Error(`information_schema.columns の取得に失敗: ${error.message}`);
-
-  const map = new Map<string, Set<string>>();
-  for (const row of (data ?? []) as { table_name: string; column_name: string }[]) {
-    if (!map.has(row.table_name)) map.set(row.table_name, new Set());
-    map.get(row.table_name)!.add(row.column_name);
-  }
-  return map;
-}
-
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = process.argv[2] ?? "supabase/functions";
   const extracted = scanDirectory(root);
@@ -421,7 +393,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.warn("");
   }
 
-  const live = await fetchLiveColumns();
+  // env が無ければ「検査せず緑」ではなく失敗させる（S-5-4 と同じ fail-closed）
+  const live = toColumnMap(fetchPublicColumns());
   const unknown: ColumnAccess[] = [];
 
   for (const a of extracted.accesses) {

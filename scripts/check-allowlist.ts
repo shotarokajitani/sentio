@@ -9,7 +9,7 @@
  */
 
 import { pathToFileURL } from "node:url";
-import { createClient } from "@supabase/supabase-js";
+import { fetchPublicColumns } from "./live-schema";
 
 export const EVENTS_ALLOWLIST = [
   "event_id",
@@ -80,23 +80,9 @@ export async function runAllowlistCheck(
 
 /** 実DBから `public.events` の列名を取る。 */
 export async function fetchEventsColumns(): Promise<string[]> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が未設定のため実DBを照会できない");
-  }
-
-  const supabase = createClient(url, key, { db: { schema: "information_schema" } });
-  const { data, error } = await supabase
-    .from("columns")
-    .select("column_name")
-    .eq("table_schema", "public")
-    .eq("table_name", "events");
-
-  if (error) throw new Error(`information_schema.columns の取得に失敗: ${error.message}`);
-
-  return (data ?? []).map((r: { column_name: string }) => r.column_name);
+  return fetchPublicColumns()
+    .filter((r) => r.table === "events")
+    .map((r) => r.column);
 }
 
 // `file://${process.argv[1]}` の連結は Windows で一致しない。pathToFileURL で正規化する。

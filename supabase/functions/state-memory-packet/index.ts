@@ -4,7 +4,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
-import { mustData, errorResponse } from "../_shared/db.ts";
+import { errorResponse, mustData, mustMaybe } from "../_shared/db.ts";
 
 function estimateTokens(text: string): number {
   if (text.length === 0) return 0;
@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
 
     // Gather sections from DB
     const [summary, baselines, events, findings, narratives] = await Promise.all([
-      mustData(
+      mustMaybe(
         supabase
           .from("company_summary")
           .select("content")

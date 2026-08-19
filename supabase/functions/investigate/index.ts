@@ -5,7 +5,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
-import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
+import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
 import { MAX_FULL_RUNS_PER_DAY, canRunFullHarness, budgetDateKey } from "../_shared/budget.ts";
 import { FINDING_TEMPLATE, EVALUATOR_CRITERIA } from "../_shared/prompts.ts";
 import { MODEL_GENERATOR, MODEL_EVALUATOR, warnIfModelDeprecated } from "../_shared/models.ts";
@@ -235,7 +235,7 @@ Deno.serve(async (req: Request) => {
     const evaluatorCriteria = EVALUATOR_CRITERIA;
 
     // Build memory packet from company_summary
-    const summaryData = await mustData(
+    const summaryData = await mustMaybe(
       supabase
         .from("company_summary")
         .select("content")
@@ -261,7 +261,7 @@ Deno.serve(async (req: Request) => {
       "investigate: budget_usage ensure",
     );
 
-    const budgetRow = await mustData(
+    const budgetRow = await mustMaybe(
       supabase
         .from("budget_usage")
         .select("full_runs, light_runs")

@@ -12,6 +12,7 @@ import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustCount, mustData } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
 import {
+  asDeliveryDb,
   deliverOnce,
   deliveryKey,
   isInvalidPeriodError,
@@ -162,7 +163,7 @@ Deno.serve(async (req: Request) => {
     ];
 
     const result = await deliverOnce(
-      supabase,
+      asDeliveryDb(supabase),
       {
         companyId,
         channel: "email",

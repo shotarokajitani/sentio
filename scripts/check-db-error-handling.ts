@@ -46,7 +46,7 @@ const NON_DB_RECEIVERS = new Set([
  * **除外リストの代わり**に置いている。除外リストは次に足す人が増やす対象になるが、
  * 「エラーを必ず受け取る形」を増やすぶんには穴が広がらない。
  */
-const GUARD_NAMES = new Set(["mustData", "mustOk", "mustCount", "takeError"]);
+const GUARD_NAMES = new Set(["mustData", "mustMaybe", "mustOk", "mustCount", "takeError"]);
 
 export interface Violation {
   file: string;

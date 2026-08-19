@@ -4,7 +4,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
-import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
+import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
 
 const HALF_LIFE_DAYS = 30;
 const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
     const nowIso = now.toISOString();
 
     // Check for existing narrative
-    const existing = await mustData(
+    const existing = await mustMaybe(
       supabase
         .from("narratives")
         .select("id, content, confidence, last_confirmed_at")

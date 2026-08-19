@@ -11,7 +11,7 @@ import { renderAlertHtml, renderAlertText } from "../_shared/email-html.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
-import { deliverOnce, deliveryKey } from "../_shared/delivery.ts";
+import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 
 const QUIET_HOUR_EXCEPTIONS = new Set(["site_down"]);
@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
     // delivery_type は 'alert' のまま status で表す（00024 で alert_deferred を廃止）
     if (isQuietHour(now) && !QUIET_HOUR_EXCEPTIONS.has(category)) {
       const deferred = await deliverOnce(
-        supabase,
+        asDeliveryDb(supabase),
         {
           companyId,
           channel: "email",
@@ -114,7 +114,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const result = await deliverOnce(
-      supabase,
+      asDeliveryDb(supabase),
       {
         companyId,
         channel: "email",

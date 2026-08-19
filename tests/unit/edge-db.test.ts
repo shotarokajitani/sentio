@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { mustData, mustOk, takeError, DbError, isDbError } from "@edge/_shared/db";
+import {
+  mustData,
+  mustMaybe,
+  mustCount,
+  mustOk,
+  takeError,
+  DbError,
+  isDbError,
+} from "@edge/_shared/db";
 
 /**
  * S-2-1 / S-2-2 / S-2-3: DBエラーを握りつぶさない共通経路。
@@ -87,5 +95,50 @@ describe("takeError — throw が正しくない場所のための第3の形", (
     expect(err).toBeInstanceOf(DbError);
     expect(err!.context).toBe("token-refresh: conn");
     expect(err!.code).toBe("23503");
+  });
+});
+
+/**
+ * `mustData` と `mustMaybe` を分けている理由（2026-08-19 の CI `deno check` 実測）。
+ *
+ * PostgREST の応答は `{data: Row[]; error: null} | {data: null; error: PostgrestError}` の合併で、
+ * `data: T` のまま受けると `T` が `Row[] | null` に推論され、**全呼び出し元が
+ * 「possibly null」の型エラー**になった（28件）。`data: T | null` から null を落として
+ * 推論させることで解決するが、その形だと `maybeSingle()` の 0件（null）まで
+ * 型から消えてしまい、**0件とエラーの区別（S-2-3）が型のレベルで壊れる**。
+ * よって単一行の取得は `mustMaybe` に分け、`null` を返り値の型に残す。
+ */
+describe("mustMaybe", () => {
+  it("0件（null）をそのまま返す — 0件は正常系 (S-2-3)", async () => {
+    await expect(mustMaybe(ok(null), "ctx")).resolves.toBeNull();
+  });
+
+  it("行があればそのまま返す", async () => {
+    await expect(mustMaybe(ok({ id: 1 }), "ctx")).resolves.toEqual({ id: 1 });
+  });
+
+  it("error があれば throw する（0件と区別する）", async () => {
+    await expect(mustMaybe(ng("permission denied", "42501"), "ctx")).rejects.toThrow(DbError);
+  });
+});
+
+describe("mustCount", () => {
+  const counted = (count: number | null) => Promise.resolve({ data: null, error: null, count });
+
+  it("count をそのまま返す", async () => {
+    await expect(mustCount(counted(7), "ctx")).resolves.toBe(7);
+  });
+
+  it("count が null なら 0 として扱う（head:true の 0件）", async () => {
+    await expect(mustCount(counted(null), "ctx")).resolves.toBe(0);
+  });
+
+  it("error があれば throw する（0件に丸めない）", async () => {
+    const failed = Promise.resolve({
+      data: null,
+      error: { message: 'relation "events" does not exist', code: "42P01" },
+      count: null,
+    });
+    await expect(mustCount(failed, "ctx")).rejects.toThrow(DbError);
   });
 });

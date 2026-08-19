@@ -10,7 +10,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
-import { errorResponse, mustData, mustOk, takeError } from "../_shared/db.ts";
+import { errorResponse, mustData, mustMaybe, mustOk, takeError } from "../_shared/db.ts";
 import { deliveryKey } from "../_shared/delivery.ts";
 
 const UNIQUE_VIOLATION = "23505";
@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
 
       if (insertError) {
         // 同じ Finding × 宛先の下書きが既にある。2件目を作らない
-        const existing = await mustData(
+        const existing = await mustMaybe(
           supabase
             .from("delivery_log")
             .select("id, status")
@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
         return json(400, { error: "draft_id is required" });
       }
 
-      const existing = await mustData(
+      const existing = await mustMaybe(
         supabase
           .from("delivery_log")
           .select("id, content, status, company_id")

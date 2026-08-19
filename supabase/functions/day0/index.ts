@@ -9,7 +9,7 @@ import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { mustData, errorResponse } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
-import { deliverOnce, deliveryKey } from "../_shared/delivery.ts";
+import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
@@ -962,7 +962,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const result = await deliverOnce(
-      supabase,
+      asDeliveryDb(supabase),
       {
         companyId: company_id,
         channel: "email",

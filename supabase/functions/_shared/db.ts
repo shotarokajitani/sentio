@@ -71,11 +71,40 @@ export function errorResponse(error: unknown, extraHeaders: Record<string, strin
   });
 }
 
-/** 読み取り。`error` があれば throw し、無ければ `data` をそのまま返す（0件を含む）。 */
+/**
+ * 複数行の読み取り。`error` があれば throw し、無ければ `data` を返す（**0件は空配列**）。
+ *
+ * 引数の型を `data: T | null` にしてあるのは、PostgREST の応答が
+ * `{ data: Row[]; error: null } | { data: null; error: PostgrestError }` の**合併**だからである。
+ * `data: T` のまま受けると `T` が `Row[] | null` に推論され、**全呼び出し元で
+ * 「possibly null」の型エラー**になる（2026-08-19 の CI `deno check` で28件発生）。
+ * `T | null` から null を落として推論させることで、戻り値が `Row[]` に定まる。
+ *
+ * **0件の可能性がある単一行の取得には使わない。** `maybeSingle()` / `single()` は
+ * `mustMaybe()` を使うこと（そちらは `null` を返り値の型に残す）。
+ */
 export async function mustData<T>(
-  query: PromiseLike<PostgrestResultLike<T>>,
+  query: PromiseLike<{ data: T | null; error: PostgrestErrorLike | null }>,
   context: string,
 ): Promise<T> {
+  const { data, error } = await query;
+  if (error) throw new DbError(context, error.message, error.code);
+  // 成功時に data が null になるのは maybeSingle / single の 0件だけで、
+  // それらは mustMaybe を使う契約にしてある
+  return data as T;
+}
+
+/**
+ * 単一行の読み取り（`maybeSingle()` / `single()`）。**0件は `null` をそのまま返す。**
+ *
+ * `mustData` と分けているのは、**0件を型から消さないため**である（S-2-3）。
+ * 0件とエラーが区別できることが要件なので、`null` を返り値の型に残して
+ * 呼び出し元に分岐を強制する。
+ */
+export async function mustMaybe<T>(
+  query: PromiseLike<{ data: T | null; error: PostgrestErrorLike | null }>,
+  context: string,
+): Promise<T | null> {
   const { data, error } = await query;
   if (error) throw new DbError(context, error.message, error.code);
   return data;

@@ -19,7 +19,7 @@
  * ここが握るのは順序と状態遷移だけなので、Resend に触らずにテストで固定できる。
  */
 
-import { DbError, mustData, mustOk, takeError } from "./db.ts";
+import { DbError, mustData, mustMaybe, mustOk, takeError } from "./db.ts";
 
 /** `00024` の CHECK 制約と同じ集合。片方を変えたらもう片方も変える。 */
 export const DELIVERY_STATUSES = [
@@ -183,7 +183,16 @@ interface ReservedRow {
 
 /**
  * `delivery_log` に触れるのに必要な最小限だけを型にしてある。
- * 実物の Supabase クライアントはこれを構造的に満たす。
+ * テストは偽物をそのまま渡せる（順序を記録するため）。
+ *
+ * 実物の Supabase クライアントは**構造的にはこれを満たす**が、
+ * `PostgrestQueryBuilder` の総称型と関係付けようとすると TypeScript が
+ * `TS2589 Type instantiation is excessively deep` で落ちる
+ * （2026-08-19 の CI `deno check` で実測）。したがって境界で `asDeliveryDb()` を通す。
+ *
+ * **キャストで型検査を捨てているので、実クライアントとの噛み合わせは実物で見る。**
+ * `tests/integration/delivery-idempotency.test.ts` が実 supabase-js クライアントと
+ * 実DBに対して `deliverOnce()` を直接動かしている（送信関数は注入するのでメールは出ない）。
  */
 export interface DeliveryDb {
   from(table: string): {
@@ -198,6 +207,15 @@ export interface DeliveryDb {
       eq(column: string, value: string): PromiseLike<QueryResult<unknown>>;
     };
   };
+}
+
+/**
+ * 実物の Supabase クライアントを `DeliveryDb` として扱う。
+ * 上のコメントのとおり、総称型どうしの関係付けが `TS2589` で落ちるための境界。
+ * ここ以外でキャストしない（キャストが散らばると噛み合わせの確認箇所が散る）。
+ */
+export function asDeliveryDb(client: unknown): DeliveryDb {
+  return client as DeliveryDb;
 }
 
 export interface SendOutcome {
@@ -336,7 +354,7 @@ async function reserve(
   // 一意制約違反以外は握りつぶさない。列が消えた・権限が無い等はここで失敗させる
   if (error.code !== UNIQUE_VIOLATION) throw error;
 
-  const existing = await mustData(
+  const existing = await mustMaybe(
     db
       .from("delivery_log")
       .select("id, status, attempts")

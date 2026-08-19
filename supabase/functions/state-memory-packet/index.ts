@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
 
     // Gather sections from DB
     const [summary, baselines, events, findings, narratives] = await Promise.all([
-      mustMaybe(
+      mustMaybe<{ content: string }>(
         supabase
           .from("company_summary")
           .select("content")

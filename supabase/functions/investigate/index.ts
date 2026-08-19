@@ -235,7 +235,7 @@ Deno.serve(async (req: Request) => {
     const evaluatorCriteria = EVALUATOR_CRITERIA;
 
     // Build memory packet from company_summary
-    const summaryData = await mustMaybe(
+    const summaryData = await mustMaybe<{ content: string }>(
       supabase
         .from("company_summary")
         .select("content")
@@ -261,7 +261,7 @@ Deno.serve(async (req: Request) => {
       "investigate: budget_usage ensure",
     );
 
-    const budgetRow = await mustMaybe(
+    const budgetRow = await mustMaybe<{ full_runs: number; light_runs: number }>(
       supabase
         .from("budget_usage")
         .select("full_runs, light_runs")
@@ -271,7 +271,10 @@ Deno.serve(async (req: Request) => {
       "investigate: budget_usage",
     );
 
-    let fullRuns = budgetRow.full_runs;
+    // 行が引けなかった場合も **起動しない**（S-6-2 〜 S-6-6 の fail-closed）。
+    // 直前の upsert で行は在るはずだが、「取れなかった＝0回使用」に丸めると
+    // 「行が無ければ無制限」の再来になる。null のまま canRunFullHarness に渡すと false になる
+    let fullRuns: number | null = budgetRow?.full_runs ?? null;
     let budgetStopped = false;
 
     // Plan investigations
@@ -388,7 +391,7 @@ Deno.serve(async (req: Request) => {
 
       // 起動したら必ず数える。起動したのに full_runs が増えない状態を作らない（S-6-4）。
       // Finding が採択されたかどうかに関わらず、ハーネスは1回動いている
-      fullRuns += 1;
+      fullRuns = (fullRuns ?? 0) + 1;
       await mustOk(
         supabase
           .from("budget_usage")

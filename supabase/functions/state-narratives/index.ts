@@ -42,7 +42,12 @@ Deno.serve(async (req: Request) => {
     const nowIso = now.toISOString();
 
     // Check for existing narrative
-    const existing = await mustMaybe(
+    const existing = await mustMaybe<{
+      id: string;
+      content: string;
+      confidence: number;
+      last_confirmed_at: string | null;
+    }>(
       supabase
         .from("narratives")
         .select("id, content, confidence, last_confirmed_at")

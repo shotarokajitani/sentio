@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
 
       if (insertError) {
         // 同じ Finding × 宛先の下書きが既にある。2件目を作らない
-        const existing = await mustMaybe(
+        const existing = await mustMaybe<{ id: string; status: string }>(
           supabase
             .from("delivery_log")
             .select("id, status")
@@ -115,7 +115,12 @@ Deno.serve(async (req: Request) => {
         return json(400, { error: "draft_id is required" });
       }
 
-      const existing = await mustMaybe(
+      const existing = await mustMaybe<{
+        id: string;
+        content: Record<string, unknown>;
+        status: string;
+        company_id: string;
+      }>(
         supabase
           .from("delivery_log")
           .select("id, content, status, company_id")

@@ -354,7 +354,7 @@ async function reserve(
   // 一意制約違反以外は握りつぶさない。列が消えた・権限が無い等はここで失敗させる
   if (error.code !== UNIQUE_VIOLATION) throw error;
 
-  const existing = await mustMaybe(
+  const existing = await mustMaybe<ReservedRow>(
     db
       .from("delivery_log")
       .select("id, status, attempts")

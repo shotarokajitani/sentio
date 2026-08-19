@@ -100,14 +100,23 @@ export async function mustData<T>(
  * `mustData` と分けているのは、**0件を型から消さないため**である（S-2-3）。
  * 0件とエラーが区別できることが要件なので、`null` を返り値の型に残して
  * 呼び出し元に分岐を強制する。
+ *
+ * **型引数は明示する。** `maybeSingle()` の応答は
+ * `{ data: T | null; error: null } | { data: null; error: PostgrestError }` で、
+ * 合併の各枝から `T` を推論させると候補が交差して **`never` に落ちる**
+ * （2026-08-19 の CI `deno check` で実測。`existing.status` が
+ * `Property 'status' does not exist on type 'never'` になった）。
+ * 期待する行の形をここで宣言する。実クライアントは総称なしの `SupabaseClient` なので、
+ * どのみち列の型は付いていない。**宣言した形が実スキーマと合っているかは
+ * `check:schema`（S-5-1）が実DBと突合する。**
  */
 export async function mustMaybe<T>(
-  query: PromiseLike<{ data: T | null; error: PostgrestErrorLike | null }>,
+  query: PromiseLike<{ data: unknown; error: PostgrestErrorLike | null }>,
   context: string,
 ): Promise<T | null> {
   const { data, error } = await query;
   if (error) throw new DbError(context, error.message, error.code);
-  return data;
+  return (data ?? null) as T | null;
 }
 
 /**

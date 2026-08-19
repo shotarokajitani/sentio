@@ -13,7 +13,10 @@ name: invoke-function
 on:
   workflow_dispatch:
     inputs:
-      function:
+      # `function` ではなく `function_name`。GitHub の式パーサで `inputs.function` が
+      # どう扱われるかを**この時点では実測できない**（workflow_dispatch はデフォルト
+      # ブランチにファイルが在るまで起動できないため）。試せないリスクは形で消す
+      function_name:
         description: "呼び出す Edge Function 名（deploy.yml のデプロイ対象のいずれか）"
         required: true
         type: string
@@ -38,7 +41,7 @@ jobs:
     env:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      FUNCTION_NAME: ${{ inputs.function }}
+      FUNCTION_NAME: ${{ inputs.function_name }}
       REQUEST_BODY: ${{ inputs.body }}
     steps:
       - uses: actions/checkout@v7

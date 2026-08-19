@@ -1,18 +1,34 @@
-// State-narratives Edge Function — handles narrative upsert with confidence decay
-// 3 state-update paths only: (a) baselines recalc, (b) narratives upsert, (c) summary regen
+// State-narratives Edge Function — 会社の文脈記憶を1件 upsert する
+//
+// **これは「夜間バッチの1段」ではない**（契約 P-2 / S-3-4）。
+// `category` と `topic` を呼び出し元が渡す**イベント駆動の単発API**であり、
+// `company_id` だけを渡して呼べる形ではない。
+// `state-baselines → state-narratives → state-summary` と一列に並べる cron 設計は
+// 成り立たないので、夜間の記銘経路は baselines 再計算と summary 再生成の2本にする。
+//
+// 実列は category / topic / content / confidence / source_event_ids（複数）/
+// last_confirmed_at / decayed_at。
+// 修復前は `key` / `updated_at` / `source_event_id`（単数）を読み書きしており、
+// いずれも実在しないため 42703 になっていた（P-2）。
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
-import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
+import { errorResponse, mustMaybe, mustOk } from "../_shared/db.ts";
+import { decayedConfidence } from "../_shared/narrative-confidence.ts";
 
-const HALF_LIFE_DAYS = 30;
-const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_DAYS;
+const json = (status: number, body: Record<string, unknown>) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
-function decayConfidence(updatedAt: string, now: Date): number {
-  const daysDiff = (now.getTime() - new Date(updatedAt).getTime()) / (24 * 60 * 60 * 1000);
-  if (daysDiff <= 0) return 1.0;
-  return Math.exp(-DECAY_LAMBDA * daysDiff);
+interface NarrativeRow {
+  id: string;
+  content: string;
+  confidence: number;
+  source_event_ids: string[] | null;
+  last_confirmed_at: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -27,9 +43,10 @@ Deno.serve(async (req: Request) => {
   try {
     const {
       company_id: bodyCompanyId,
-      key,
+      category,
+      topic,
       content,
-      source_event_id,
+      source_event_ids,
       is_correction,
     } = await req.json();
 
@@ -37,85 +54,112 @@ Deno.serve(async (req: Request) => {
     if (!scope.ok) return scope.response;
     const company_id = scope.companyId;
 
+    // 同定に要る3つが揃わないと upsert 先が決まらない。**DBに触る前に**落とす
+    if (!category || !topic || typeof content !== "string" || content.length === 0) {
+      return json(400, { error: "category, topic, content are required" });
+    }
+
+    const sourceEventIds: string[] = Array.isArray(source_event_ids)
+      ? source_event_ids.filter((id: unknown): id is string => typeof id === "string")
+      : [];
+
     const supabase = getSupabaseAdmin();
     const now = new Date();
     const nowIso = now.toISOString();
 
-    // Check for existing narrative
-    const existing = await mustMaybe<{
-      id: string;
-      content: string;
-      confidence: number;
-      last_confirmed_at: string | null;
-    }>(
+    // 自然キーは (company_id, category, topic)
+    const existing = await mustMaybe<NarrativeRow>(
       supabase
         .from("narratives")
-        .select("id, content, confidence, last_confirmed_at")
+        .select("id, content, confidence, source_event_ids, last_confirmed_at")
         .eq("company_id", company_id)
-        .eq("key", key)
+        .eq("category", category)
+        .eq("topic", topic)
         .maybeSingle(),
       "state-narratives: existing",
     );
 
-    if (is_correction && existing) {
-      // Correction: immediate confidence reduction
+    // 訂正は**即時に confidence を落とす**（時間減衰を待たない。`.claude/rules/state.md`）。
+    // 「違う」と言われた記憶を持ち続けるほうが害が大きい
+    if (is_correction) {
+      if (!existing) {
+        // 0件は正常系として区別できる形で返す（S-2-3）。訂正の対象が無い
+        return json(404, { error: "narrative not found", category, topic });
+      }
+
       await mustOk(
         supabase
           .from("narratives")
           .update({
             content,
-            confidence: 0.0,
-            source_event_id,
-            updated_at: nowIso,
+            confidence: 0,
+            source_event_ids: mergeEventIds(existing.source_event_ids, sourceEventIds),
+            last_confirmed_at: nowIso,
+            decayed_at: nowIso,
           })
-          .eq("company_id", company_id)
-          .eq("key", key),
+          .eq("id", existing.id),
         "state-narratives: correction update",
       );
 
-      return new Response(JSON.stringify({ status: "ok", action: "corrected", key }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return json(200, {
+        status: "ok",
+        action: "corrected",
+        category,
+        topic,
+        confidence: 0,
       });
     }
 
     if (existing) {
-      // Update existing — refresh confidence to 1.0
+      // 再確認されたので confidence を 1 に戻し、last_confirmed_at を進める
       await mustOk(
         supabase
           .from("narratives")
           .update({
             content,
-            confidence: 1.0,
-            source_event_id,
-            updated_at: nowIso,
+            confidence: 1,
+            source_event_ids: mergeEventIds(existing.source_event_ids, sourceEventIds),
+            last_confirmed_at: nowIso,
           })
-          .eq("company_id", company_id)
-          .eq("key", key),
+          .eq("id", existing.id),
         "state-narratives: update",
       );
 
-      return new Response(JSON.stringify({ status: "ok", action: "updated", key }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return json(200, {
+        status: "ok",
+        action: "updated",
+        category,
+        topic,
+        confidence: 1,
+        // 直前の値がどこまで減衰していたかを返す。再確認の意味が呼び出し元から見える
+        previous_confidence: decayedConfidence(
+          existing.confidence,
+          existing.last_confirmed_at,
+          now,
+        ),
       });
     }
 
-    // Create new
     await mustOk(
       supabase.from("narratives").insert({
         company_id,
-        key,
+        category,
+        topic,
         content,
-        confidence: 1.0,
-        source_event_id,
-        updated_at: nowIso,
+        confidence: 1,
+        source_event_ids: sourceEventIds,
+        last_confirmed_at: nowIso,
       }),
       "state-narratives: insert",
     );
 
-    return new Response(JSON.stringify({ status: "ok", action: "created", key }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(200, { status: "ok", action: "created", category, topic, confidence: 1 });
   } catch (error) {
     return errorResponse(error, corsHeaders);
   }
 });
+
+/** 根拠イベントは積み上げる。上書きすると「何を根拠に持った記憶か」が消える。 */
+function mergeEventIds(existing: string[] | null, incoming: string[]): string[] {
+  return [...new Set([...(existing ?? []), ...incoming])];
+}

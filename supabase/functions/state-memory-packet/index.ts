@@ -5,6 +5,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData, mustMaybe } from "../_shared/db.ts";
+import { toFlatBaselines } from "../_shared/baseline-stats.ts";
+import { decayedConfidence } from "../_shared/narrative-confidence.ts";
 
 function estimateTokens(text: string): number {
   if (text.length === 0) return 0;
@@ -43,7 +45,7 @@ Deno.serve(async (req: Request) => {
       mustData(
         supabase
           .from("baselines")
-          .select("metric_key, is_established, median, iqr")
+          .select("metric_key, is_established, stats")
           .eq("company_id", company_id)
           .eq("is_established", true),
         "state-memory-packet: baselines",
@@ -68,9 +70,11 @@ Deno.serve(async (req: Request) => {
       mustData(
         supabase
           .from("narratives")
-          .select("content, confidence")
+          // 実在列は category / topic / content / confidence / source_event_ids /
+          // last_confirmed_at。`updated_at` は存在しない（P-2）
+          .select("category, topic, content, confidence, last_confirmed_at")
           .eq("company_id", company_id)
-          .order("updated_at", { ascending: false })
+          .order("last_confirmed_at", { ascending: false, nullsFirst: false })
           .limit(10),
         "state-memory-packet: narratives",
       ),
@@ -82,12 +86,10 @@ Deno.serve(async (req: Request) => {
       {
         type: "baselines",
         priority: 2,
+        // 統計は `stats` JSONB から取り出す。変換はアダプタ1本だけを通す（S-1-2）
         content:
-          (baselines || [])
-            .map(
-              (b: { metric_key: string; median: number; iqr: number }) =>
-                `${b.metric_key}: median=${b.median}, iqr=${b.iqr}`,
-            )
+          toFlatBaselines(baselines)
+            .map((b) => `${b.metric_key}: median=${b.median}, iqr=${b.iqr}`)
             .join("\n") || "(no baselines)",
       },
       {
@@ -115,11 +117,20 @@ Deno.serve(async (req: Request) => {
       {
         type: "narratives",
         priority: 5,
+        // category / topic を添える。どの面の話かが分からないと編成器の後段で使えない
+        // confidence は**読む側で減衰させる**（S-1-3）。保存値は最後に確認した時点の値で、
+        // 実効値は last_confirmed_at からの経過で減る
         content:
-          (narratives || [])
+          narratives
             .map(
-              (n: { content: string; confidence: number }) =>
-                `(conf=${n.confidence.toFixed(2)}) ${n.content}`,
+              (n: {
+                category: string;
+                topic: string;
+                content: string;
+                confidence: number;
+                last_confirmed_at: string | null;
+              }) =>
+                `[${n.category}/${n.topic}] (conf=${decayedConfidence(n.confidence, n.last_confirmed_at, new Date()).toFixed(2)}) ${n.content}`,
             )
             .join("\n") || "(no narratives)",
       },

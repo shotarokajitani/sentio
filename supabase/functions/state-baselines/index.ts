@@ -5,17 +5,13 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
+import {
+  BASELINE_NATURAL_KEY,
+  REVENUE_BASELINE,
+  buildBaselineStats,
+} from "../_shared/baseline-stats.ts";
 
 const MIN_OBS = 5;
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const index = (p / 100) * (sorted.length - 1);
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  if (lower === upper) return sorted[lower];
-  return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -51,34 +47,28 @@ Deno.serve(async (req: Request) => {
       .map((e) => (e.metrics as Record<string, unknown>)?.revenue as number)
       .filter((v): v is number => typeof v === "number");
 
-    const isEstablished = revenues.length >= MIN_OBS;
-    const sorted = [...revenues].sort((a, b) => a - b);
-    const median = isEstablished
-      ? sorted.length % 2 === 1
-        ? sorted[Math.floor(sorted.length / 2)]
-        : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-      : null;
+    // 統計は `stats` JSONB に入れる。**修復前はここが median / iqr / p25 / p75 /
+    // observation_count を「列として」書いており、実スキーマに存在しないため
+    // PGRST204 になっていた**（P-1）。計算はアダプタ1本に寄せてある（S-1-2）
+    const stats = buildBaselineStats(revenues, MIN_OBS);
+    const isEstablished = stats !== null;
 
-    const p25 = isEstablished ? percentile(sorted, 25) : null;
-    const p75 = isEstablished ? percentile(sorted, 75) : null;
-
-    const now = new Date().toISOString();
-
-    // Upsert baseline
     await mustOk(
       supabase.from("baselines").upsert(
         {
           company_id,
-          metric_key: "revenue",
+          metric_key: REVENUE_BASELINE.metricKey,
+          // 自然キーの一部なので明示する。省略するとキーの意味が変わる
+          entity_id: REVENUE_BASELINE.entityId,
+          granularity: REVENUE_BASELINE.granularity,
+          // 確立していないときは stats を空にする。数字を 0 で埋めない
+          // （読み側の parseBaselineStats が null にして落とす）
+          stats: stats ?? {},
+          min_obs: MIN_OBS,
           is_established: isEstablished,
-          median,
-          iqr: p25 !== null && p75 !== null ? p75 - p25 : null,
-          p25,
-          p75,
-          observation_count: revenues.length,
-          updated_at: now,
+          updated_at: new Date().toISOString(),
         },
-        { onConflict: "company_id,metric_key" },
+        { onConflict: BASELINE_NATURAL_KEY },
       ),
       "state-baselines: baselines upsert",
     );

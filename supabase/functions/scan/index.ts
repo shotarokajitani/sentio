@@ -5,6 +5,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { mustData, errorResponse } from "../_shared/db.ts";
+import { toFlatBaselines } from "../_shared/baseline-stats.ts";
 
 interface ScanCandidate {
   scanType: string;
@@ -45,16 +46,17 @@ Deno.serve(async (req: Request) => {
       "scan: events",
     );
 
-    // Fetch baselines。列を明示する。`select("*")` のままだと、実在しない列
-    // （median / iqr / p25 / p75）が undefined になり、比較が NaN になって
-    // 静かに0件になる。この不具合が隠れていた場所そのもの
-    const baselines = await mustData(
+    // Fetch baselines。**統計は `stats` JSONB にある**（`median` 等の列は実在しない）。
+    // 修復前はここが実在しない列を選び、undefined → 比較が NaN → 静かに0件になっていた。
+    // フラット形への変換は `toFlatBaselines` 1本だけを通す（契約 S-1-2）
+    const baselineRows = await mustData(
       supabase
         .from("baselines")
-        .select("metric_key, is_established, median, iqr, p25, p75")
+        .select("metric_key, is_established, stats")
         .eq("company_id", company_id),
       "scan: baselines",
     );
+    const baselines = toFlatBaselines(baselineRows);
 
     // Fetch known explanations for suppression
     const knownExplanations = await mustData(
@@ -66,9 +68,7 @@ Deno.serve(async (req: Request) => {
     );
 
     const candidates: ScanCandidate[] = [];
-    const established = (baselines || []).filter(
-      (b: { is_established: boolean }) => b.is_established,
-    );
+    const established = baselines.filter((b) => b.is_established);
 
     // 1. Deviation scan
     for (const event of events || []) {

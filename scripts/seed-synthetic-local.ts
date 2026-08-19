@@ -3,6 +3,7 @@
  * Usage: pnpm exec tsx scripts/seed-synthetic-local.ts
  */
 import { generateSyntheticCompany } from "./generate-synthetic-company";
+import { REVENUE_BASELINE } from "@edge/_shared/baseline-stats";
 
 const SUPABASE_URL = "http://127.0.0.1:54321";
 const SERVICE_ROLE_KEY =
@@ -93,33 +94,33 @@ async function main() {
   );
 
   // Upsert baselines for synthetic company
+  //
+  // **統計は `stats` JSONB に入れる**（契約 S-1-4）。修復前はここが
+  // median / iqr / p25 / p75 / observation_count を「列として」書き、
+  // かつ `stats: {}` を並べていた。実在しない列なので投入は失敗し、
+  // 仮に通っても `stats` が空なので読み側からは基準値なしに見える。
+  //
+  // `entity_id` は自然キー (company_id, metric_key, entity_id, granularity) の
+  // 一部なので明示する。会社全体の指標なので null
   const baselines = [
     {
       company_id: company.meta.companyId,
-      metric_key: "revenue",
-      granularity: "monthly",
+      metric_key: REVENUE_BASELINE.metricKey,
+      entity_id: REVENUE_BASELINE.entityId,
+      granularity: REVENUE_BASELINE.granularity,
       is_established: true,
-      median: 100000,
-      iqr: 15000,
-      p25: 93000,
-      p75: 108000,
-      observation_count: 12,
+      stats: { median: 100000, iqr: 15000, p25: 93000, p75: 108000, count: 12 },
       min_obs: 5,
-      stats: {},
       updated_at: new Date().toISOString(),
     },
     {
       company_id: company.meta.companyId,
       metric_key: "schedule_interval",
+      entity_id: null,
       granularity: "weekly",
       is_established: true,
-      median: 7,
-      iqr: 2,
-      p25: 6,
-      p75: 8,
-      observation_count: 8,
+      stats: { median: 7, iqr: 2, p25: 6, p75: 8, count: 8 },
       min_obs: 5,
-      stats: {},
       updated_at: new Date().toISOString(),
     },
   ];

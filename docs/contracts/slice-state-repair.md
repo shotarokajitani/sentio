@@ -633,14 +633,25 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
 `docs/contracts/roadmap.md` へ進む前に、以下2件を必ず片付ける。
 S-2 が17本すべて閉じても、この2件が未了なら merge しない。
 
+0. **本番の PostgreSQL バージョンの実測**（2026-08-20 追加）。
+   `00023` の `NULLS NOT DISTINCT` は **PostgreSQL 15 以降**の構文である。
+   `supabase/config.toml` の `major_version = 15` は**宣言であって本番の実測ではない**
+   （同ファイルのコメント自身が remote で `SHOW server_version;` を実行して確認せよと書いている）。
+   `select version();` かダッシュボードの Settings → Infrastructure で実測し、
+   `docs/checklists/env-diff.md` の表に記録すること。
+   **15 未満だった場合、部分索引や式索引への差し替えでは済まない**:
+   supabase-js の `upsert` は PostgREST の `on_conflict` 経由で**列名のリストしか渡せず**、
+   PostgreSQL が部分一意索引を `ON CONFLICT` の推論に使うには文側に索引述語が要る。
+   その場合は `entity_id` の NOT NULL 化（意味論とデータの変更）か
+   upsert 経路そのものの変更になるため、**S-1 の範囲を超える。設計から見直す。**
+
 1. **`00023` の欠番。**
-   本スライスは冪等キーを `00024_delivery_log_idempotency.sql` に置いたが、
-   `00023` は S-1（baselines の一意索引・列修正。契約 S-1-6）のために予約したまま**空いている**。
-   マイグレーションは辞書順に適用されるので欠番自体は動作を壊さないが、
-   「番号が飛んでいる理由」を知らない人が後から埋めると衝突する。
-   **どちらかを満たしてから merge する**:
-   - **S-1 を同一PRに入れて `00023` を実際に埋める**（既定。実装順どおり）
-   - S-1 を別PRに分けるなら、S-1 の migration を **`00025` に採番**して欠番を解消する
+   本スライスは冪等キーを `00024_delivery_log_idempotency.sql` に置き、
+   `00023` は S-1（baselines の一意索引。契約 S-1-6）で埋めた（2026-08-20）。
+   **解消済み。** S-1 を同一PRに入れて `00023` を埋めた（既定の選択肢どおり）。
+   S-1 を別PRに分ける判断に戻す場合は、S-1 の migration を **`00025` に採番**して
+   欠番を作らないこと（辞書順に適用されるので欠番自体は動作を壊さないが、
+   「番号が飛んでいる理由」を知らない人が後から埋めると衝突する）。
 
 2. **cron の Bearer と関数側 `SUPABASE_SERVICE_ROLE_KEY` の一致をデプロイ後に実測する。**
    S-2-9 で `resolveCaller` を17本すべてに入れた結果、**呼び出し元が service_role キーを

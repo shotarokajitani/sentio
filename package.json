@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "eval:engine": "vitest run tests/eval/ --reporter=verbose",
-    "check:allowlist": "tsx scripts/check-allowlist.ts"
+    "check:allowlist": "tsx scripts/check-allowlist.ts",
+    "check:db-errors": "tsx scripts/check-db-error-handling.ts",
+    "check:caller-guard": "tsx scripts/check-caller-guard.ts",
+    "check:schema": "tsx scripts/check-schema-contract.ts"
   },
   "keywords": [],
   "author": "",

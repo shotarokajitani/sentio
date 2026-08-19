@@ -8,9 +8,14 @@ import {
 } from "../../src/act/weekly-renderer";
 
 /**
- * Integration test: scan → findings → deliver-weekly pipeline
- * Validates D+1 (findings generated), D+2 (weekly count matches findings),
- * and the overall walking skeleton pipeline.
+ * scan → findings → deliver-weekly を **インメモリで** 通すテスト。
+ * D+1（findings が出る）・D+2（週次の件数が findings と一致する）を、
+ * `src/` の純関数に手作りのオブジェクトを渡して確認する。
+ *
+ * 2026-08-19 に `tests/integration/pipeline.test.ts` から移設した（契約 S-5-3）。
+ * 実DBにも Edge Function にも当たらないのに `integration` を名乗っており、
+ * State層が実スキーマに対して一度も動いていない事実がこの緑の裏に隠れていた。
+ * **実DBに当たる版は `tests/integration/pipeline-db.test.ts`。** 両方を残す。
  */
 
 function buildBaselines(): Baseline[] {

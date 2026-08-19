@@ -24,7 +24,13 @@ jobs:
       # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail するため明示除外する。
       # 除外を外したい場合は integration ジョブ側の env 注入も併せて見直すこと。
       - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
-      - run: pnpm run check:allowlist # S2/トークンのスキーマ検査（scripts/で実装）
+
+      # 実DBの要らない静的検査。壊れた書き方をマージ前に止める。
+      # check:allowlist は実DB照会になったため integration ジョブへ移した（契約 S-5-4）。
+      # ここに残すと Supabase 不在で必ず落ちる。
+      - run: pnpm run check:db-errors # S-2-4: DBエラーの握りつぶし検出
+      - run: pnpm run check:caller-guard # S-4-8: 越境封鎖の適用漏れ検出
+
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 
   # RLS等の統合テストを skip なしで実行する。
@@ -69,13 +75,50 @@ jobs:
           echo "SUPABASE_SERVICE_ROLE_KEY=$SRK" >> "$GITHUB_ENV"
           echo "接続先: $API_URL"
 
+      # 実DBに当たる検査。ここに置くのは Supabase が起きているのがこのジョブだけのため。
+      - name: "check:allowlist — S2 allowlist を実DBの列と突合する"
+        run: pnpm run check:allowlist
+
+      - name: "check:schema — Edge Function の参照列を実DBと突合する"
+        run: pnpm run check:schema
+
+      # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する。
+      # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
+      # 「動いているはず」で進めずここで実測する（契約 S-5-2）。
+      - name: Probe Edge Runtime reachability
+        run: |
+          set -uo pipefail
+          code=$(curl -s -o /tmp/probe.txt -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"company_id":"00000000-0000-0000-0000-000000000000"}' \
+            "$SUPABASE_URL/functions/v1/scan" || echo "000")
+          echo "scan への実HTTP: status=$code"
+          echo "応答本文:"; cat /tmp/probe.txt || true
+          if [ "$code" = "000" ]; then
+            echo "::error::Edge Runtime に到達できない。supabase start が functions を配信していない"
+            exit 1
+          fi
+
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times
         run: |
           set -euo pipefail
           for i in 1 2 3; do
             echo "===== integration run $i/3 — 接続先 $SUPABASE_URL ====="
-            pnpm exec vitest run tests/integration/ --reporter=verbose
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tee "/tmp/it-$i.log"
+          done
+
+      # 「env が無いから skip で緑」を作らないための可視化（契約 S-5-5）。
+      # skip の件数と対象を必ずログに出す。0件でも「0件だった」と言わせる。
+      - name: Report skipped tests
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            [ -f "/tmp/it-$i.log" ] || continue
+            echo "===== run $i の skip ====="
+            grep -E '(↓|skipped)' "/tmp/it-$i.log" || echo "skip 0件"
           done
 
       - name: Stop local Supabase

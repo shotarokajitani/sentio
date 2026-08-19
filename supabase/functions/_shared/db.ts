@@ -81,6 +81,22 @@ export async function mustData<T>(
   return data;
 }
 
+/**
+ * 件数だけを取る（`select("*", { count: "exact", head: true })`）。
+ *
+ * `head: true` は `data` を返さないので `mustData` では受けられない。
+ * 「count を取るときだけ生の分割代入に戻る」を作ると、そこが検査の穴になるため、
+ * **正規形をもう1つ増やす**（`takeError` を足したのと同じ考え方）。
+ */
+export async function mustCount(
+  query: PromiseLike<PostgrestResultLike<unknown> & { count: number | null }>,
+  context: string,
+): Promise<number> {
+  const { count, error } = await query;
+  if (error) throw new DbError(context, error.message, error.code);
+  return count ?? 0;
+}
+
 /** 書き込み。`error` があれば throw する。戻り値は使わない。 */
 export async function mustOk(
   query: PromiseLike<PostgrestResultLike<unknown>>,

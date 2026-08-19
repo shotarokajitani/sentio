@@ -279,6 +279,34 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
   判定そのものは S-4-1（`resolveCaller`）と同一実装だが、**S-2 の段で入れる**。
   理由: 本番で現に開いている穴であり、列名の修正（S-1）を待つ理由が無い
 
+- **S-2-10** **deliver 系のテストが本番の宛先へ実送信しえない構成であることを、
+  コードの主張ではなく実測で示す**（2026-08-20 検収者追加。着手条件）。
+  ここが担保できるまで deliver 系のテストを走らせない。
+
+  **修復前の実測（2026-08-20）— これが対照である**: `vitest.config.ts:6` が
+  ローカルの `.env` を `process.env` に丸ごと載せており、**テスト実行時に
+  `RESEND_API_KEY` が載っていた**（`tests/unit/test-recipients.test.ts` が
+  `deliver 系のテスト環境に RESEND_API_KEY が載っている` で赤くなった）。
+  この状態で deliver 系のテストを書けば、**本番の鍵で実際にメールが飛ぶ。**
+
+  合格条件:
+
+  1. テストプロセスから `RESEND_API_KEY` / `RESEND_FROM` が**構造的に落ちている**
+     （`vitest.config.ts` が無条件に削除する。シェルで export された値も落とす）
+  2. CI に**そもそも渡していない**ことを、テストより先にジョブ内で実測する
+     （`verify` ジョブの `printenv` ステップ）
+  3. 鍵が未設定なら**送信せず fail-closed で 500 になる**ことを、実 Function への
+     実HTTPで確かめる（`tests/integration/delivery-idempotency.test.ts`）。
+     このとき**予約行すら作らない**
+  4. 宛先は **`tests/fixtures/recipients.ts` の1箇所**から取る。フィクスチャに焼き込まない
+     - ローカル / CI の自動テスト = `sentio-e2e@example.com`（RFC 2606 予約ドメイン）。
+       この経路は送信しないので到達性は要件にならず、**到達するアドレスを焼き込むと
+       鍵が混入した瞬間に実メールが飛ぶ**。事故時の被害をゼロにする方を採る
+     - 人間が受信を確認する経路 = `shotaro.kajitani+sentio-e2e@mdc-diseno.com`。
+       専用エイリアスの作成は `docs/spec/07_open_items.md`（ブロッカーではない）
+  5. **顧客の実アドレスがフィクスチャ・テストデータに入らない**ことを機械で検査する
+     （`tests/unit/test-recipients.test.ts` が `tests/` `supabase/functions/` `scripts/` を走査）
+
 #### deliver 系の明示要件（2026-08-19 追加。S-2-0 の除外に代わるもの）
 
 握りつぶしを失敗に変えると、deliver 系だけは「**メールは出たのに 5xx**」が起こりうる。
@@ -292,25 +320,114 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
 - **S-2-8** 二重送信が起きないことを**テストで固定する**。
   送信後のDB書き込み失敗を注入し、**再試行で2通目が出ない**ことを示す
 
-##### S-2-7 で採った形（実装判断の記録）
+##### S-2-7 で採った形（実装判断の記録・2026-08-20 検収者承認）
 
-**送信意図の記録 → 送信 → 結果更新** の3段にする。
+**予約 → 送信 → 結果更新** の3段にする。実装は `supabase/functions/_shared/delivery.ts`
+の `deliverOnce()` 1本で、**送信関数は予約に成功したときしか呼ばれない**
+（呼び出し元が順序を組み替えられない形にしてある）。
 
 1. `delivery_log` に `status = "sending"` の行を**先に** INSERT する（冪等キー付き）
 2. Resend へ送信する
 3. 結果で `status` を `sent` / `failed` に UPDATE する
-4. 再試行時、`sending` の行が既にあれば**送信済みの可能性ありとして再送しない**
+4. 再試行時、**一意制約違反なら送信せずスキップ**する
 
-**根拠**: 現状は「送信 → `delivery_log` に INSERT」の順（`deliver-pulse/index.ts:98,127`）であり、
-**送信後のDB失敗がログに何も残さない**。この状態で再試行すると、DBには痕跡が無いので
+**根拠**: 修復前は「送信 → `delivery_log` に INSERT」の順（`deliver-pulse/index.ts:98,127`）で、
+**送信後のDB失敗がログに何も残さなかった**。この状態で再試行すると、DBには痕跡が無いので
 2通目が出る。順序を反転させると「送ったかどうか分からない」状態が必ずDBに残り、
 **判断の材料が消えない**。`sending` を「送っていない」ではなく「**送った可能性がある**」と
 解釈するのは、二重送信より未送信のほうが害が小さいという判断による
 （Sentio は何も勝手に送らない。CLAUDE.md 絶対規則）。
 
-冪等キーは既存の `_shared/event-id.ts` と同じ発想で、送信単位の自然キーから作る
-（pulse: `pulse:<company_id>:<JST日付>` / alert: `alert:<company_id>:<finding_id>` /
-weekly: `weekly:<company_id>:<ISO週>`）。`00024` で `delivery_log.idempotency_key` に一意索引を張る。
+###### 冪等キーの構成要素（5種すべて）
+
+キーは **単一の TEXT カラム `delivery_log.idempotency_key`** に入れ、**単一列の UNIQUE** を張る。
+複合キーにしない。次元はキー文字列に畳み込む。組み立ては `deliveryKey()` が唯一の出所。
+
+| Function          | 冪等キー                                                            | 対象の次元            |
+| ----------------- | ------------------------------------------------------------------- | --------------------- |
+| `deliver-pulse`   | `pulse:<company_id>:<対象日 JST YYYY-MM-DD>`                        | 会社・種別・対象期間  |
+| `deliver-weekly`  | `weekly:<company_id>:<ISO週 YYYY-Www>`                              | 会社・種別・対象期間  |
+| `deliver-alert`   | `alert:<company_id>:<event_id>`                                     | 会社・種別・対象ID    |
+| `day0`            | `day0:<company_id>`                                                 | 会社・種別（1回きり） |
+| `onetap-calendar` | `onetap_calendar:<company_id>:<finding_id>:<recipient_id>:<action>` | 会社・種別・対象ID    |
+
+###### 対象期間は導出ではなく**受け取れる**ようにする（S-D7・2026-08-20 検収者指摘）
+
+「実行日ではなく報告対象日を使う」だけでは境界問題は消えない。**報告対象日そのものが
+`now` から導かれる**ため、JST 23:58 の実行と 00:02 の再実行では導出結果が1日ずれる。
+`weekly` の ISO週 も同型である。
+
+したがって:
+
+- `deliver-pulse` は任意引数 `target_date`（JST日付）を受ける。指定があればそれを使い、
+  無ければ導出（JSTの前日）にフォールバックする
+- `deliver-weekly` は任意引数 `target_week`（ISO週）で同じ扱い
+- 不正な値は **DBにも外部にも触る前に 400** で落とす（`InvalidPeriodError`）
+
+これで cron の通常運転は導出、`workflow_dispatch` や手動再実行は明示指定になり、
+**再実行が厳密に冪等になる**。S-4-10 の手動実行ワークフローから再送を試せる形にもなる。
+
+**cron の実測（2026-08-20）**: `supabase/migrations/` に定義されている `cron.schedule` は
+`sync-connections`（`0 0,6,12,18 * * *` UTC＝JST 9/15/21/3時）**1本のみ**で、
+**`deliver-pulse` / `deliver-weekly` の cron はまだ存在しない**。したがって現時点で
+「JST 0時付近にスケジュールされている」問題は発生していない。
+**cron を追加するときは、JST 0時をまたぐ時刻を避けるか `target_date` / `target_week` の
+明示指定を必須にすること**（`docs/runbooks/2026-08-20_delivery-idempotency.md` に点検手順）。
+
+###### 再試行の可否は `status` で決める（S-D8）
+
+| `status`                          | 再試行 | 理由                                                        |
+| --------------------------------- | ------ | ----------------------------------------------------------- |
+| `sent`                            | しない | 送信済み                                                    |
+| `sending`                         | しない | **送ったか分からない。** fail-closed が正しい               |
+| `failed`                          | する   | Resend が明示的に失敗を返した＝**送っていないと確定できる** |
+| `deferred`                        | する   | 静音時間の繰り延べ。まだ送っていない                        |
+| `skipped` / `draft` / `confirmed` | しない | 送信経路ではない                                            |
+
+`failed` を再試行不可にすると、1回失敗した `day0` が二度と送れなくなる。
+
+- 再試行の上限は `MAX_SEND_ATTEMPTS = 3`（`_shared/delivery.ts` の定数1つ。
+  `MAX_FULL_RUNS_PER_DAY` と同じ作法で**環境変数化しない**）
+- `delivery_log.attempts` が回数を持つ。上限到達時は**送信せず、その事実を
+  レスポンス（`status: error` / `attempts`）と `console.error` に残す**。黙って止まらない
+- `sending` のまま固まった行は**自動で期限切れにしない**（送ったか分からないため）。
+  人間が中身を確認して手で進める手順を
+  `docs/runbooks/2026-08-20_delivery-idempotency.md` に置く
+- `delivery_log.status` は自由文字列にしない。`00024` が7値の **CHECK 制約 ＋ NOT NULL** を張る
+  （CHECK は NULL に対して素通りするため、NOT NULL を併せないと穴が残る）
+
+###### `alert_deferred` の廃止（S-D9）
+
+静音時間の繰り延べ行と、その後の実送信行は**同じ冪等キーを共有する必要がある**
+（別行にすると予約 INSERT が一意制約違反になる）。したがって `delivery_type` は `alert` に寄せ、
+繰り延べは `status = "deferred"` で表す。`00024` に移行 UPDATE を含める
+（該当行数は deploy ログの `NOTICE` に出る。本番の事前計数は runbook に手順を置く）。
+`deferred → sent` が**同一行の UPDATE** であることをテストで固定する。
+
+###### `category` をキーに入れない（S-D6）
+
+冪等キーの第一目的はリトライ時の二重送信防止であり、**リトライ間で値が変わりうる要素を
+キーに入れると、値が揺れた瞬間に別キー扱いになって二重送信が起きる**。
+`category` はハーネス側の出力に由来しうるので決定的だと断言できない。
+「同一イベントで異なるカテゴリのアラートを2通出したい」という要求が実際に出てきたら、
+その時点で証拠つきで次元を足す。
+
+なお契約起草時の `alert:<company_id>:<finding_id>` は改訂した。
+**`finding_id` は `deliver-alert` のペイロードに存在しない**（`{company_id, event, email, category}`）ため、
+実装できない記述だった。`event.event_id` は `events` の `TEXT PRIMARY KEY`（`00001:5`）で、
+`_shared/event-id.ts` が `SHA-256(fingerprint:rowContent)` から決定的に採番するため再採番されない。
+
+###### `onetap-calendar` のキーに `action` を含める（S-D10）
+
+`action` の取りうる値は **`create` と `confirm` の2つだけ**（それ以外は 400）。
+**両方とも副作用を持つ**（`create` は下書き行の INSERT、`confirm` は同じ行の UPDATE）ため、
+`action` 抜きのキーは2つ目の操作を黙って握りつぶしうる。よってキーに含める。
+`action` は呼び出し元がペイロードで明示する値で、リトライ間で揺れない。
+
+実際に予約行を作るのは `create` だけで、`confirm` は既存行の状態遷移なので
+冪等性は「既に `confirmed` なら 200 skipped」で担保する。
+なお `onetap-calendar` はメールを送らない（E4: 下書き/仮登録まで）。ここで防いでいるのは
+二重送信ではなく**二重の仮登録**である。
 
 > **この基準群が本スライスの中心である。** 列名の修正は今日の不具合を消すだけだが、
 > S-2 は「同じ形の不具合が次に入っても、静かには通らない」を作る。

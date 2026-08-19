@@ -58,15 +58,6 @@ Deno.serve(async (req: Request) => {
     );
     const baselines = toFlatBaselines(baselineRows);
 
-    // Fetch known explanations for suppression
-    const knownExplanations = await mustData(
-      supabase
-        .from("known_explanations")
-        .select("pattern, explanation")
-        .eq("company_id", company_id),
-      "scan: known_explanations",
-    );
-
     const candidates: ScanCandidate[] = [];
     const established = baselines.filter((b) => b.is_established);
 

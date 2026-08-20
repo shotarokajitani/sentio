@@ -429,6 +429,8 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
 出力しないことを 2026-08-20 の deploy #27 で実測した（`Apply migrations` は全17行で NOTICE ゼロ）。
 `RAISE NOTICE` はローカルの `supabase db reset` でのデバッグ用として残す。
 本番の事前計数は `docs/checklists/env-diff.md` にある）。
+**✅ 2026-08-20 実施済み。Q1〜Q4 すべて OK で、移行行数は 0 だった**
+（`docs/runbooks/2026-08-20_post-deploy-verification_result.md`）。
 `deferred → sent` が**同一行の UPDATE** であることをテストで固定する。
 
 ###### `category` をキーに入れない（S-D6）
@@ -759,7 +761,7 @@ S-2 が17本すべて閉じても、この4件が未了なら merge しない。
   | 関門                                               | 誰が   | いつ                       | ブロックする範囲   |
   | -------------------------------------------------- | ------ | -------------------------- | ------------------ |
   | S-5-6: 修復前の赤の確認                            | 起草者 | **S-1 / S-2 の実装より前** | **修復の着手**     |
-  | S-4-2 後半: 本番の実 Function URL へ認証なしで 401 | 検収者 | merge → deploy の後        | **✅ 2026-08-20 合格** |
+  | S-4-2 後半: 本番の実 Function URL へ認証なしで 401 | 検収者 | merge → deploy の後        | **✅ 2026-08-20 完了**（`docs/runbooks/2026-08-20_s4-2_401-verification.md`） |
   | S-3-5: 本番データでの完走（findings 0件が到達点）  | 検収者 | merge → deploy の後        | スライスのクローズ |
 
   **S-4-2 後半は 2026-08-20 に合格**（deploy #27 の後・実施者: 検収者）。

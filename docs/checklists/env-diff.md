@@ -45,6 +45,11 @@
       移行行数はログに一切現れない（deploy #27 で実測）。
       検証は `docs/runbooks/2026-08-20_post-deploy-verification.sql` の Q3。
 
+      **実施済み（2026-08-20・deploy #27 の後）。Q1〜Q4 すべて OK。**
+      Q3 は `total_rows = 0` / `still_alert_deferred = 0` / `status_null = 0` で、
+      **移行対象は0件だった**ことが確定した。実測時点から本番データは動いていない。
+      結果は `docs/runbooks/2026-08-20_post-deploy-verification_result.md`。
+
       **版に依存している箇所（2026-08-20 時点）**:
       `00023` の `NULLS NOT DISTINCT`（**PostgreSQL 15 以降**）。
       `baselines` の自然キー `(company_id, metric_key, entity_id, granularity)` は

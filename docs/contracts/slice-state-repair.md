@@ -423,7 +423,12 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
 静音時間の繰り延べ行と、その後の実送信行は**同じ冪等キーを共有する必要がある**
 （別行にすると予約 INSERT が一意制約違反になる）。したがって `delivery_type` は `alert` に寄せ、
 繰り延べは `status = "deferred"` で表す。`00024` に移行 UPDATE を含める
-（該当行数は deploy ログの `NOTICE` に出る。本番の事前計数は runbook に手順を置く）。
+（該当行数の確認は**デプロイ後の SQL 検証**で行う。
+`docs/runbooks/2026-08-20_post-deploy-verification.sql` の Q3。
+**deploy ログの `NOTICE` では確認できない** — `supabase db push` はサーバ側の NOTICE を
+出力しないことを 2026-08-20 の deploy #27 で実測した（`Apply migrations` は全17行で NOTICE ゼロ）。
+`RAISE NOTICE` はローカルの `supabase db reset` でのデバッグ用として残す。
+本番の事前計数は `docs/checklists/env-diff.md` にある）。
 `deferred → sent` が**同一行の UPDATE** であることをテストで固定する。
 
 ###### `category` をキーに入れない（S-D6）
@@ -754,5 +759,13 @@ S-2 が17本すべて閉じても、この4件が未了なら merge しない。
   | 関門                                               | 誰が   | いつ                       | ブロックする範囲   |
   | -------------------------------------------------- | ------ | -------------------------- | ------------------ |
   | S-5-6: 修復前の赤の確認                            | 起草者 | **S-1 / S-2 の実装より前** | **修復の着手**     |
-  | S-4-2 後半: 本番の実 Function URL へ認証なしで 401 | 検収者 | merge → deploy の後        | スライスのクローズ |
+  | S-4-2 後半: 本番の実 Function URL へ認証なしで 401 | 検収者 | merge → deploy の後        | **✅ 2026-08-20 合格** |
   | S-3-5: 本番データでの完走（findings 0件が到達点）  | 検収者 | merge → deploy の後        | スライスのクローズ |
+
+  **S-4-2 後半は 2026-08-20 に合格**（deploy #27 の後・実施者: 検収者）。
+  実測は `docs/runbooks/2026-08-20_s4-2_401-verification.md`。
+  修復前は同じ URL が **200 で本番会社のタイムライン824文字**を返していたのに対し、
+  修復後は **401 / `{"error":"unauthorized"}`** のみになった。
+  2本のみの実測だが、`--no-verify-jwt` の除去は `deploy.yml` の共通処理であり、
+  適用漏れは `check:caller-guard`（S-4-8）が CI で全数検出している。
+  **残るクローズ関門は S-3-5 のみ。**

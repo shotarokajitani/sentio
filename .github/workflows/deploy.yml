@@ -22,7 +22,22 @@ jobs:
       # integration は Supabase 起動が要るため ci.yml の integration ジョブが担う。
       # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail する
       - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
-      - run: pnpm run check:allowlist
+      # `check:allowlist` はここでは走らせない（2026-08-20・案A）。
+      #
+      # 実DBの列照会（psql 直結）に変わったため Supabase の起動が要る。このジョブには
+      # 無いので `SUPABASE_DB_URL` 未設定 → `scripts/live-schema.ts:27` が throw →
+      # `check-allowlist.ts` が reason: "query-failed" で fail-closed の exit 1 になり、
+      # verify が必ず落ちて `needs: verify` の deploy-migrations に到達しない。
+      # 担当は ci.yml の integration ジョブ（`ci.yml:48` の「integration ジョブへ移した」
+      # という宣言と対応する。移設したのに deploy.yml だけが取り残されていた）。
+      #
+      # **この分担は main への直 push が禁止されていることに依存する。**
+      # `ci.yml:2` は `on: [pull_request]` のみで、直 push では走らない。
+      # PR 経由（squash merge を含む）なら ci.yml が走るので穴は無いが、
+      # 直 push が可能な状態では S2 allowlist の機械的担保がその経路だけ消える
+      # （CLAUDE.md 絶対規則「S2テーブルに本文型カラムを追加しない」）。
+      # 設定手順は docs/runbooks/2026-08-20_branch-protection.md。
+      # ブランチ保護が外れた場合はこの分担を見直すこと。
 
   # スキーマを先に反映する。関数が先に出ると「新コードが未適用の関数/カラムを呼ぶ」不整合が起きる
   # （実例: 00017 未適用のまま sync-connections がデプロイ済みになった 2026-08-12 の事故）

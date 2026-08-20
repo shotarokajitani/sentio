@@ -687,6 +687,23 @@ S-2 が17本すべて閉じても、この2件が未了なら merge しない。
 
    手順の実体は `docs/runbooks/2026-08-20_delivery-idempotency.md` の §3-2 に置く。
 
+3. **main のブランチ保護を入れる（2026-08-20 追加・人間関門）。**
+   `deploy.yml` の `verify` から `check:allowlist` を外した（案A）結果、
+   この検査は `ci.yml` の `integration` でしか走らない。
+   そして **`ci.yml:2` は `on: [pull_request]` のみ**であり、main への直 push では走らない。
+   **保護が無い状態で merge すると、直 push 経路で S2 allowlist の機械的担保が消える。**
+
+   2026-08-20 時点で **main は未保護**（`gh api .../branches/main/protection` → 404、
+   `gh api .../rulesets` → `[]`）。
+
+   要求する設定は「PR 必須」だけでは足りない。
+   **`Require status checks to pass` に `gitleaks` / `verify` / `integration` /
+   `edge-functions` の4件を指定する**こと。PR 必須だけでは「赤のまま merge」が通り、
+   S-5 を赤い CI のまま完了扱いにした 2026-08-19 の事故（run 32282055630）が再発する。
+
+   手順の実体は `docs/runbooks/2026-08-20_branch-protection.md`。
+   **設定が入るまで merge しない。**
+
 - A-2（cron 登録の migration）は**本スライスの後**。壊れたFunctionを cron に載せない
 - 本番実測（S-3-5）は**検収者関門**
 - 進行順序: 契約承認 → plan mode → 実装 → commit → 停止。停止点を越えて先に進まない

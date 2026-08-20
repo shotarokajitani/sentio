@@ -89,11 +89,14 @@ Deno.serve(async (req: Request) => {
     );
 
     // count は data を返さないので mustCount で受ける。
-    // ここだけ生の分割代入に戻すと、そこが検査の穴になる
+    // ここだけ生の分割代入に戻すと、そこが検査の穴になる。
+    // head: true なので行は1件も返らないが、`*` ではなく列名を書く。
+    // `*` のままだと check:schema（S-5-1）が参照列を静的に読めず、
+    // 列の消失・改名を検出できない穴になる
     const csvCount = await mustCount(
       supabase
         .from("events")
-        .select("*", { count: "exact", head: true })
+        .select("event_id", { count: "exact", head: true })
         .eq("company_id", companyId)
         .eq("source", "csv:accounting"),
       "deliver-weekly: csv event count",
@@ -102,7 +105,7 @@ Deno.serve(async (req: Request) => {
     const calCount = await mustCount(
       supabase
         .from("events")
-        .select("*", { count: "exact", head: true })
+        .select("event_id", { count: "exact", head: true })
         .eq("company_id", companyId)
         .eq("source", "google_calendar"),
       "deliver-weekly: calendar event count",

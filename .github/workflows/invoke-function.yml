@@ -88,15 +88,30 @@ jobs:
             --max-time 120 \
             -o response.txt -w '%{http_code}')"
 
-          # ステータスと本文の両方を残す。残らない手動実行は検収に使えない（S-4-10 条件6）
+          bytes="$(wc -c < response.txt | tr -d ' ')"
           echo "HTTP status: ${status}"
-          echo "--- response body ---"
-          cat response.txt
-          echo ""
-          echo "--- end of body ---"
+          echo "本文バイト長: ${bytes}"
 
-          # || true でエラーを吸わない。2xx 以外は run を赤くする
+          # **2xx の本文は run ログに出さない**（2026-08-20・検収者による受入基準の訂正）。
+          # 成功応答は本番会社の活動データそのもの（state-memory-packet は実測で
+          # recent_events を 824文字返した）。--no-verify-jwt を外して閉じた漏洩経路を、
+          # Actions のログという別の場所に開き直すことになる。
+          # 完走の証跡はバイト長とハッシュで足りる。中身は Supabase の Logs 側で見る。
+          #
+          # 非2xx は全文を出す。エラーメッセージであり顧客データではない。
+          # 401 の実測（S-4-2）はこちら側に落ちるので、証跡としてそのまま使える。
           case "${status}" in
-            2??) ;;
-            *) echo "::error::HTTP ${status}"; exit 1 ;;
+            2??)
+              echo "本文 SHA-256: $(sha256sum response.txt | awk '{print $1}')"
+              echo "（2xx の本文は顧客データを含みうるため出力しない）"
+              ;;
+            *)
+              echo "--- response body（非2xx。エラー本文なので全文を出す） ---"
+              cat response.txt
+              echo ""
+              echo "--- end of body ---"
+              # || true でエラーを吸わない
+              echo "::error::HTTP ${status}"
+              exit 1
+              ;;
           esac

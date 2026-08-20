@@ -58,7 +58,8 @@ Vault削除用の security definer 関数の新設を検討したが、
 認証セッションは anon キーで扱うため、未設定だとログインも `/connect` も機能しない
 （`src/middleware.ts` は fail-closed でログイン画面へ送る）。
 
-- 値は Supabase Dashboard → Project Settings → API → `anon` `public` キー
+- 値は Supabase Dashboard → Project Settings → **API Keys → 「Legacy API Keys」タブ** → `anon` `public` キー
+  （2026-08-20: 既定タブが新形式 `sb_publishable_...` に変わり、JWT は別タブへ移った）
 - Production と Preview の両方に設定する
 - 追加後、対象デプロイを再実行する（環境変数はビルド後に反映されない）
 

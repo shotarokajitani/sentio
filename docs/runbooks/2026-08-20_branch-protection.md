@@ -103,3 +103,69 @@ gh api repos/shotarokajitani/sentio/branches/main/protection
 - 緊急時に直 push で塞ぐ運用ができなくなる。必要になった場合は
   Ruleset を一時的に `Disabled` にする（`Evaluate` ではなく `Disabled`）。
   **戻すのを忘れると deploy.yml が片肺のまま走るので、戻すまでを1つの作業として扱う**
+
+---
+
+## 実施記録（2026-08-20・完了）
+
+**梶谷さんが Ruleset を作成し、検収側で反映を確認した。停止点3 は解消。**
+
+| 項目 | 実測 |
+| --- | --- |
+| 作成日 | 2026-08-20 |
+| 方式 | Rulesets（Classic branch protection ではない） |
+| Ruleset 名 | `main-protection` |
+| Ruleset ID | **21074191**（`/settings/rules/21074191`。ID が振られている＝作成済み） |
+| `/branches` の表示 | 「Your main branch isn't protected」の警告が**消えた** |
+| PR #31 の状態 | "Ready to merge" / All checks have passed / **6 successful checks** / No conflicts with base branch |
+
+### 必須の status checks は **4件ちょうど**。重複は残っていない（API で実測）
+
+検収者の指示（第6便）には「`Any source` の2行が手打ちの残りとして残っている」とあったが、
+**API で引くと4件しか無く、すべて GitHub Actions（`integration_id=15368`）である。**
+
+```
+$ gh api repos/shotarokajitani/sentio/rulesets/21074191     --jq '.rules[] | select(.type=="required_status_checks")
+          | .parameters.required_status_checks[]
+          | "(.context) | integration_id=(.integration_id // "Any source")"'
+gitleaks       | integration_id=15368
+verify         | integration_id=15368
+integration    | integration_id=15368
+edge-functions | integration_id=15368
+```
+
+`integration_id` が入っている＝提供元が GitHub Actions に固定されている、という意味である。
+`Any source` なら `integration_id` が無い。**4件とも固定されており、`Any source` の行は存在しない。**
+
+**したがって掃除は不要である。** UI に6行見えたのは、設定中の画面か、
+候補（suggestion）と確定済みを併記した表示だったと考えられる。
+**保存されている実体は API が正**なので、こちらを証跡として採る。
+
+> UI で今も6行見えるようなら、それは保存されていない表示上の候補である可能性が高い。
+> 気になる場合は画面を再読み込みして確認すること。
+> **いずれにせよ CC は GitHub の設定を触らない**（2026-08-20 検収者指示）。
+
+### Ruleset の全パラメータ（2026-08-20 実測）
+
+| 項目 | 実測値 | 評価 |
+| --- | --- | --- |
+| `enforcement` | `active` | 有効 |
+| `conditions.ref_name.include` | `["~DEFAULT_BRANCH"]` | main が対象 |
+| `bypass_actors` | **0件** | **管理者も迂回できない。**要求どおり |
+| ルール種別 | `deletion` / `non_fast_forward` / `pull_request` / `required_status_checks` | 削除禁止・force push 禁止・PR 必須・checks 必須の4本 |
+| `required_status_checks` 件数 | **4** | gitleaks / verify / integration / edge-functions |
+| `strict_required_status_checks_policy` | `true` | **Require branches to be up to date** が有効 |
+| `required_approving_review_count` | `0` | 単独開発のため。レビュー体制ができたら 1 に上げる |
+| `allowed_merge_methods` | `merge` / `squash` / `rebase` | 制限なし |
+
+**`bypass_actors` が 0件であることが重要である。** ここに誰か入っていると、
+「PR 必須・checks 必須」が管理者に対して効かず、事故（run 32282055630 を赤のまま
+完了扱いにした形）を止められない。
+
+### 確認コマンド
+
+```
+gh api repos/shotarokajitani/sentio/rulesets
+```
+
+`[]` でなくなっていること（作成前は `[]`、`branches/main/protection` は 404 だった）。

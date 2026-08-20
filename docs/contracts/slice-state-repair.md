@@ -628,12 +628,24 @@ cron は service_role キー（正当なJWT）を送っているので、`verify
   S-4 は残り（呼び出し元ごとの `company_id` の出所・`ALLOWED_CALLERS` の宣言・
   ゲートウェイ側の `verify_jwt`・手動実行経路・適用漏れ検出の CI 常設）を担う
 
-### merge 前の停止点（2026-08-20 検収者提示。**S-2 完了時点では解けていない**）
+### merge 前の停止点（2026-08-20 検収者提示。**2026-08-20 に 0 / 1 / 2-a / 3 をすべて解消**）
 
-`docs/contracts/roadmap.md` へ進む前に、以下2件を必ず片付ける。
-S-2 が17本すべて閉じても、この2件が未了なら merge しない。
+`docs/contracts/roadmap.md` へ進む前に、**以下4件（0〜3）**を必ず片付ける。
+S-2 が17本すべて閉じても、この4件が未了なら merge しない。
+
+**ただし停止点2 は2段に分かれる。** merge を止めるのは **2-a（静的一致）だけ**であり、
+**2-b（実疎通）はデプロイ後**で、止めるのは merge ではなく A-2（cron 登録の migration）である。
+節の見出しが「merge 前」なので、2-b をここに置いたまま「デプロイ後」と書くと
+「停止点2 は merge を止めない」と読めてしまう。2段に分けて書く理由がこれである
+（2026-08-20 検収者指摘。宣言と実態のずれ）。
+
+**現況（2026-08-20 時点）**: 0 ✅ / 1 ✅ / 2-a ✅ / 3 ✅ → **merge 可能**。
+2-b はデプロイ後の関門として残る。
 
 0. **本番の PostgreSQL バージョンの実測**（2026-08-20 追加）。
+   **✅ 完了（2026-08-20）。本番は PostgreSQL 17.6**（実施者: 梶谷 / 実測値は
+   `docs/checklists/env-diff.md` の表）。**17.6 >= 15 なので `NULLS NOT DISTINCT` は使え、
+   `00023` の版ガードは発火しない。**以下は判断の根拠として残す。
    `00023` の `NULLS NOT DISTINCT` は **PostgreSQL 15 以降**の構文である。
    `supabase/config.toml` の `major_version = 15` は**宣言であって本番の実測ではない**
    （同ファイルのコメント自身が remote で `SHOW server_version;` を実行して確認せよと書いている）。
@@ -653,41 +665,68 @@ S-2 が17本すべて閉じても、この2件が未了なら merge しない。
    欠番を作らないこと（辞書順に適用されるので欠番自体は動作を壊さないが、
    「番号が飛んでいる理由」を知らない人が後から埋めると衝突する）。
 
-2. **cron の Bearer と関数側 `SUPABASE_SERVICE_ROLE_KEY` の一致をデプロイ後に実測する。**
-   S-2-9 で `resolveCaller` を17本すべてに入れた結果、**呼び出し元が service_role キーを
-   持っていなければ 401 になる**。`00020` の pg_cron ジョブが Vault から取り出して
-   `Authorization: Bearer` に載せている値と、Function 側の `SUPABASE_SERVICE_ROLE_KEY` が
-   食い違っていると、**`sync-connections` が毎日 401 で静かに止まる**。
-   ローカルの実DBテストでは両者が同じ値になるため、この不一致は**本番でしか出ない**。
+2. **cron の Bearer と service_role キーの一致。2段に分かれる。混ぜないこと。**
 
-   **確認先は次の2つ。cron の実行記録では判定できない**（2026-08-20 検収者指摘）:
+   S-2-9 で `resolveCaller` を17本すべてに入れ、S-4 で17本すべてから `--no-verify-jwt` を
+   外した結果、**呼び出し元が service_role キーを持っていなければ 401 になる**。
+   `00020` の pg_cron ジョブが Vault から取り出して `Authorization: Bearer` に載せている値と、
+   プロジェクトの現行 service_role キーが食い違っていると、
+   **`sync-connections` が毎日 401 で静かに止まる**。
 
-   `net.http_post` は**リクエストをキューに入れて即座に `request_id` を返す非同期関数**である。
-   cron ジョブが実行する SQL は `SELECT net.http_post(...)` なので、**HTTP応答を待たずに成功する**。
-   したがって **Function が 401 を返しても cron 側の実行記録は成功のまま**であり、
-   それを見て安心する経路になる。**「cron が成功している」は「関数が成功した」を意味しない。**
+   ### 2-a. 静的一致（**merge 前。merge を止める**）
 
-   1. **`net._http_response`（実際のHTTPステータスが入る）**
+   **判定: ✅ 合格（2026-08-20 実施。実施者: 梶谷 / 判定: 検収者）。**
+   実測結果は `docs/runbooks/2026-08-20_cron-bearer-key-match_result.md`。
 
-      ```sql
-      select id, status_code, error_msg, created
-        from net._http_response
-       order by created desc
-       limit 20;
-      ```
+   - **目的**: cron が送る `Authorization: Bearer` の値と、プロジェクトの現行
+     service_role キーが**同じ値か**を、**関数を1回も呼ばずに**確かめる
+   - **手順の実体**: `docs/runbooks/2026-08-20_cron-bearer-key-match.sql` と
+     `docs/secrets-runbook.md`「静的一致の確認（merge 前の停止点2）」
+   - **合格条件**: `key_len` / `key_tail` / `key_sha256` の3つが**すべて一致**すること。
+     `sha256` が一致していれば同じ値である。`len` と `tail` は、
+     ハッシュを採り違えたときに気づくための添え物
+   - **`key_prefix` が `eyJ` 以外だった場合は merge を止めて相談する。**
+     `eyJ` はレガシー JWT 形式で、ゲートウェイの `verify_jwt` を通る。
+     `sb_secret_` 等の新形式がゲートウェイを通るかは**未実測**である
 
-      `status_code` が **200** であること。**401 なら Vault の `sentio_service_role_key` が
-      現行キーと食い違っている。**
-      **保持期間が短い**（既定で数時間で刈られる）ので、**cron 発火の直後に見ること**。
-      発火は **JST 9 / 15 / 21 / 3 時**（`0 0,6,12,18 * * *` UTC）。
+   **なぜ merge 前でなければならないか。**
+   17本すべてから `--no-verify-jwt` を外した以上、不一致のままデプロイすると、
+   **唯一稼働している cron（`sync-connections`）が翌朝から毎日 401 で止まる**。
+   しかも `net.http_post` は**リクエストをキューに入れて即座に `request_id` を返す
+   非同期関数**なので、cron が実行する `SELECT net.http_post(...)` は HTTP 応答を待たずに
+   成功する。したがって **`cron.job_run_details` は succeeded のまま**であり、
+   **止まっていることがどこにも出ない。** デプロイ後に気づく経路が無いので、
+   merge 前に静的に確かめるしかない。
 
-   2. **Supabase ダッシュボードの `sync-connections` の Invocations / Logs**
+   2026-08-20 の実測では、cron の登録は1本（jobid 9 / `0 0,6,12,18 * * *` UTC ＝
+   JST 9 / 15 / 21 / 3 時）で、トークンは Vault 参照（`read_vault_secret_by_name`）。
+   平文の埋め込みは無し。`len` / `tail` / `sha256` / `prefix` すべて一致し、`prefix = eyJ`。
 
-      401 が出ていないこと。`net._http_response` が既に刈られていた場合の代替経路。
+   ### 2-b. 実疎通（**デプロイ後。A-2 を止める。merge は止めない**）
+
+   - `net._http_response.status_code` が **200** であること
+
+     ```sql
+     select id, status_code, error_msg, created
+       from net._http_response
+      order by created desc
+      limit 20;
+     ```
+
+   - **保持期間が短い**（既定で数時間で刈られる）ので、**cron 発火の直後に見る**。
+     発火は **JST 9 / 15 / 21 / 3 時**（`0 0,6,12,18 * * *` UTC）
+   - 刈られていた場合の代替は、Supabase ダッシュボードの `sync-connections` の
+     Invocations / Logs に 401 が出ていないこと
+   - **`cron.job_run_details` では判定できない。** 上記のとおり `net.http_post` が
+     非同期だからである。「cron が成功している」は「関数が成功した」を意味しない。
+     この誤読は 2026-08-20 に検収者が指摘するまで手順書に残っていた
 
    手順の実体は `docs/runbooks/2026-08-20_delivery-idempotency.md` の §3-2 に置く。
 
 3. **main のブランチ保護を入れる（2026-08-20 追加・人間関門）。**
+   **✅ 完了（2026-08-20）。** 梶谷さんが Ruleset `main-protection`（ID 21074191）を作成し、
+   検収側で反映を確認した。証跡と残作業は `docs/runbooks/2026-08-20_branch-protection.md`。
+   以下は要求内容の記録として残す。
    `deploy.yml` の `verify` から `check:allowlist` を外した（案A）結果、
    この検査は `ci.yml` の `integration` でしか走らない。
    そして **`ci.yml:2` は `on: [pull_request]` のみ**であり、main への直 push では走らない。
@@ -701,8 +740,8 @@ S-2 が17本すべて閉じても、この2件が未了なら merge しない。
    `edge-functions` の4件を指定する**こと。PR 必須だけでは「赤のまま merge」が通り、
    S-5 を赤い CI のまま完了扱いにした 2026-08-19 の事故（run 32282055630）が再発する。
 
-   手順の実体は `docs/runbooks/2026-08-20_branch-protection.md`。
-   **設定が入るまで merge しない。**
+   手順の実体と実施証跡は `docs/runbooks/2026-08-20_branch-protection.md`。
+   **2026-08-20 に設定済み。以後、必須4件が緑でなければ merge できない。**
 
 - A-2（cron 登録の migration）は**本スライスの後**。壊れたFunctionを cron に載せない
 - 本番実測（S-3-5）は**検収者関門**

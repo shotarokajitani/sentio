@@ -76,10 +76,20 @@ jobs:
       - name: Start local Supabase
         run: supabase start
 
-      # 00001〜00019 が素通しで適用されることの証跡。
-      # ローカルのDocker不可環境ではここが唯一の全適用検証になる
-      - name: Apply all migrations from scratch (00001..00019)
-        run: supabase db reset
+      # 全 migration が素通しで適用されることの証跡。
+      # ローカルのDocker不可環境ではここが唯一の全適用検証になる。
+      #
+      # **ステップ名に範囲を書かない。** 以前は "(00001..00019)" と書いていたが、
+      # 実際には 00024 まであった（2026-08-20 に検収者が指摘）。
+      # supabase db reset は supabase/migrations/ 配下を全件適用するので動作は正しく、
+      # ずれていたのは宣言のほうだった。番号を人が書き写す形にすると必ずずれるので、
+      # 範囲は書かずに**実測をログへ出す**。
+      - name: Apply all migrations from scratch
+        run: |
+          set -euo pipefail
+          files=(supabase/migrations/*.sql)
+          echo "適用対象 ${#files[@]}件: $(basename "${files[0]}") 〜 $(basename "${files[-1]}")"
+          supabase db reset
 
       - name: Export Supabase env
         run: |

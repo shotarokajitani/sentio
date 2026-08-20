@@ -1,0 +1,24 @@
+// 正しい書き方: 全DBアクセスが mustData / mustOk を通っている。
+// 拡張子を .ts.fixture にしているのは、tsconfig の `tests/**/*.ts` と
+// vitest の include に拾わせないため（検査対象はソーステキストであってモジュールではない）。
+
+import { mustData, mustOk } from "../_shared/db.ts";
+
+async function readAndWrite(supabase: Client, companyId: string) {
+  const events = mustData(
+    await supabase.from("events").select("event_id").eq("company_id", companyId),
+    "good: events",
+  );
+
+  const [summary, baselines] = await Promise.all([
+    mustData(supabase.from("company_summary").select("content").single(), "good: summary"),
+    mustData(supabase.from("baselines").select("stats"), "good: baselines"),
+  ]);
+
+  mustOk(await supabase.from("findings").insert({ company_id: companyId }));
+
+  // Array.from は Supabase クライアントではないので検査対象外
+  const ids = Array.from(new Set(events.map((e) => e.event_id)));
+
+  return { summary, baselines, ids };
+}

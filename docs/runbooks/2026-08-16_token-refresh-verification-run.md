@@ -11,10 +11,17 @@
 > `connections` は全ステータス0件で、STEP 1 の SUMMARY が
 > `STOP: activeな接続が0件` を返した。前提不足であり、実装の問題ではない。
 >
-> **cron疎通は別経路で実証済み。** `cron.job_run_details` が
-> **4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**（`net.http_post` 正常）。
-> ⇒ `00020` の「Vaultから秘密取得 → Edge Function 呼び出し」が本番で4回連続成功しており、
-> prereq-check の seq 9 相当は **OK**。
+> **cron の発火は別経路で実証済み。** `cron.job_run_details` が
+> **4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**。
+>
+> **2026-08-20 訂正。** 当時ここに「（`net.http_post` 正常）」「Edge Function 呼び出しが
+> 4回連続成功」と書いたが、**この観測ではそこまで言えない**。`net.http_post` は
+> 非同期で `request_id` を即座に返すため、`"1 row"` は**「リクエストを積めた」まで**である。
+> **関数が 401 を返していても同じ結果になる。**
+> 言えているのは「Vaultから秘密を取り出して `net.http_post` を呼ぶ SQL が動いた」までで、
+> **Edge Function 側の成否は未確認のまま**だった。
+> 実際のHTTPステータスの確認先は `net._http_response` とダッシュボードの Logs
+> （手順: `docs/runbooks/2026-08-20_delivery-idempotency.md` §3-2）。
 >
 > したがって**未確認として残るのは「実際のトークンでリフレッシュが起きるか」だけ**
 > （B-s2-1 / B-s2-2 / B-s2-3）。連携が1件でも作られたら本書のSTEP 1から再開する。

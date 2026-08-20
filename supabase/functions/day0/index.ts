@@ -6,6 +6,11 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { MODEL_GENERATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import { renderDay0Html, renderDay0Text } from "../_shared/email-html.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, errorResponse } from "../_shared/db.ts";
+import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
+import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
+import { deliveryResponse } from "../_shared/delivery-response.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 
 const DAY0_BLOCK_KEYS = [
@@ -72,41 +77,46 @@ async function fetchCompanyEvents(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
 ) {
-  const { data } = await supabase
-    .from("events")
-    .select("event_id, occurred_at, source, event_type, metrics, sensitivity")
-    .eq("company_id", companyId)
-    .order("occurred_at", { ascending: false })
-    .limit(200);
-  return data || [];
+  return await mustData(
+    supabase
+      .from("events")
+      .select("event_id, occurred_at, source, event_type, metrics, sensitivity")
+      .eq("company_id", companyId)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    "day0: company events",
+  );
 }
 
 async function fetchS0Events(supabase: ReturnType<typeof getSupabaseAdmin>) {
-  const { data } = await supabase
-    .from("events")
-    .select("event_id, occurred_at, source, event_type, metrics")
-    .is("company_id", null)
-    .eq("sensitivity", "S0")
-    .order("occurred_at", { ascending: false })
-    .limit(50);
-  return data || [];
+  return await mustData(
+    supabase
+      .from("events")
+      .select("event_id, occurred_at, source, event_type, metrics")
+      .is("company_id", null)
+      .eq("sensitivity", "S0")
+      .order("occurred_at", { ascending: false })
+      .limit(50),
+    "day0: S0 events",
+  );
 }
 
 async function fetchConnections(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
-  const { data } = await supabase
-    .from("connections")
-    .select("provider, status")
-    .eq("company_id", companyId);
-  return data || [];
+  return await mustData(
+    supabase.from("connections").select("provider, status").eq("company_id", companyId),
+    "day0: connections",
+  );
 }
 
 async function fetchCompetitors(supabase: ReturnType<typeof getSupabaseAdmin>, companyId: string) {
-  const { data } = await supabase
-    .from("entities")
-    .select("canonical_name, attrs")
-    .eq("company_id", companyId)
-    .eq("type", "competitor");
-  return data || [];
+  return await mustData(
+    supabase
+      .from("entities")
+      .select("canonical_name, attrs")
+      .eq("company_id", companyId)
+      .eq("type", "competitor"),
+    "day0: competitors",
+  );
 }
 
 async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
@@ -752,15 +762,22 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   const start = Date.now();
 
   try {
     const input: Day0Input = await req.json();
-    const { company_id, company_name, url, industry, concern, email } = input;
+    const { company_name, url, industry, concern, email } = input;
+
+    const scope = resolveCompanyId(caller.caller, input.company_id);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
 
     const model = MODEL_GENERATOR;
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    const resendKey = Deno.env.get("RESEND_API_KEY");
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY must be set" }), {
@@ -920,108 +937,56 @@ Deno.serve(async (req: Request) => {
       blocks_passed: passedBlocks.length,
     };
 
-    // Send via Resend — fail-closed: missing config is an error, not a silent skip
-    if (!resendKey) {
-      return new Response(
-        JSON.stringify({ status: "error", reason: "RESEND_API_KEY not configured", report }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // 送信は「予約 → 送信 → 結果でUPDATE」（契約 S-2-7）。
+    // 修復前はここが「送信 → INSERT」の順で、送信後のDB失敗が痕跡を残さなかった。
+    // Day0 は会社ごとに1回きりなので冪等キーは day0:<company_id>
 
-    let emailStatus = "skipped";
-    let emailId: string | undefined;
-    let sendError: string | undefined;
-
-    if (email) {
-      const resendFrom = Deno.env.get("RESEND_FROM");
-      if (!resendFrom) {
-        await supabase.from("delivery_log").insert({
-          id: crypto.randomUUID(),
-          company_id,
-          channel: "email",
-          delivery_type: "day0",
-          content: report,
-          status: "failed",
-          created_at: new Date().toISOString(),
-        });
-        return new Response(
-          JSON.stringify({
-            status: "error",
-            reason: "RESEND_FROM未設定。サンドボックス送信を防止しました。",
-            report,
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      const emailHtml = renderDay0Html(company_name, passedBlocks, {
-        generationTimeMs,
-        totalTokens,
-        passedCount: passedBlocks.length,
-        totalCount: blocks.length,
-      });
-      const emailText = renderDay0Text(company_name, passedBlocks);
-
-      const resendRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: resendFrom,
-          to: [email],
-          subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: emailHtml,
-          text: emailText,
-        }),
-      });
-
-      const resendBody = await resendRes.json().catch(() => ({}));
-
-      if (resendRes.ok) {
-        emailId = resendBody.id;
-        emailStatus = "sent";
-        console.log(`Resend OK: email_id=${emailId}`);
-      } else {
-        emailStatus = "failed";
-        sendError = `Resend ${resendRes.status}: ${resendBody.message || JSON.stringify(resendBody)}`;
-        console.error(`Resend failed: ${sendError}`);
-      }
-    }
-
-    // Store in delivery_log (actual send status)
-    const { error: logErr } = await supabase.from("delivery_log").insert({
-      id: crypto.randomUUID(),
-      company_id,
-      channel: "email",
-      delivery_type: "day0",
-      content: { ...report, email_id: emailId },
-      status: emailStatus,
-      created_at: new Date().toISOString(),
-    });
-
-    if (logErr) {
-      return new Response(
-        JSON.stringify({ error: `delivery_log insert failed: ${logErr.message}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (emailStatus === "failed") {
-      return new Response(JSON.stringify({ status: "error", reason: sendError, report }), {
-        status: 502,
+    if (!email) {
+      return new Response(JSON.stringify({ error: "email is required" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ status: "ok", email_id: emailId, report }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // 送信設定は**予約より前**に見る（E+3 / E+5）
+    const mail = resolveMailConfig();
+    if (!mail.ok) {
+      return new Response(
+        JSON.stringify({
+          status: "error",
+          reason: `${mail.missing.join(" / ")} が未設定。送信せずに停止しました`,
+          report,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const result = await deliverOnce(
+      asDeliveryDb(supabase),
+      {
+        companyId: company_id,
+        channel: "email",
+        deliveryType: "day0",
+        idempotencyKey: deliveryKey({ kind: "day0", companyId: company_id }),
+        content: report as unknown as Record<string, unknown>,
+        now: new Date(),
+      },
+      () =>
+        sendEmail(mail.config, {
+          to: email,
+          subject: `[Sentio] Day0レポート: ${company_name}`,
+          html: renderDay0Html(company_name, passedBlocks, {
+            generationTimeMs,
+            totalTokens,
+            passedCount: passedBlocks.length,
+            totalCount: blocks.length,
+          }),
+          text: renderDay0Text(company_name, passedBlocks),
+        }),
+    );
+
+    return deliveryResponse(result, { report });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

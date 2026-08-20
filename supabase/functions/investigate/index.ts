@@ -4,6 +4,9 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
+import { MAX_FULL_RUNS_PER_DAY, canRunFullHarness, budgetDateKey } from "../_shared/budget.ts";
 import { FINDING_TEMPLATE, EVALUATOR_CRITERIA } from "../_shared/prompts.ts";
 import { MODEL_GENERATOR, MODEL_EVALUATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
@@ -200,11 +203,19 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id, candidates } = (await req.json()) as {
+    const { company_id: bodyCompanyId, candidates } = (await req.json()) as {
       company_id: string;
       candidates: Candidate[];
     };
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
@@ -224,38 +235,77 @@ Deno.serve(async (req: Request) => {
     const evaluatorCriteria = EVALUATOR_CRITERIA;
 
     // Build memory packet from company_summary
-    const { data: summaryData } = await supabase
-      .from("company_summary")
-      .select("content")
-      .eq("company_id", company_id)
-      .order("generated_at", { ascending: false })
-      .limit(1)
-      .single();
+    const summaryData = await mustMaybe<{ content: string }>(
+      supabase
+        .from("company_summary")
+        .select("content")
+        .eq("company_id", company_id)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      "investigate: company_summary",
+    );
     const memoryPacket = summaryData?.content || "(No company summary available yet)";
 
-    // Check investigation budget
-    const { data: budgetData } = await supabase
-      .from("budget_usage")
-      .select("used, daily_limit")
-      .eq("company_id", company_id)
-      .single();
-    const budgetExhausted = budgetData && budgetData.used >= budgetData.daily_limit;
+    // 調査予算（S-6-2 〜 S-6-6）。
+    // 修復前は実在しない列（used / daily_limit）を引き、エラーを無視して null にしていた。
+    // 「行が無ければ無制限」を廃し、行が無ければ作って 0 から数える
+    const today = budgetDateKey(new Date());
+    await mustOk(
+      supabase
+        .from("budget_usage")
+        .upsert(
+          { company_id, date: today, full_runs: 0, light_runs: 0 },
+          { onConflict: "company_id,date", ignoreDuplicates: true },
+        ),
+      "investigate: budget_usage ensure",
+    );
+
+    const budgetRow = await mustMaybe<{ full_runs: number; light_runs: number }>(
+      supabase
+        .from("budget_usage")
+        .select("full_runs, light_runs")
+        .eq("company_id", company_id)
+        .eq("date", today)
+        .single(),
+      "investigate: budget_usage",
+    );
+
+    // 行が引けなかった場合も **起動しない**（S-6-2 〜 S-6-6 の fail-closed）。
+    // 直前の upsert で行は在るはずだが、「取れなかった＝0回使用」に丸めると
+    // 「行が無ければ無制限」の再来になる。null のまま canRunFullHarness に渡すと false になる
+    let fullRuns: number | null = budgetRow?.full_runs ?? null;
+    let budgetStopped = false;
 
     // Plan investigations
     const investigations = planInvestigations(candidates);
     const findings = [];
 
     for (const group of investigations) {
-      if (budgetExhausted) break;
+      // 上限に達したら起動しない（fail-closed）。
+      // 止めた事実をログとレスポンスの両方に残す。黙って0件で終わらせると、
+      // 「候補が無かった」のか「予算で止めた」のかが区別できなくなる（S-6-6）
+      if (!canRunFullHarness(fullRuns)) {
+        budgetStopped = true;
+        console.warn(
+          `[sentio:budget] company_id=${company_id} date=${today} ` +
+            `full_runs=${fullRuns}/${MAX_FULL_RUNS_PER_DAY} ` +
+            `上限に達したためフルハーネスを起動しない（残り ${investigations.length - findings.length} 群を見送り）`,
+        );
+        break;
+      }
 
       // Generator
       const draft = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
 
       // Fetch evidence summaries for Evaluator
-      const { data: evidenceEvents } = await supabase
-        .from("events")
-        .select("event_id, source, event_type, metrics, occurred_at")
-        .in("event_id", draft.evidence_event_ids);
+      const evidenceEvents = await mustData(
+        supabase
+          .from("events")
+          .select("event_id, source, event_type, metrics, occurred_at")
+          .in("event_id", draft.evidence_event_ids),
+        "investigate: evidence events",
+      );
 
       const evidenceSummaries = (evidenceEvents || []).map((e) => ({
         event_id: e.event_id,
@@ -313,47 +363,62 @@ Deno.serve(async (req: Request) => {
         // Store Finding in DB
         const findingId = crypto.randomUUID();
         const now = new Date().toISOString();
-        const { error: insertError } = await supabase.from("findings").insert({
-          id: findingId,
-          company_id,
-          status: "open",
-          urgency: draft.urgency,
-          what: draft.what,
-          evidence_event_ids: draft.evidence_event_ids,
-          confidence: 0.8,
-          hypotheses: draft.hypotheses,
-          next_actions: draft.next_actions,
-          eval_log: {
-            criteria: evalResult.criteria,
-            revisions,
-            result: evalResult.result,
-          },
-          parent_finding_id: null,
-          created_at: now,
-          updated_at: now,
-        });
+        await mustOk(
+          supabase.from("findings").insert({
+            id: findingId,
+            company_id,
+            status: "open",
+            urgency: draft.urgency,
+            what: draft.what,
+            evidence_event_ids: draft.evidence_event_ids,
+            confidence: 0.8,
+            hypotheses: draft.hypotheses,
+            next_actions: draft.next_actions,
+            eval_log: {
+              criteria: evalResult.criteria,
+              revisions,
+              result: evalResult.result,
+            },
+            parent_finding_id: null,
+            created_at: now,
+            updated_at: now,
+          }),
+          "investigate: findings insert",
+        );
 
-        if (!insertError) {
-          findings.push({ id: findingId, what: draft.what, urgency: draft.urgency });
-        }
+        findings.push({ id: findingId, what: draft.what, urgency: draft.urgency });
       }
 
-      // Update budget usage
-      if (budgetData) {
-        await supabase
+      // 起動したら必ず数える。起動したのに full_runs が増えない状態を作らない（S-6-4）。
+      // Finding が採択されたかどうかに関わらず、ハーネスは1回動いている
+      fullRuns = (fullRuns ?? 0) + 1;
+      await mustOk(
+        supabase
           .from("budget_usage")
-          .update({ used: (budgetData.used || 0) + 1 })
-          .eq("company_id", company_id);
-      }
+          .update({ full_runs: fullRuns })
+          .eq("company_id", company_id)
+          .eq("date", today),
+        "investigate: budget_usage increment",
+      );
     }
 
-    return new Response(JSON.stringify({ status: "ok", company_id, findings }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
     return new Response(
-      JSON.stringify({ error: (error as Error).message, model_used: MODEL_GENERATOR }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({
+        status: "ok",
+        company_id,
+        findings,
+        // 0件の原因を応答から区別できるようにする（S-2-3 / S-6-6）
+        budget: {
+          full_runs: fullRuns,
+          limit: MAX_FULL_RUNS_PER_DAY,
+          stopped_by_budget: budgetStopped,
+        },
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
+  } catch (error) {
+    return errorResponse(error, corsHeaders);
   }
 });

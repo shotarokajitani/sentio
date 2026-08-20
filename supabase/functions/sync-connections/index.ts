@@ -8,6 +8,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller } from "../_shared/caller.ts";
+import { errorResponse, mustData, mustOk } from "../_shared/db.ts";
 import { isTokenExpired, refreshToken } from "../_shared/token-refresh.ts";
 import { generateEventId } from "../_shared/event-id.ts";
 
@@ -37,130 +39,142 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は**DBに触る前**（契約 S-2-9 / S-4-1）。
+  // この関数は全社の接続を横断して読むため、company_id のスコープ判定は無い。
+  // 通せるのは internal（pg_cron / 内部呼び出し）だけ、が唯一の境界になる
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   const supabase = getSupabaseAdmin();
   const results: SyncResult[] = [];
 
-  // 1. 全アクティブ接続を取得
-  const { data: connections, error: fetchErr } = await supabase
-    .from("connections")
-    .select("id, company_id, provider, vault_secret_id, expires_at")
-    .eq("status", "active");
-
-  if (fetchErr) {
-    return new Response(
-      JSON.stringify({ error: `connections fetch failed: ${fetchErr.message}` }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  try {
+    // 1. 全アクティブ接続を取得
+    const connections = await mustData(
+      supabase
+        .from("connections")
+        .select("id, company_id, provider, vault_secret_id, expires_at")
+        .eq("status", "active"),
+      "sync-connections: active connections",
     );
-  }
 
-  if (!connections || connections.length === 0) {
-    return new Response(JSON.stringify({ results: [], message: "no active connections" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+    if (connections.length === 0) {
+      return new Response(JSON.stringify({ results: [], message: "no active connections" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-  // 2. 各接続を処理
-  for (const conn of connections as Connection[]) {
-    try {
-      let accessToken: string;
+    // 2. 各接続を処理
+    for (const conn of connections as Connection[]) {
+      try {
+        let accessToken: string;
 
-      // 2a. トークン期限チェック & リフレッシュ
-      if (isTokenExpired(conn.expires_at)) {
-        const refreshResult = await refreshToken(conn, supabase, (k) => Deno.env.get(k));
+        // 2a. トークン期限チェック & リフレッシュ
+        if (isTokenExpired(conn.expires_at)) {
+          const refreshResult = await refreshToken(conn, supabase, (k) => Deno.env.get(k));
 
-        if (!refreshResult.ok) {
-          // refreshToken内でreauth_required済み
-          console.error(
-            `refresh failed: provider=${conn.provider} company=${conn.company_id} reason=${refreshResult.reason}`,
-          );
+          if (!refreshResult.ok) {
+            // refreshToken内でreauth_required済み
+            console.error(
+              `refresh failed: provider=${conn.provider} company=${conn.company_id} reason=${refreshResult.reason}`,
+            );
+            results.push({
+              provider: conn.provider,
+              company_id: conn.company_id,
+              status: "skipped",
+              detail: `refresh failed: ${refreshResult.reason}`,
+            });
+            continue;
+          }
+
+          accessToken = refreshResult.accessToken;
+        } else {
+          // トークンまだ有効 → Vaultから読み出し
+          const { data: vaultData, error: vaultError } = await supabase.rpc("read_vault_secret", {
+            p_id: conn.vault_secret_id,
+          });
+
+          if (vaultError || !vaultData) {
+            console.error(
+              `vault read failed: provider=${conn.provider} company=${conn.company_id}`,
+            );
+            results.push({
+              provider: conn.provider,
+              company_id: conn.company_id,
+              status: "error",
+              detail: `vault read failed: ${vaultError?.message ?? "no data"}`,
+            });
+            continue;
+          }
+
+          try {
+            const payload = JSON.parse(vaultData);
+            accessToken = payload.access_token;
+            if (!accessToken) throw new Error("access_token missing");
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            results.push({
+              provider: conn.provider,
+              company_id: conn.company_id,
+              status: "error",
+              detail: `invalid vault payload: ${msg}`,
+            });
+            continue;
+          }
+        }
+
+        // 2e. プロバイダー別にデータ同期
+        let syncCount: number;
+        if (conn.provider === "google_calendar") {
+          syncCount = await syncCalendarEvents(accessToken, conn.company_id, supabase);
+        } else if (conn.provider === "freee") {
+          syncCount = await syncFreeeTransactions(accessToken, conn.company_id, supabase);
+        } else {
           results.push({
             provider: conn.provider,
             company_id: conn.company_id,
             status: "skipped",
-            detail: `refresh failed: ${refreshResult.reason}`,
+            detail: `unknown provider: ${conn.provider}`,
           });
           continue;
         }
 
-        accessToken = refreshResult.accessToken;
-      } else {
-        // トークンまだ有効 → Vaultから読み出し
-        const { data: vaultData, error: vaultError } = await supabase.rpc("read_vault_secret", {
-          p_id: conn.vault_secret_id,
-        });
+        // 2f. last_refresh を更新
+        await mustOk(
+          supabase
+            .from("connections")
+            .update({ last_refresh: new Date().toISOString() })
+            .eq("id", conn.id),
+          "sync-connections: last_refresh",
+        );
 
-        if (vaultError || !vaultData) {
-          console.error(`vault read failed: provider=${conn.provider} company=${conn.company_id}`);
-          results.push({
-            provider: conn.provider,
-            company_id: conn.company_id,
-            status: "error",
-            detail: `vault read failed: ${vaultError?.message ?? "no data"}`,
-          });
-          continue;
-        }
-
-        try {
-          const payload = JSON.parse(vaultData);
-          accessToken = payload.access_token;
-          if (!accessToken) throw new Error("access_token missing");
-        } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
-          results.push({
-            provider: conn.provider,
-            company_id: conn.company_id,
-            status: "error",
-            detail: `invalid vault payload: ${msg}`,
-          });
-          continue;
-        }
-      }
-
-      // 2e. プロバイダー別にデータ同期
-      let syncCount: number;
-      if (conn.provider === "google_calendar") {
-        syncCount = await syncCalendarEvents(accessToken, conn.company_id, supabase);
-      } else if (conn.provider === "freee") {
-        syncCount = await syncFreeeTransactions(accessToken, conn.company_id, supabase);
-      } else {
         results.push({
           provider: conn.provider,
           company_id: conn.company_id,
-          status: "skipped",
-          detail: `unknown provider: ${conn.provider}`,
+          status: "synced",
+          detail: `${syncCount} events`,
         });
-        continue;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(
+          `sync error: provider=${conn.provider} company=${conn.company_id} error=${msg}`,
+        );
+        results.push({
+          provider: conn.provider,
+          company_id: conn.company_id,
+          status: "error",
+          detail: msg,
+        });
       }
-
-      // 2f. last_refresh を更新
-      await supabase
-        .from("connections")
-        .update({ last_refresh: new Date().toISOString() })
-        .eq("id", conn.id);
-
-      results.push({
-        provider: conn.provider,
-        company_id: conn.company_id,
-        status: "synced",
-        detail: `${syncCount} events`,
-      });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(
-        `sync error: provider=${conn.provider} company=${conn.company_id} error=${msg}`,
-      );
-      results.push({
-        provider: conn.provider,
-        company_id: conn.company_id,
-        status: "error",
-        detail: msg,
-      });
     }
-  }
 
-  return new Response(JSON.stringify({ results }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+    return new Response(JSON.stringify({ results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    // 接続一覧が引けない＝同期対象が分からない。0件と区別できないので握りつぶさない
+    return errorResponse(error, corsHeaders);
+  }
 });
 
 // --- Google Calendar 同期 (過去7日) ---
@@ -228,11 +242,10 @@ async function syncCalendarEvents(
     ),
   );
 
-  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-  if (error) {
-    throw new Error(`Calendar events upsert failed: ${error.message}`);
-  }
+  await mustOk(
+    supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+    "sync-connections: calendar events upsert",
+  );
 
   return rows.length;
 }
@@ -316,11 +329,10 @@ async function syncFreeeTransactions(
     ),
   );
 
-  const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-  if (error) {
-    throw new Error(`freee events upsert failed: ${error.message}`);
-  }
+  await mustOk(
+    supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+    "sync-connections: freee events upsert",
+  );
 
   return rows.length;
 }

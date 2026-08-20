@@ -120,10 +120,19 @@ GitHub Actions の `deploy` ワークフロー実行結果を確認:
 > 「`00020` が完走した」ことまでしか言えなかった。本番の実オブジェクトで確定させた。
 
 **seq 9（cron疎通）も 2026-08-16 に確定した。** `cron.job_run_details` が
-**4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**（`net.http_post` 正常）。
-シークレット登録（16:13 UTC）が初回発火（18:00 UTC）より前に完了していたため、
-予測どおり初回から成功している。
-⇒ `00020` の「Vaultから秘密取得 → Edge Function 呼び出し」経路が本番稼働している。
+**4回発火（UTC 18/00/06/12時）・失敗0件・`last_message = "1 row"`**。
+
+> **2026-08-20 訂正 — この観測が言えることの射程。** 当時ここに「（`net.http_post` 正常）」と
+> 書いたが、それは言い過ぎだった。`net.http_post` は**リクエストをキューに入れて
+> 即座に `request_id` を返す非同期関数**なので、`"1 row"` は
+> **「リクエストを積めた」までしか意味しない**。
+> **Edge Function が 401 や 500 を返していても、この観測は同じ結果になる。**
+> 実際のHTTPステータスは `net._http_response` かダッシュボードの Logs にしか無い
+> （手順: `docs/runbooks/2026-08-20_delivery-idempotency.md` §3-2）。
+> **cron ジョブが発火したこと**は言えている（それがこの観測の正しい射程）。
+> シークレット登録（16:13 UTC）が初回発火（18:00 UTC）より前に完了していたため、
+> 予測どおり初回から成功している。
+> ⇒ `00020` の「Vaultから秘密取得 → Edge Function 呼び出し」経路が本番稼働している。
 
 **前提確認は seq 1〜9 すべて完了。** 残るは実トークンでのリフレッシュ実測
 （検証A〜D）だが、`connections` が0件のため**初回OAuth連携作成後に繰り延べ**
@@ -208,6 +217,11 @@ LIMIT 5;
 -- 期待結果: status = 'succeeded'
 -- 'failed' かつ return_message に unrecognized configuration parameter が出ていれば
 -- GUC未設定が原因
+--
+-- 2026-08-20 追記: ここで分かるのは「cronが実行したSQLが成功したか」までである。
+-- net.http_post は非同期なので、Edge Function が 401/500 を返しても succeeded になる。
+-- 関数側の成否は net._http_response かダッシュボードの Logs で見ること
+-- （docs/runbooks/2026-08-20_delivery-idempotency.md §3-2）。
 ```
 
 ---

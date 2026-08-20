@@ -19,12 +19,41 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+
+      # 送信事故の防止（契約 S-2-10）。CI に Resend の設定を持ち込んでいないことを
+      # テストより先に事実として確かめる。ローカルでは vitest.config.ts が
+      # `.env` 由来の値を落とすが、CI 側は「そもそも渡していない」ことを実測で示す。
+      - name: "Resend の設定が CI に載っていないことを確かめる"
+        run: |
+          set -uo pipefail
+          fail=0
+          for k in RESEND_API_KEY RESEND_FROM; do
+            v=$(printenv "$k" || true)
+            if [ -n "$v" ]; then
+              echo "::error::$k が CI 環境に載っている。deliver 系のテストが実送信しうる"
+              fail=1
+            else
+              echo "$k: 未設定"
+            fi
+          done
+          exit $fail
+
       - run: pnpm typecheck && pnpm lint
       # integration は Supabase 起動が要るため専用ジョブ（integration）で実行する。
       # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail するため明示除外する。
       # 除外を外したい場合は integration ジョブ側の env 注入も併せて見直すこと。
       - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
-      - run: pnpm run check:allowlist # S2/トークンのスキーマ検査（scripts/で実装）
+
+      # 実DBの要らない静的検査。壊れた書き方をマージ前に止める。
+      # check:allowlist は実DB照会になったため integration ジョブへ移した（契約 S-5-4）。
+      # ここに残すと Supabase 不在で必ず落ちる。
+      - run: pnpm run check:db-errors # S-2-4: DBエラーの握りつぶし検出
+      - run: pnpm run check:caller-guard # S-4-8: 越境封鎖の適用漏れ検出
+      # S-5-7: 検査器の配置ずれ検出。「検査器はあるが CI で落ちない」を止める。
+      # 実DBを要求しない静的解析なので、Docker が落ちた日にこの検査ごと消えることはない。
+      # 宣言の正本は docs/checklists/ci-coverage.yml（自分自身も宣言に入っている）。
+      - run: pnpm run check:ci-coverage
+
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 
   # RLS等の統合テストを skip なしで実行する。
@@ -47,10 +76,20 @@ jobs:
       - name: Start local Supabase
         run: supabase start
 
-      # 00001〜00019 が素通しで適用されることの証跡。
-      # ローカルのDocker不可環境ではここが唯一の全適用検証になる
-      - name: Apply all migrations from scratch (00001..00019)
-        run: supabase db reset
+      # 全 migration が素通しで適用されることの証跡。
+      # ローカルのDocker不可環境ではここが唯一の全適用検証になる。
+      #
+      # **ステップ名に範囲を書かない。** 以前は "(00001..00019)" と書いていたが、
+      # 実際には 00024 まであった（2026-08-20 に検収者が指摘）。
+      # supabase db reset は supabase/migrations/ 配下を全件適用するので動作は正しく、
+      # ずれていたのは宣言のほうだった。番号を人が書き写す形にすると必ずずれるので、
+      # 範囲は書かずに**実測をログへ出す**。
+      - name: Apply all migrations from scratch
+        run: |
+          set -euo pipefail
+          files=(supabase/migrations/*.sql)
+          echo "適用対象 ${#files[@]}件: $(basename "${files[0]}") 〜 $(basename "${files[-1]}")"
+          supabase db reset
 
       - name: Export Supabase env
         run: |
@@ -60,59 +99,100 @@ jobs:
           API_URL=$(get API_URL)
           ANON=$(get ANON_KEY)
           SRK=$(get SERVICE_ROLE_KEY)
+          # DB_URL は check:allowlist / check:schema が実DBの列を引くのに使う。
+          # PostgREST は information_schema を公開しないため、psql で直接つなぐ
+          # （scripts/live-schema.ts の冒頭に理由を記載）
+          DB_URL=$(get DB_URL)
           # ローカル開発用の固定値だが、鍵をログに残さない原則を守る
           echo "::add-mask::$ANON"
           echo "::add-mask::$SRK"
-          test -n "$API_URL" && test -n "$ANON" && test -n "$SRK"
+          echo "::add-mask::$DB_URL"
+          test -n "$API_URL" && test -n "$ANON" && test -n "$SRK" && test -n "$DB_URL"
           echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "SUPABASE_ANON_KEY=$ANON" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SRK" >> "$GITHUB_ENV"
+          echo "SUPABASE_DB_URL=$DB_URL" >> "$GITHUB_ENV"
           echo "接続先: $API_URL"
+          echo "psql: $(psql --version 2>&1 || echo '見つからない')"
+
+      # 実DBに当たる検査。ここに置くのは Supabase が起きているのがこのジョブだけのため。
+      - name: "check:allowlist — S2 allowlist を実DBの列と突合する"
+        if: ${{ !cancelled() }}
+        run: pnpm run check:allowlist
+
+      - name: "check:schema — Edge Function の参照列を実DBと突合する"
+        if: ${{ !cancelled() }}
+        run: pnpm run check:schema
+
+      # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する。
+      # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
+      # 「動いているはず」で進めずここで実測する（契約 S-5-2）。
+      - name: Probe Edge Runtime reachability
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          code=$(curl -s -o /tmp/probe.txt -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"company_id":"00000000-0000-0000-0000-000000000000"}' \
+            "$SUPABASE_URL/functions/v1/scan" || echo "000")
+          echo "scan への実HTTP: status=$code"
+          echo "応答本文:"; cat /tmp/probe.txt || true
+          if [ "$code" = "000" ]; then
+            echo "::error::Edge Runtime に到達できない。supabase start が functions を配信していない"
+            exit 1
+          fi
 
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           for i in 1 2 3; do
             echo "===== integration run $i/3 — 接続先 $SUPABASE_URL ====="
-            pnpm exec vitest run tests/integration/ --reporter=verbose
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tee "/tmp/it-$i.log"
+          done
+
+      # 「env が無いから skip で緑」を作らないための可視化（契約 S-5-5）。
+      # skip の件数と対象を必ずログに出す。0件でも「0件だった」と言わせる。
+      - name: Report skipped tests
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            [ -f "/tmp/it-$i.log" ] || continue
+            echo "===== run $i の skip ====="
+            grep -E '(↓|skipped)' "/tmp/it-$i.log" || echo "skip 0件"
           done
 
       - name: Stop local Supabase
         if: ${{ always() }}
         run: supabase stop
 
-  # Edge Function の import が解決できることを静的に検証する。
-  # deploy-functions で esm.sh → npm: へ移した変更が、デプロイ前に壊れていないかを見る。
-  # 注意: これは静的検査であり、Edge Runtime 上での実行時挙動は担保しない。
+  # Edge Function の型検査。tsconfig が各 Function の index.ts を除外しているため、
+  # index.ts に型検査が掛かるのは**このジョブだけ**である
+  # （2026-08-19: typecheck / lint / unit が全部緑の状態で deno check が28件で落ちた）。
+  #
+  # コマンドをここに書き写さず `pnpm run check:edge-types` を呼ぶ。
+  # 同じ内容を CI とローカルの2箇所に持つと、片方だけ更新されたときに
+  # 「検査対象から漏れているのに緑」が起きる（check:allowlist が1行 log で
+  # 緑を返していたのと同型の空洞）。実体は scripts/check-edge-types.ts の1本だけ。
+  # 対象網羅のアサーションも同じスクリプトに入っている。
   edge-functions:
     runs-on: ubuntu-latest
     needs: gitleaks
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
 
-      # Supabase Edge Runtime と同系メジャー（Deno 2系）に固定する
+      # Supabase Edge Runtime と同系メジャー（Deno 2系）に固定する。
+      # scripts/check-edge-types.ts の REQUIRED_DENO_VERSION と同じ値にすること
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.1.4
 
-      - name: Verify check target covers every function and _shared file
-        run: |
-          set -euo pipefail
-          FUNC_DIRS=$(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_shared' | wc -l)
-          INDEXES=$(find supabase/functions -mindepth 2 -maxdepth 2 -name 'index.ts' -not -path '*/_shared/*' | wc -l)
-          SHARED=$(find supabase/functions/_shared -name '*.ts' | wc -l)
-          TOTAL=$(find supabase/functions -name '*.ts' | wc -l)
-          echo "function ディレクトリ: $FUNC_DIRS / index.ts: $INDEXES / _shared: $SHARED / 合計.ts: $TOTAL"
-          find supabase/functions -name '*.ts' | sort
-          # 全 function が index.ts を持ち、検査対象が合計と一致すること
-          test "$FUNC_DIRS" -eq "$INDEXES"
-          test "$TOTAL" -eq "$((INDEXES + SHARED))"
-          test "$TOTAL" -gt 0
-
-      # --node-modules-dir=none: ルートの package.json/node_modules に引きずられず、
-      # Deno のグローバルキャッシュで npm: を解決させる（Edge Runtime と同じ経路）
-      # 値に ": " を含むため引用が要る（無引用だとYAMLのマッピングとして解釈され構文エラー）
-      - name: "deno check — npm: 指定子の解決を実際に走らせる"
-        run: find supabase/functions -name '*.ts' -print0 | xargs -0 deno check --no-lock --node-modules-dir=none
+      - run: pnpm run check:edge-types
 # 本番反映はmainマージ後の別workflow（deploy.yml, スライス1で作成）のみ。手動デプロイ禁止。

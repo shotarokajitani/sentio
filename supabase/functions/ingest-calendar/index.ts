@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { generateEventId } from "../_shared/event-id.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustOk, errorResponse } from "../_shared/db.ts";
 
 /**
  * ingest-calendar: カレンダーフィクスチャ注入
@@ -15,8 +17,16 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id, events } = await req.json();
+    const { company_id: bodyCompanyId, events } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
 
     if (!company_id || !Array.isArray(events)) {
       return new Response(JSON.stringify({ error: "company_id and events[] required" }), {
@@ -52,22 +62,15 @@ serve(async (req: Request) => {
     }
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    await mustOk(
+      supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+      "ingest-calendar: events upsert",
+    );
 
     return new Response(JSON.stringify({ count: rows.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (err) {
+    return errorResponse(err, corsHeaders);
   }
 });

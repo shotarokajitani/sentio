@@ -52,6 +52,12 @@ current_setting('app.settings.service_role_key')
 `cron.job_run_details` を見に行かない限り誰にも気づかれない。
 「静かな失敗」の典型なので、適用直後に必ず潰しておく。
 
+> **この故障は `job_run_details` で捕まえられる**（GUC 未設定は SQL 自体を落とすため）。
+> ただし**そこで分かるのはそこまで**である（2026-08-20 追記）。`net.http_post` は非同期なので、
+> **Edge Function が 401 / 500 を返しても `job_run_details` は `succeeded` になる。**
+> 関数側の成否は `net._http_response` かダッシュボードの Logs で見ること
+> （手順: `docs/runbooks/2026-08-20_delivery-idempotency.md` §3-2）。
+
 ---
 
 ## 事前に読むこと（設計上の申し送り）

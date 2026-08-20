@@ -3,6 +3,9 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, errorResponse } from "../_shared/db.ts";
+import { toFlatBaselines } from "../_shared/baseline-stats.ts";
 
 interface ScanCandidate {
   scanType: string;
@@ -18,35 +21,45 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id } = await req.json();
+    const { company_id: bodyCompanyId } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
+
     const supabase = getSupabaseAdmin();
 
     // Fetch recent events (last 90 days)
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: events } = await supabase
-      .from("events")
-      .select("event_id, occurred_at, event_type, source, metrics, sensitivity, company_id")
-      .or(`company_id.eq.${company_id},company_id.is.null`)
-      .gte("occurred_at", cutoff)
-      .order("occurred_at", { ascending: false });
+    const events = await mustData(
+      supabase
+        .from("events")
+        .select("event_id, occurred_at, event_type, source, metrics, sensitivity, company_id")
+        .or(`company_id.eq.${company_id},company_id.is.null`)
+        .gte("occurred_at", cutoff)
+        .order("occurred_at", { ascending: false }),
+      "scan: events",
+    );
 
-    // Fetch baselines
-    const { data: baselines } = await supabase
-      .from("baselines")
-      .select("*")
-      .eq("company_id", company_id);
-
-    // Fetch known explanations for suppression
-    const { data: knownExplanations } = await supabase
-      .from("known_explanations")
-      .select("pattern, explanation")
-      .eq("company_id", company_id);
+    // Fetch baselines。**統計は `stats` JSONB にある**（`median` 等の列は実在しない）。
+    // 修復前はここが実在しない列を選び、undefined → 比較が NaN → 静かに0件になっていた。
+    // フラット形への変換は `toFlatBaselines` 1本だけを通す（契約 S-1-2）
+    const baselineRows = await mustData(
+      supabase
+        .from("baselines")
+        .select("metric_key, is_established, stats")
+        .eq("company_id", company_id),
+      "scan: baselines",
+    );
+    const baselines = toFlatBaselines(baselineRows);
 
     const candidates: ScanCandidate[] = [];
-    const established = (baselines || []).filter(
-      (b: { is_established: boolean }) => b.is_established,
-    );
+    const established = baselines.filter((b) => b.is_established);
 
     // 1. Deviation scan
     for (const event of events || []) {
@@ -213,9 +226,6 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

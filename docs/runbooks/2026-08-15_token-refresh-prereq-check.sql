@@ -76,6 +76,9 @@ runs AS (
     max(start_time)                                       AS last_run,
     (array_agg(return_message ORDER BY start_time DESC)
        FILTER (WHERE status = 'failed'))[1]               AS last_error
+  -- 2026-08-20 追記: ここで数えられるのは「cronが実行したSQLの成否」まで。
+  -- net.http_post は非同期なので、Edge Function が 401/500 を返しても failed にならない。
+  -- 関数側の成否は net._http_response / ダッシュボードの Logs で見ること。
   FROM cron.job_run_details
   WHERE jobid IN (SELECT jobid FROM cron.job WHERE jobname = 'sync-connections')
 )

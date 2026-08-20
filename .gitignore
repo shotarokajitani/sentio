@@ -11,3 +11,7 @@ tmp/
 supabase/.branches/
 supabase/.temp/
 .claude/settings.local.json
+
+# Playwright MCP の作業生成物（スクリーンショット・page snapshot・console log）。
+# MCP サーバがセッションごとに再生成するため、削除しても再び未追跡で現れる。
+.playwright-mcp/

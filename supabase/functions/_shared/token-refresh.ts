@@ -6,6 +6,8 @@
  * getEnv パラメータ注入により Deno 依存なしでテスト可能。
  */
 
+import { takeError } from "./db.ts";
+
 export const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 export interface ProviderConfig {
@@ -146,15 +148,19 @@ export async function refreshToken(
     return { ok: false, reason: `vault update failed: ${updateVaultError.message}` };
   }
 
-  // connections テーブルを更新
-  const { error: connUpdateError } = await supabase
-    .from("connections")
-    .update({
-      expires_at: newExpiresAt,
-      last_refresh: new Date().toISOString(),
-      status: "active",
-    })
-    .eq("id", connection.id);
+  // connections テーブルを更新。
+  // ここは throw ではなく理由を返す。呼び出し元が status を落とす分岐を持っているため
+  const connUpdateError = await takeError(
+    supabase
+      .from("connections")
+      .update({
+        expires_at: newExpiresAt,
+        last_refresh: new Date().toISOString(),
+        status: "active",
+      })
+      .eq("id", connection.id),
+    "token-refresh: connection update",
+  );
 
   if (connUpdateError) {
     console.error("connection update failed:", connUpdateError.message);
@@ -170,10 +176,10 @@ async function markReauthRequired(
   connectionId: string,
   reason: string,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("connections")
-    .update({ status: "reauth_required" })
-    .eq("id", connectionId);
+  const error = await takeError(
+    supabase.from("connections").update({ status: "reauth_required" }).eq("id", connectionId),
+    "token-refresh: mark reauth_required",
+  );
   if (error) {
     console.error(`failed to mark reauth_required (${reason}):`, error.message);
   }

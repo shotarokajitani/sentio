@@ -1,0 +1,117 @@
+# Edge Function の手動実行（契約 slice-state-repair S-4-10）。
+#
+# なぜ Supabase Dashboard の Test UI ではないのか（2026-08-19・検収者の実測）:
+# Test UI の Role 選択肢は Postgres / Anonymous の2つだけで **service_role を選ぶ経路が無い**。
+# さらに invoke はダッシュボードのサーバ側から出るため、Headers 行に手入力した
+# `Authorization` が関数まで届いたかを確定できない。
+# `workflow_dispatch` なら秘密は GitHub Secrets に置け、実行記録が run ログに残る。
+#
+# **このワークフローはデプロイを一切行わない。** checkout は
+# 「呼び出してよい関数の一覧を deploy.yml から引く」ためだけに使う（S-4-10 条件1）。
+name: invoke-function
+
+on:
+  workflow_dispatch:
+    inputs:
+      # `function` ではなく `function_name`。GitHub の式パーサで `inputs.function` が
+      # どう扱われるかを**この時点では実測できない**（workflow_dispatch はデフォルト
+      # ブランチにファイルが在るまで起動できないため）。試せないリスクは形で消す
+      function_name:
+        description: "呼び出す Edge Function 名（deploy.yml のデプロイ対象のいずれか）"
+        required: true
+        type: string
+      body:
+        description: 'リクエストボディ（JSON）。例: {"company_id":"..."}'
+        required: false
+        default: "{}"
+        type: string
+
+# 手動実行はレポジトリへ何も書かない。既定の GITHUB_TOKEN 権限を落としておく
+permissions: {}
+
+# 同じ関数を同時に叩いて結果の対応が取れなくなるのを防ぐ
+concurrency:
+  group: invoke-function
+  cancel-in-progress: false
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FUNCTION_NAME: ${{ inputs.function_name }}
+      REQUEST_BODY: ${{ inputs.body }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # 呼び出してよい関数は deploy.yml のデプロイ対象と定義する。
+      # ここで一覧を焼き込むと deploy.yml と静かにずれるため、毎回引き直す
+      # （抽出規則は scripts/check-caller-guard.ts の parseDeployTargets と同じ）
+      - name: Resolve allowed targets from deploy.yml
+        run: |
+          set -euo pipefail
+          grep -oE 'supabase functions deploy [A-Za-z0-9_-]+' .github/workflows/deploy.yml \
+            | awk '{print $4}' | sort -u > targets.txt
+          count="$(wc -l < targets.txt)"
+          echo "deploy targets: ${count}"
+          cat targets.txt
+          # 0件は「抽出に失敗した」であって「対象が無い」ではない。fail-closed
+          test "${count}" -gt 0
+          grep -qx "${FUNCTION_NAME}" targets.txt || {
+            echo "::error::'${FUNCTION_NAME}' は deploy.yml のデプロイ対象ではない"
+            exit 1
+          }
+
+      - name: Invoke
+        run: |
+          set -euo pipefail
+          # GitHub は secrets を自動マスクするが、S-4-10 条件6 の明示要件として自分でも伏せる
+          echo "::add-mask::${SUPABASE_SERVICE_ROLE_KEY}"
+          echo "::add-mask::${SUPABASE_PROJECT_REF}"
+
+          # 秘密が空のまま Bearer を送ると、意味の無い 401 を「関数が正しく閉じている」と
+          # 誤読させる。空なら呼ばずに落とす
+          test -n "${SUPABASE_SERVICE_ROLE_KEY}"
+          test -n "${SUPABASE_PROJECT_REF}"
+
+          # 関数URLは secrets から組み立てる（ハードコード禁止・S-4-10 条件3）
+          url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/${FUNCTION_NAME}"
+
+          # resolveCaller の internal 経路（service_role キーの一致）で入る。
+          # テスト専用の抜け道は作らない（S-4-10 条件4・5）
+          status="$(curl -sS -X POST "${url}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            --data "${REQUEST_BODY}" \
+            --max-time 120 \
+            -o response.txt -w '%{http_code}')"
+
+          bytes="$(wc -c < response.txt | tr -d ' ')"
+          echo "HTTP status: ${status}"
+          echo "本文バイト長: ${bytes}"
+
+          # **2xx の本文は run ログに出さない**（2026-08-20・検収者による受入基準の訂正）。
+          # 成功応答は本番会社の活動データそのもの（state-memory-packet は実測で
+          # recent_events を 824文字返した）。--no-verify-jwt を外して閉じた漏洩経路を、
+          # Actions のログという別の場所に開き直すことになる。
+          # 完走の証跡はバイト長とハッシュで足りる。中身は Supabase の Logs 側で見る。
+          #
+          # 非2xx は全文を出す。エラーメッセージであり顧客データではない。
+          # 401 の実測（S-4-2）はこちら側に落ちるので、証跡としてそのまま使える。
+          case "${status}" in
+            2??)
+              echo "本文 SHA-256: $(sha256sum response.txt | awk '{print $1}')"
+              echo "（2xx の本文は顧客データを含みうるため出力しない）"
+              ;;
+            *)
+              echo "--- response body（非2xx。エラー本文なので全文を出す） ---"
+              cat response.txt
+              echo ""
+              echo "--- end of body ---"
+              # || true でエラーを吸わない
+              echo "::error::HTTP ${status}"
+              exit 1
+              ;;
+          esac

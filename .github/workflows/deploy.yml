@@ -22,7 +22,22 @@ jobs:
       # integration は Supabase 起動が要るため ci.yml の integration ジョブが担う。
       # ここで走らせると SUPABASE_* 不在で rls.test.ts のガードが fail する
       - run: pnpm exec vitest run --exclude 'tests/e2e/**' --exclude 'tests/integration/**'
-      - run: pnpm run check:allowlist
+      # `check:allowlist` はここでは走らせない（2026-08-20・案A）。
+      #
+      # 実DBの列照会（psql 直結）に変わったため Supabase の起動が要る。このジョブには
+      # 無いので `SUPABASE_DB_URL` 未設定 → `scripts/live-schema.ts:27` が throw →
+      # `check-allowlist.ts` が reason: "query-failed" で fail-closed の exit 1 になり、
+      # verify が必ず落ちて `needs: verify` の deploy-migrations に到達しない。
+      # 担当は ci.yml の integration ジョブ（`ci.yml:48` の「integration ジョブへ移した」
+      # という宣言と対応する。移設したのに deploy.yml だけが取り残されていた）。
+      #
+      # **この分担は main への直 push が禁止されていることに依存する。**
+      # `ci.yml:2` は `on: [pull_request]` のみで、直 push では走らない。
+      # PR 経由（squash merge を含む）なら ci.yml が走るので穴は無いが、
+      # 直 push が可能な状態では S2 allowlist の機械的担保がその経路だけ消える
+      # （CLAUDE.md 絶対規則「S2テーブルに本文型カラムを追加しない」）。
+      # 設定手順は docs/runbooks/2026-08-20_branch-protection.md。
+      # ブランチ保護が外れた場合はこの分担を見直すこと。
 
   # スキーマを先に反映する。関数が先に出ると「新コードが未適用の関数/カラムを呼ぶ」不整合が起きる
   # （実例: 00017 未適用のまま sync-connections がデプロイ済みになった 2026-08-12 の事故）
@@ -80,70 +95,78 @@ jobs:
 
       # function ごとに個別step。`if: !cancelled()` で1件の失敗が後続を止めないようにしつつ、
       # 失敗したstepはそのままジョブ失敗として顕在化させる（|| true / continue-on-error は禁止）
+      #
+      # `--no-verify-jwt` は付けない（契約 S-4 / 封鎖は S-方針2 の案B＋A の二層）。
+      # 2026-08-19 の本番実測で、認証情報ゼロでも不正な Bearer でも
+      # `state-memory-packet` が HTTP 200 と実データを返したのは、この17本すべてに
+      # `--no-verify-jwt` が付いていてゲートウェイが素通しだったためである。
+      # 内側の `resolveCaller`（S-2-9）だけでも 401 になるが、ゲートウェイ層を戻すと
+      # 「関数を1本足したときに resolveCaller を忘れる」事故が即座に全公開になる。
+      # **401 に当たったからといってこのフラグを戻さないこと。** 戻すなら契約側から。
       - name: Deploy sync-connections
         if: ${{ !cancelled() }}
-        run: supabase functions deploy sync-connections --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy sync-connections --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy scan
         if: ${{ !cancelled() }}
-        run: supabase functions deploy scan --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy scan --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy investigate
         if: ${{ !cancelled() }}
-        run: supabase functions deploy investigate --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy investigate --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy run-sense
         if: ${{ !cancelled() }}
-        run: supabase functions deploy run-sense --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy run-sense --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy ingest-calendar
         if: ${{ !cancelled() }}
-        run: supabase functions deploy ingest-calendar --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy ingest-calendar --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy ingest-csv
         if: ${{ !cancelled() }}
-        run: supabase functions deploy ingest-csv --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy ingest-csv --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy ingest-s0
         if: ${{ !cancelled() }}
-        run: supabase functions deploy ingest-s0 --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy ingest-s0 --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy ingest-monitor
         if: ${{ !cancelled() }}
-        run: supabase functions deploy ingest-monitor --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy ingest-monitor --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy state-baselines
         if: ${{ !cancelled() }}
-        run: supabase functions deploy state-baselines --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy state-baselines --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy state-summary
         if: ${{ !cancelled() }}
-        run: supabase functions deploy state-summary --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy state-summary --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy state-narratives
         if: ${{ !cancelled() }}
-        run: supabase functions deploy state-narratives --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy state-narratives --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy state-memory-packet
         if: ${{ !cancelled() }}
-        run: supabase functions deploy state-memory-packet --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy state-memory-packet --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy deliver-alert
         if: ${{ !cancelled() }}
-        run: supabase functions deploy deliver-alert --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy deliver-alert --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy deliver-pulse
         if: ${{ !cancelled() }}
-        run: supabase functions deploy deliver-pulse --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy deliver-pulse --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy deliver-weekly
         if: ${{ !cancelled() }}
-        run: supabase functions deploy deliver-weekly --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy deliver-weekly --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy day0
         if: ${{ !cancelled() }}
-        run: supabase functions deploy day0 --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy day0 --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy onetap-calendar
         if: ${{ !cancelled() }}
-        run: supabase functions deploy onetap-calendar --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+        run: supabase functions deploy onetap-calendar --project-ref "$SUPABASE_PROJECT_REF"

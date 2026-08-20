@@ -1,0 +1,90 @@
+# 検査器の配置宣言（check:ci-coverage の正本）
+#
+# なぜ宣言ファイルが要るか。
+# 「検査器はあるが CI で落ちない」形が3度出た（deno check 28件 / S-5-1 の check:schema /
+# deploy.yml に取り残された check:allowlist）。うち2つは **CI が赤にならない** ことが
+# 問題の本体なので、run の色を見る監視では原理的に届かない。
+#
+# `package.json` の scripts を正本にしない理由:
+#   1. `check:*` という命名規約に依存すると、規約外の検査器（typecheck / lint /
+#      eval:engine）が漏れる
+#   2. 単純な集合包含では「**どこに載っているべきか**」を表現できない。
+#      check:allowlist は deploy.verify に載っていては**いけない**検査器であり、
+#      「載っているから OK」と誤判定される
+#
+# したがって配置（must_run_in）を宣言し、`scripts/check-ci-coverage.ts` が
+# `.github/workflows/` の実物と突合する。
+#
+# フィールド:
+#   id           識別子
+#   script       package.json の scripts キー。両方向の集合差を取るのに使う
+#   file         scripts/ 配下のファイル名。scripts/check-*.ts との集合差を取るのに使う
+#   command      ワークフローの run から探す文字列
+#   contract     根拠となる契約項番
+#   requires     実行の前提。live-db / deno。ここから配置禁止を機械的に導出する
+#   must_run_in  <ワークフローのファイル名（拡張子なし）>.<ジョブ名>
+#   note         人間向けの補足（検査には使わない）
+
+checks:
+  - id: check-allowlist
+    script: "check:allowlist"
+    file: "check-allowlist.ts"
+    command: "pnpm run check:allowlist"
+    contract: S-5-4
+    requires: [live-db]
+    must_run_in: ["ci.integration"]
+    note: >-
+      2026-08-20 に deploy.verify から外した（案A）。実DB照会に変わっており
+      Supabase を起動しないジョブでは fail-closed で必ず落ちるため。
+      requires: live-db から deploy.verify への配置禁止が自動導出される。
+
+  - id: check-schema
+    script: "check:schema"
+    file: "check-schema-contract.ts"
+    command: "pnpm run check:schema"
+    contract: S-5-1
+    requires: [live-db]
+    must_run_in: ["ci.integration"]
+
+  - id: check-db-errors
+    script: "check:db-errors"
+    file: "check-db-error-handling.ts"
+    command: "pnpm run check:db-errors"
+    contract: S-2-4
+    requires: []
+    must_run_in: ["ci.verify"]
+    note: >-
+      静的検査なので deploy.verify にも置けるが、現状は置いていない。
+      直 push 経路の担保は typecheck / lint / unit までで、ここは意図的に狭い。
+      広げるかは未判断（07_open_items 行き）。
+
+  - id: check-caller-guard
+    script: "check:caller-guard"
+    file: "check-caller-guard.ts"
+    command: "pnpm run check:caller-guard"
+    contract: S-4-8
+    requires: []
+    must_run_in: ["ci.verify"]
+
+  - id: check-edge-types
+    script: "check:edge-types"
+    file: "check-edge-types.ts"
+    command: "pnpm run check:edge-types"
+    contract: S-5-3
+    requires: [deno]
+    must_run_in: ["ci.edge-functions"]
+    note: >-
+      tsconfig が各 Function の index.ts を除外しているため、
+      index.ts に型検査が掛かるのはこのジョブだけ。2026-08-19 に
+      typecheck / lint / unit が全部緑の状態で deno check が28件で落ちた。
+
+  - id: check-ci-coverage
+    script: "check:ci-coverage"
+    file: "check-ci-coverage.ts"
+    command: "pnpm run check:ci-coverage"
+    contract: S-5-7
+    requires: []
+    must_run_in: ["ci.verify"]
+    note: >-
+      自分自身を宣言する。CI から外せば、この検査器自身が missing を吐いて赤になる。
+      実DBを要求しないのは、Docker が落ちた日に検査ごと消えるのを避けるため。

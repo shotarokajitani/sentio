@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { generateEventId } from "../_shared/event-id.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustOk, errorResponse } from "../_shared/db.ts";
 
 serve(async (req: Request) => {
   // CORS preflight
@@ -10,14 +12,22 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    const { csv_text, company_id, file_fingerprint } = await req.json();
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
 
-    if (!csv_text || !company_id || !file_fingerprint) {
-      return new Response(
-        JSON.stringify({ error: "csv_text, company_id, file_fingerprint required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+  try {
+    const { csv_text, company_id: bodyCompanyId, file_fingerprint } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
+
+    if (!csv_text || !file_fingerprint) {
+      return new Response(JSON.stringify({ error: "csv_text, file_fingerprint required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const lines = (csv_text as string).trim().split("\n");
@@ -60,22 +70,15 @@ serve(async (req: Request) => {
 
     // UPSERT: ON CONFLICT update metrics (B2 idempotency, B3 diff detection)
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("events").upsert(rows, { onConflict: "event_id" });
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    await mustOk(
+      supabase.from("events").upsert(rows, { onConflict: "event_id" }),
+      "ingest-csv: events upsert",
+    );
 
     return new Response(JSON.stringify({ count: rows.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (err) {
+    return errorResponse(err, corsHeaders);
   }
 });

@@ -9,18 +9,28 @@
 
 ## 1. 現行ツールのバージョン（実測）
 
-| ツール       | バージョン                      | 実行ファイルの場所                    | 導入経路             |
-| ------------ | ------------------------------- | ------------------------------------- | -------------------- |
-| Node.js      | `v24.13.1`                      | `C:\Program Files\nodejs\node`        | 公式インストーラ     |
-| npm          | `11.8.0`                        | `C:\Program Files\nodejs\npm`         | Node同梱             |
-| pnpm         | `11.21.0`                       | `%APPDATA%\npm\pnpm`                  | npm グローバル       |
-| Git          | `2.53.0.windows.2`              | `/mingw64/bin/git`（Git for Windows） | 公式インストーラ     |
-| GitHub CLI   | `2.97.0 (2026-07-31)`           | `C:\Program Files\GitHub CLI\gh`      | 公式インストーラ     |
-| Supabase CLI | `2.110.0`（global／**要注意**） | `C:\Users\shota\scoop\shims\supabase` | scoop（main bucket） |
-| Claude Code  | `2.1.235`                       | `%APPDATA%\npm\claude`                | npm グローバル       |
-| Docker       | `29.6.1, build 8900f1d`         | `C:\Program Files\Docker\...\docker`  | Docker Desktop       |
+| ツール       | バージョン                      | 実行ファイルの場所                    | 導入経路               |
+| ------------ | ------------------------------- | ------------------------------------- | ---------------------- |
+| Node.js      | `v24.13.1`                      | `C:\Program Files\nodejs\node`        | 公式インストーラ       |
+| npm          | `11.8.0`                        | `C:\Program Files\nodejs\npm`         | Node同梱               |
+| pnpm         | `11.21.0`                       | `%APPDATA%\npm\pnpm`                  | npm グローバル         |
+| Git          | `2.53.0.windows.2`              | `/mingw64/bin/git`（Git for Windows） | 公式インストーラ       |
+| GitHub CLI   | `2.97.0 (2026-07-31)`           | `C:\Program Files\GitHub CLI\gh`      | 公式インストーラ       |
+| Supabase CLI | `2.110.0`（global／**要注意**） | `C:\Users\shota\scoop\shims\supabase` | scoop（main bucket）   |
+| Claude Code  | `2.1.235`                       | `%APPDATA%\npm\claude`                | npm グローバル         |
+| Docker       | `29.6.1, build 8900f1d`         | `C:\Program Files\Docker\...\docker`  | Docker Desktop         |
+| Deno         | `2.1.4`（**CIと同値に固定**）   | `%USERPROFILE%\.deno\bin\deno.exe`    | GitHub Releases の zip |
 
 > Docker は一覧指定に無いが、`supabase start`（ローカルスタック）が依存するため併記した。
+
+> **Deno は `pnpm run check:edge-types`（Edge Function の型検査）に必要。**
+> `tsconfig.json` は各 Function の `index.ts` を除外しているため、
+> `pnpm typecheck` はそこを1行も見ていない。型検査の実体は `deno check` だけである
+> （2026-08-19: typecheck / lint / unit が全部緑の状態で `deno check` が28件で落ちた）。
+> **バージョンは CI の `denoland/setup-deno`（`v2.1.4`）と揃える。**
+> ずれていると `scripts/check-edge-types.ts` が警告を出す。
+> 近似での代替（tsc に寄せた設定など）は**用意しない**。近似が緑でも `deno check` が
+> 緑とは限らず、それを緑と読むこと自体が新しい空洞になる。
 
 ### Supabase CLI 2.113.0 固定 — 現状は「2系統」に分かれている
 
@@ -226,6 +236,10 @@ nothing added to commit but untracked files present
 
 1. Node.js `v24.13.1` / Git for Windows / GitHub CLI / Docker Desktop を入れる
 2. `npm i -g pnpm@11.21.0` と `npm i -g @anthropic-ai/claude-code`
+   2b. Deno `v2.1.4` を入れる（`pnpm run check:edge-types` に必要）。
+   GitHub Releases の zip を `%USERPROFILE%\.deno\bin` へ展開し、そこを PATH に足す:
+   `https://github.com/denoland/deno/releases/download/v2.1.4/deno-x86_64-pc-windows-msvc.zip`
+   バージョンは CI と揃えること（最新版を入れない）
 3. **Supabase CLI は global に入れない**（§1 の理由）
 4. `git clone github.com/shotarokajitani/sentio` → `pnpm install`
    （これで `supabase@2.113.0` が `node_modules` に入る）

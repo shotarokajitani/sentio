@@ -3,6 +3,8 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
+import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
+import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
 
 const MAX_SUMMARY_TOKENS = 4000;
 const CHAPTER_KEYS = ["overview", "financial", "operations", "people", "external"] as const;
@@ -16,27 +18,44 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 呼び出し元の判定は DBに触る前（契約 S-2-9）
+  const caller = await resolveCaller(req);
+  if (!caller.ok) return caller.response;
+
   try {
-    const { company_id } = await req.json();
+    const { company_id: bodyCompanyId } = await req.json();
+
+    const scope = resolveCompanyId(caller.caller, bodyCompanyId);
+    if (!scope.ok) return scope.response;
+    const company_id = scope.companyId;
+
     const supabase = getSupabaseAdmin();
 
-    // Gather data from multiple tables
-    const [eventsRes, baselinesRes, narrativesRes, entitiesRes] = await Promise.all([
-      supabase
-        .from("events")
-        .select("event_type, metrics, occurred_at")
-        .eq("company_id", company_id)
-        .order("occurred_at", { ascending: false })
-        .limit(100),
-      supabase.from("baselines").select("*").eq("company_id", company_id),
-      supabase.from("narratives").select("*").eq("company_id", company_id),
-      supabase.from("entities").select("*").eq("company_id", company_id),
+    // select("*") をやめて列を明示する。`*` のままだと、実在しない列を読んでも
+    // undefined になるだけで気付けない（scan が baselines でこれを踏んでいた）
+    const [events, baselines, narratives, entities] = await Promise.all([
+      mustData(
+        supabase
+          .from("events")
+          .select("event_type, occurred_at")
+          .eq("company_id", company_id)
+          .order("occurred_at", { ascending: false })
+          .limit(100),
+        "state-summary: events",
+      ),
+      mustData(
+        supabase.from("baselines").select("id").eq("company_id", company_id),
+        "state-summary: baselines",
+      ),
+      mustData(
+        supabase.from("narratives").select("content").eq("company_id", company_id),
+        "state-summary: narratives",
+      ),
+      mustData(
+        supabase.from("entities").select("id").eq("company_id", company_id),
+        "state-summary: entities",
+      ),
     ]);
-
-    const events = eventsRes.data || [];
-    const baselines = baselinesRes.data || [];
-    const narratives = narrativesRes.data || [];
-    const entities = entitiesRes.data || [];
 
     // Build chapters
     const txnEvents = events.filter((e) => e.event_type === "transaction");
@@ -102,26 +121,24 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString();
 
     // Upsert company_summary
-    const { error } = await supabase.from("company_summary").upsert(
-      {
-        company_id,
-        content,
-        token_count: totalTokens,
-        chapters,
-        generated_at: now,
-      },
-      { onConflict: "company_id" },
+    await mustOk(
+      supabase.from("company_summary").upsert(
+        {
+          company_id,
+          content,
+          token_count: totalTokens,
+          chapters,
+          generated_at: now,
+        },
+        { onConflict: "company_id" },
+      ),
+      "state-summary: company_summary upsert",
     );
-
-    if (error) throw error;
 
     return new Response(JSON.stringify({ status: "ok", company_id, token_count: totalTokens }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return errorResponse(error, corsHeaders);
   }
 });

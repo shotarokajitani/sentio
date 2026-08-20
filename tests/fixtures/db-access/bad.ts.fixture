@@ -1,0 +1,23 @@
+// 陰性コントロール: 握りつぶしを3件仕込んである。
+// 検査がこれを検出できなければ、検査自体が空洞である。
+
+async function readAndWrite(supabase: Client, companyId: string) {
+  // 1件目: error を受け取らない分割代入
+  const { data: events } = await supabase
+    .from("events")
+    .select("event_id")
+    .eq("company_id", companyId);
+
+  // 2件目: Promise.all の中身が素通し
+  const [summaryRes] = await Promise.all([
+    supabase.from("company_summary").select("content").single(),
+  ]);
+
+  // 3件目: 戻り値をそのまま捨てる書き込み
+  await supabase.from("findings").insert({ company_id: companyId });
+
+  // これは検査対象外（Supabase クライアントではない）
+  const ids = Array.from(new Set((events ?? []).map((e) => e.event_id)));
+
+  return { summaryRes, ids };
+}

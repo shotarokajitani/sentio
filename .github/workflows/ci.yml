@@ -49,6 +49,10 @@ jobs:
       # ここに残すと Supabase 不在で必ず落ちる。
       - run: pnpm run check:db-errors # S-2-4: DBエラーの握りつぶし検出
       - run: pnpm run check:caller-guard # S-4-8: 越境封鎖の適用漏れ検出
+      # S-5-7: 検査器の配置ずれ検出。「検査器はあるが CI で落ちない」を止める。
+      # 実DBを要求しない静的解析なので、Docker が落ちた日にこの検査ごと消えることはない。
+      # 宣言の正本は docs/checklists/ci-coverage.yml（自分自身も宣言に入っている）。
+      - run: pnpm run check:ci-coverage
 
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 

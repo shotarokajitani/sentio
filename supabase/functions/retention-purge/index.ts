@@ -123,7 +123,8 @@ Deno.serve(async (req: Request) => {
         status: "ok",
         cutoff,
         retention_months: RETENTION_MONTHS,
-        companies: companies.length,
+        // 全社数ではなく「期限切れの行を持っていた会社の数」。0 は正常（消すものが無い）
+        companies: expired.length,
         deleted: totalDeleted,
         // 0件で終わった理由を応答から区別できるようにする（S-2-3 と同じ考え方）
         blocked,

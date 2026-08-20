@@ -87,19 +87,39 @@ Edge Function だけが別スキーマを前提に書かれ、`tests/unit/baseli
 
 §0.4 の3件はいずれも**本手順書の修正範囲外**。実測結果とあわせて検収者に判断を仰ぐ。
 
+> **2026-08-20 追記（スライスS での処遇）。上表は 2026-08-19 時点の実測記録として残す。**
+> 3件とも `docs/contracts/slice-state-repair.md` の対象になり、PR #31 で以下の状態にある。
+> 上表だけを読んで「今もそうなっている」と誤読しないこと。
+>
+> - `known_explanations` の死んだクエリ → **削除済み**（S-6-1）。抑制③が未実装である事実は
+>   `docs/spec/07_open_items.md` に登録済み
+> - `budget_usage` の列不一致 → **実列（`full_runs` / `light_runs`）で動くよう修正済み**（S-6-2）。
+>   行が無い場合は「無制限」ではなく 0 から数える fail-closed（S-6-3）
+> - `--no-verify-jwt` → **17本すべてから除去済み**（S-4）。加えて `resolveCaller` を17本に入れ、
+>   ボディの `company_id` は `internal` 以外では採用しない（S-2-9 / S-4-3）。
+>   **本番での 401 実測は merge → deploy の後**（S-4-2）
+
 ---
 
 ## 1. 実行方法
 
-Supabase Dashboard → **Edge Functions** → 対象function → **Invoke / Test** タブ。
-Method `POST` / Body に各STEPのJSON。
-（全functionが `--no-verify-jwt` のため、Dashboardからの実行に追加の認証設定は不要）
+GitHub Actions → **invoke-function** ワークフロー → **Run workflow**。
+`function_name` に対象function名、`body` に各STEPのJSON を入れて実行する。
 
-> **Dashboard の Test Function UI は1回目が 500 を返すことがある**（UI側の通信エラー）。
-> 500 が出たら**1回だけ再送**し、それでも 500 なら本物の失敗として扱う
-> （`docs/runbooks/2026-08-07_token-refresh-verification.md` で実測済みの既知挙動）。
-> ただし STEP 1・2 は**本物の500が予測されている**ので、再送しても同じ本文が返る。
-> `error` メッセージの中身（列名が出るか）で区別する。
+> **2026-08-20 変更（スライスS・S-4-10）。Supabase Dashboard の Invoke / Test タブは使わない。**
+>
+> 理由は2つある。
+>
+> 1. **Test UI に service_role を選ぶ経路が無い。** Role の選択肢は Postgres（RLSバイパス）と
+>    Anonymous の2つだけで、`resolveCaller` が `internal` と認める呼び出し元になれない。
+>    Headers 行に `Authorization` を手入力しても、invoke はダッシュボードの**サーバ側**から
+>    出るため、それが関数まで届いたかを確定できない（2026-08-19 検収者が実測）
+> 2. **17本すべてから `--no-verify-jwt` を外した。** ゲートウェイでも JWT 検証が入るので、
+>    「Dashboard からなら追加の認証設定は不要」という旧前提はもう成り立たない
+>
+> `workflow_dispatch` なら秘密は GitHub Secrets に置け、実行記録が Actions の run ログに残る。
+> 前提: リポジトリ Secrets に `SUPABASE_SERVICE_ROLE_KEY` が登録されていること
+> （手順: `docs/secrets-runbook.md`「service_role キーの保管先は3箇所ある」）。
 
 SQLはすべて `docs/runbooks/2026-08-19_pipeline-first-run.sql` にある。
 Dashboard → **SQL Editor** で、指定されたブロックを**ブロック単位でコピペ**して実行する。
@@ -107,8 +127,13 @@ Dashboard → **SQL Editor** で、指定されたブロックを**ブロック�
 
 ### 記録すること（各STEP共通）
 
-1. HTTPステータス
-2. レスポンスJSON**全文**（省略しない）
+1. HTTPステータス（Actions の run ログに出る）
+2. レスポンスJSON**全文**（省略しない）。
+   **取得元は Supabase の Function Logs / Invocations。**
+   Actions の run ログには 2xx の本文を出していない（バイト長と SHA-256 だけ）。
+   成功応答は本番会社の活動データそのもので、`--no-verify-jwt` を外して閉じた漏洩経路を
+   Actions のログに開き直すことになるため（2026-08-20 受入基準の訂正）。
+   **非2xx は run ログに全文が出る**ので、失敗時はそちらをそのまま使う
 3. 直後SQLの結果グリッド
 4. Function の **Logs** タブの該当行（失敗時は必須）
 

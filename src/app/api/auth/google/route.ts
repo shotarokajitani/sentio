@@ -28,7 +28,13 @@ export async function GET(req: NextRequest) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/calendar.readonly",
+    // calendar.readonly ではなく events.readonly。Sentio が叩く Calendar API は
+    // GET /calendar/v3/calendars/primary/events の1本だけで、calendarList / calendars /
+    // acls / settings は一度も呼んでいない（2026-08-20 実測）。readonly は
+    // 「アクセスできる任意のカレンダーの閲覧とダウンロード」まで含むので過剰である。
+    // events.owned.readonly では招待された予定が落ち、会議負荷を測れないため使えない。
+    // 詳細と Google 審査への回答は docs/runbooks/2026-08-20_google-oauth-verification.md。
+    scope: "https://www.googleapis.com/auth/calendar.events.readonly",
     access_type: "offline",
     prompt: "consent",
     state,

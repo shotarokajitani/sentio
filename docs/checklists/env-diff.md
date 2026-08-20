@@ -15,20 +15,20 @@
       版に依存する構文を使う migration は、ローカルで通っても本番で**構文エラー**として落ちる。
 
       ```sql
-              select version();
-              -- または Settings → Infrastructure
-              ```
+      select version();
+      -- または Settings → Infrastructure
+      ```
 
-              | 項目                      | 値         | 実測日 | 実施者 |
-              | ------------------------- | ---------- | ------ | ------ |
-              | 本番の PostgreSQL バージョン | **未実施** |        |        |
+      | 項目                      | 値         | 実測日 | 実施者 |
+      | ------------------------- | ---------- | ------ | ------ |
+      | 本番の PostgreSQL バージョン | **未実施** |        |        |
 
-              **版に依存している箇所（2026-08-20 時点）**:
-              `00023` の `NULLS NOT DISTINCT`（**PostgreSQL 15 以降**）。
-              `baselines` の自然キー `(company_id, metric_key, entity_id, granularity)` は
-              `entity_id` が NULL を取りうるため、この構文が無いと一意索引の意味が成立しない。
-              `00023` は実行時に `server_version_num` を見て 15 未満なら**理由を書いて停止**する
-              （素の `CREATE INDEX` だとパース時に落ちてメッセージが読めないため動的SQLにしてある）。
+      **版に依存している箇所（2026-08-20 時点）**:
+      `00023` の `NULLS NOT DISTINCT`（**PostgreSQL 15 以降**）。
+      `baselines` の自然キー `(company_id, metric_key, entity_id, granularity)` は
+      `entity_id` が NULL を取りうるため、この構文が無いと一意索引の意味が成立しない。
+      `00023` は実行時に `server_version_num` を見て 15 未満なら**理由を書いて停止**する
+      （素の `CREATE INDEX` だとパース時に落ちてメッセージが読めないため動的SQLにしてある）。
 
 - [ ] **Extensions**: 本番プロジェクトで必要拡張が有効か（ローカル supabase start の
       自動有効化に騙されない）

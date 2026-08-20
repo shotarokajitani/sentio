@@ -380,6 +380,57 @@ a {
   margin: var(--s3) 0 0;
 }
 
+/* h1〜h3 は margin 0 が既定。条文の小見出しは自分で間を取る */
+.prose h3 {
+  margin-top: var(--s4);
+  font-size: 1rem;
+}
+
+.prose h3 + p,
+.prose h3 + ul {
+  margin-top: var(--s2);
+}
+
+/* 委託先の対照表。塗りは使わず、細い罫線と余白だけで読ませる */
+.prose .table-scroll {
+  margin-top: var(--s3);
+  overflow-x: auto;
+}
+
+.prose table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.prose th,
+.prose td {
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.7;
+}
+
+.prose th {
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+
+.prose td {
+  color: var(--ink-muted);
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: none;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: var(--s5) var(--s3) var(--s6);

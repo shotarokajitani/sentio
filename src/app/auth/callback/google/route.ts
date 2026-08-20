@@ -98,7 +98,8 @@ export async function GET(req: NextRequest) {
       company_id: companyId,
       provider: "google_calendar",
       vault_secret_id: vaultId,
-      scopes: ["calendar.readonly"],
+      // 実際に同意を得たスコープを記録する。api/auth/google/route.ts の scope と揃えること
+      scopes: ["calendar.events.readonly"],
       status: "active",
       last_refresh: new Date().toISOString(),
       expires_at: expiresAt,

@@ -120,20 +120,50 @@ gh secret set SUPABASE_SERVICE_ROLE_KEY --repo shotarokajitani/sentio
        `00020` の `cron.schedule` を流し直して Vault 参照に寄せること
    - **判定不能** → 本文を目視する。貼り戻すときは `command_redacted` を使う
 
-3. 突き合わせ相手（現行 service_role キー）の指紋を採る。
-   ダッシュボード → Settings → API → service_role キーをコピーし、**ローカルで**ハッシュする
+3. 突き合わせ相手（現行 service_role キー）の指紋を採る。**ローカルで**ハッシュする。
 
-   ```powershell
-   $k = Read-Host -AsSecureString "service_role key"
-   $p = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-          [Runtime.InteropServices.Marshal]::SecureStringToBSTR($k))
-   "len={0} tail={1} sha256={2}" -f $p.Length, $p.Substring($p.Length-4),
-     ([BitConverter]::ToString(
-        [Security.Cryptography.SHA256]::Create().ComputeHash(
-          [Text.Encoding]::UTF8.GetBytes($p))) -replace '-','').ToLower()
+   **場所は `Settings → API` ではない。**（2026-08-20 に移動が判明）
+
+   `Settings → API Keys` を開き、**「Legacy API Keys」タブ**に切り替える。
+   既定で表示されるのは新形式（`sb_publishable_...` / `sb_secret_...`）で、
+   `anon` / `service_role` の JWT は別タブに移った。
+
+   ```
+   https://supabase.com/dashboard/project/<project-ref>/settings/api-keys
    ```
 
-   `Read-Host -AsSecureString` を使うのは、キーを PowerShell の履歴に残さないため。
+   **手順の順序が重要。この順で打つこと。**
+
+   1. **先に**次の1行を PowerShell に貼って、関数を定義する（鍵はまだコピーしない）
+
+      ```powershell
+      function fp { $p=(Get-Clipboard).Trim(); "len=$($p.Length) tail=$($p.Substring($p.Length-4)) prefix=$($p.Substring(0,3)) sha256=$(([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($p))) -replace '-','').ToLower())" }
+      ```
+
+   2. ダッシュボードの Legacy API Keys から **service_role キーをコピーする**
+   3. PowerShell に戻り、**`fp` と打って Enter**。**貼り付けないこと**
+
+   **なぜこの形なのか（2026-08-20 に全部実測で踏んだ失敗）。**
+
+   - **PowerShell のコードを複数行で貼らない。** 対話コンソールに複数行を貼ると
+     行の途中で切れて `MissingExpressionAfterToken` になる。
+     **必ず1行にすること。** 旧版はここが複数行だったため必ず壊れた
+   - **`Read-Host -AsSecureString` を使わない。** 入力が画面に出ないため、
+     貼り付けが効かないまま Enter される事故が起きる
+     （実測: `len=0` ＝ 空文字列の SHA-256 が出た）。
+     さらに `Read-Host -AsSecureString "<値>"` と書くと、第1引数は `-Prompt` なので
+     **その値はプロンプト文字列として画面に表示されるだけ**で、`$p` には入らない
+   - **`fp` を定義する前に鍵をコピーしない。** 関数定義の1行をコピーして貼った時点で、
+     クリップボードの中身が**鍵からコマンド文字列に上書きされる**
+     （実測: `len=281` / `prefix=$p` / `tail=le p` ＝ コマンド自身のハッシュが出た）。
+     **定義 → 鍵をコピー → `fp` と打つ**、の順を崩さないこと
+   - **`Get-Clipboard` にしたのは、鍵が PowerShell の履歴にもコマンドラインにも
+     現れないため。** `fp` としか打たないので、履歴に残るのは `fp` の3文字だけである
+
+   > **鍵の値そのものをチャットやチケットに貼らないこと。**
+   > 貼った時点で漏洩として扱い、ローテーションが要る（`docs/incident.md`）。
+   > 突き合わせに必要なのは `len` / `tail` / `prefix` / `sha256` の4つだけで、
+   > 鍵そのものは要らない。
 
 4. `key_len` / `key_tail` / `key_sha256` の3つがすべて一致すれば合格。
    **`sha256` が一致していれば同じ値である。** `len` と `tail` は、

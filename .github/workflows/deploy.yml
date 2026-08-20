@@ -170,3 +170,9 @@ jobs:
       - name: Deploy onetap-calendar
         if: ${{ !cancelled() }}
         run: supabase functions deploy onetap-calendar --project-ref "$SUPABASE_PROJECT_REF"
+
+      # 保持期間を過ぎたイベントを消す定期処理（プライバシーポリシー §6）。
+      # cron 登録は A-2（本スライスの後）。それまでは Actions の invoke-function から手動で回す
+      - name: Deploy retention-purge
+        if: ${{ !cancelled() }}
+        run: supabase functions deploy retention-purge --project-ref "$SUPABASE_PROJECT_REF"

@@ -160,6 +160,11 @@ jobs:
             [ "$n" = "_shared" ] && continue
             fns+=("$n")
           done
+          # 【一時・陰性コントロール1】存在しない Function を1本足す。
+          # 503 リトライが上限に達して ::error:: を出し、integration が赤で終わることを
+          # CI 上で実測するための一時変更。ログ回収後に revert する。
+          fns+=("__probe_negative__")
+
           if [ "${#fns[@]}" -eq 0 ]; then
             echo "::error::supabase/functions/ に Function が1本も無い。列挙の仕方が壊れている"
             exit 1

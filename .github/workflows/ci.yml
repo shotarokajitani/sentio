@@ -166,28 +166,13 @@ jobs:
           fi
           echo "対象 ${#fns[@]}本: ${fns[*]}"
 
-          # 【一時・陰性コントロール1-b】ログ回収後に revert する。恒久的な変更ではない。
-          # 陰性コントロール1（存在しない Function 名）では Edge Runtime が 404 を返し、
-          # リトライ経路に一度も入らなかった（run 32590888865 で実測）。
-          # 実 HTTP で 503 を作るため、503 を返し続ける偽サーバを立てて向き先を変える。
-          # MAX_ATTEMPTS / SLEEP_SEC / BUDGET_SEC は変更しない。
-          python3 -c "$(printf '%s\n' \
-            'import http.server as s' \
-            'class H(s.BaseHTTPRequestHandler):' \
-            ' def do_OPTIONS(self): self.send_response(503); self.end_headers()' \
-            ' def log_message(self, *a): pass' \
-            's.HTTPServer(("127.0.0.1", 8599), H).serve_forever()')" >/dev/null 2>&1 &
-          NEG_SRV_PID=$!
-          # バックグラウンドのサーバがステップの stdout を掴んだままだと
-          # スクリプト終了後もランナーが EOF を待って固まる（ローカルで実測）。
-          # fd を切り離したうえで、終了時に必ず落とす
-          trap 'kill $NEG_SRV_PID 2>/dev/null || true' EXIT
-          for _ in $(seq 1 20); do
-            curl -s -o /dev/null -X OPTIONS http://127.0.0.1:8599 && break
-            sleep 0.5
-          done
-          SUPABASE_URL="http://127.0.0.1:8599"
-          echo "【陰性コントロール1-b】向き先を $SUPABASE_URL に変えた（常に 503 を返す偽サーバ）"
+          # 【一時・陰性コントロール2】ログ回収後に revert する。恒久的な変更ではない。
+          # 待ち受けていないポートへ向け、curl 失敗で code=000 と判定されて
+          # その場で exit 1 することを CI 上で実測する。
+          # これは `$(curl ... || echo "000")` が `000000` になり到達不能の判定が
+          # 一度も成立しなかったバグ（d73ffe1 で修正済み）の、CI 上での証明にあたる。
+          SUPABASE_URL="http://127.0.0.1:1"
+          echo "【陰性コントロール2】向き先を $SUPABASE_URL に変えた（待ち受けなし）"
 
           MAX_ATTEMPTS=30   # 1本あたりの試行上限
           SLEEP_SEC=2       # 503 を踏んだときの待ち

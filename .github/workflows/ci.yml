@@ -259,6 +259,37 @@ jobs:
             grep -E '(↓|skipped)' "/tmp/it-$i.log" || echo "skip 0件"
           done
 
+      # 503 の機序を実物で見るための材料回収（2026-08-23 の再オープン・手順1）。
+      # 実測記録 `docs/reports/2026-08-21_CI_503フレークの実測.md` の「再オープン」を参照。
+      # **仮説を変える前に、503 のとき Edge Runtime で何が起きているかを見る。**
+      # 緑のときも回収する。赤との差を取れないと「赤のときだけ出ている行」が判別できない。
+      # `supabase stop` より前に置くこと。停めた後ではコンテナが消えている。
+      - name: Dump Edge Runtime container logs
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          # コンテナ名を書き写さない。project_id 未設定だとディレクトリ名から作られるため、
+          # 名前を固定で書くと環境が変わった瞬間に黙って何も取れなくなる
+          name=$(docker ps -a --filter "name=edge_runtime" --format '{{.Names}}' | head -1)
+          if [ -z "$name" ]; then
+            echo "::warning::Edge Runtime のコンテナが見つからない。全コンテナを出す"
+            docker ps -a --format '{{.Names}}  {{.Status}}'
+            exit 0
+          fi
+
+          echo "===== コンテナ: $name ====="
+          docker inspect "$name" --format 'Status={{.State.Status}} OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}}'
+
+          echo "===== ホストのメモリ／ロード ====="
+          free -m || true
+          uptime || true
+
+          echo "===== 全コンテナの状態 ====="
+          docker ps -a --format '{{.Names}}  {{.Status}}'
+
+          echo "===== docker logs $name（末尾3000行）====="
+          docker logs --tail 3000 "$name" 2>&1 || true
+
       - name: Stop local Supabase
         if: ${{ always() }}
         run: supabase stop

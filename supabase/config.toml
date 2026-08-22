@@ -193,5 +193,5 @@ enabled = true
 # Configure one of the two available modes: `oneshot`, `per_worker`.
 # `oneshot` starts a new runtime for each request.
 # `per_worker` reuses the runtime across requests.
-policy = "oneshot"
+policy = "per_worker"
 inspector_port = 8083

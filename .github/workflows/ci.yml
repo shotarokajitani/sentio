@@ -244,7 +244,7 @@ jobs:
           set -euo pipefail
           for i in 1 2 3; do
             echo "===== integration run $i/3 — 接続先 $SUPABASE_URL ====="
-            pnpm exec vitest run tests/integration/ --reporter=verbose --no-file-parallelism 2>&1 | tee "/tmp/it-$i.log"
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tee "/tmp/it-$i.log"
           done
 
       # 「env が無いから skip で緑」を作らないための可視化（契約 S-5-5）。

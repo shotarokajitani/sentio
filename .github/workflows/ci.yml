@@ -124,24 +124,118 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm run check:schema
 
-      # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する。
+      # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する（契約 S-5-2）。
       # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
-      # 「動いているはず」で進めずここで実測する（契約 S-5-2）。
-      - name: Probe Edge Runtime reachability
+      # 「動いているはず」で進めずここで実測する。
+      #
+      # **scan 1本ではなく全 Function を叩く**（2026-08-21 の 503 フレーク対処・案B）。
+      # 実測は `docs/reports/2026-08-21_CI_503フレークの実測.md`。
+      # 落ちるテストが試行ごとに移動し、観測値は毎回 503 だった。scan 1本のプローブは
+      # 通っていたので、「Edge Runtime に到達できるか」は見えていたが
+      # 「個々の Function が応答できる状態か」は見えていなかった。
+      #
+      # `supabase/config.toml` は `[edge_runtime] policy = "oneshot"` なので、
+      # ワーカー自体はリクエストごとに作り直される。**ここで温めているのはワーカーではなく、
+      # コンテナ内の Deno モジュールキャッシュである**（各 Function の依存グラフの初回解決）。
+      # これが 503 の機序だという確証は無い（実測できるのは CI の色だけ）。
+      # 効いていなければ同じ 503 が再発するので、その時点で案を組み直す。
+      #
+      # プローブは POST ではなく **OPTIONS** を投げる。18本すべてが CORS 分岐を
+      # ハンドラ先頭に持ち（`req.method === "OPTIONS"` → 200 "ok"）、
+      # 認証にもDBにも触れずに戻る。POST だと service_role として本物の処理が走り、
+      # この後の integration テストが見るDBの状態を、プローブが先に動かしてしまう。
+      # Authorization は付ける。ゲートウェイの verify_jwt を通してユーザーワーカーまで届かせるため。
+      - name: Probe Edge Runtime reachability (全 Function)
         if: ${{ !cancelled() }}
         run: |
           set -uo pipefail
-          code=$(curl -s -o /tmp/probe.txt -w '%{http_code}' -X POST \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"company_id":"00000000-0000-0000-0000-000000000000"}' \
-            "$SUPABASE_URL/functions/v1/scan" || echo "000")
-          echo "scan への実HTTP: status=$code"
-          echo "応答本文:"; cat /tmp/probe.txt || true
-          if [ "$code" = "000" ]; then
-            echo "::error::Edge Runtime に到達できない。supabase start が functions を配信していない"
+
+          # **本数を人が書き写さない。** 実物のディレクトリを数える
+          # （`_shared` は Function ではなく共有モジュールなので除く）。
+          # 番号や本数をワークフローに書くと必ずずれる（Apply all migrations と同じ理由）。
+          fns=()
+          for d in supabase/functions/*/; do
+            [ -d "$d" ] || continue
+            n=$(basename "$d")
+            [ "$n" = "_shared" ] && continue
+            fns+=("$n")
+          done
+          if [ "${#fns[@]}" -eq 0 ]; then
+            echo "::error::supabase/functions/ に Function が1本も無い。列挙の仕方が壊れている"
             exit 1
           fi
+          echo "対象 ${#fns[@]}本: ${fns[*]}"
+
+          MAX_ATTEMPTS=30   # 1本あたりの試行上限
+          SLEEP_SEC=2       # 503 を踏んだときの待ち
+          BUDGET_SEC=420    # 全体の総待ち時間の上限
+
+          start=$SECONDS
+          waited=0          # 起動待ちが発生した Function の本数
+          retries=0         # 503 を踏んだ総回数
+
+          for fn in "${fns[@]}"; do
+            attempt=0
+            fn_start=$SECONDS
+            while :; do
+              attempt=$((attempt + 1))
+              # 前の試行の本文を持ち越さない。curl が接続に失敗した回は -o を書かないため、
+              # 消しておかないと無関係な応答本文をエラーに添えてしまう
+              : > /tmp/probe.txt
+              # **`$(curl ... || echo "000")` と書かない。** curl は失敗時にも
+              # `%{http_code}` として `000` を出すので `||` の分と連結して `000000` になり、
+              # 到達不能の判定が一度も成立しない（2026-08-23 に実測。従来のプローブも同じ形だった）。
+              # 終了ステータスは代入とは別に見る
+              if ! code=$(curl -s -o /tmp/probe.txt -w '%{http_code}' -X OPTIONS \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$SUPABASE_URL/functions/v1/$fn"); then
+                code="000"
+              fi
+
+              # 到達不能は起動待ちではない。待っても直らないので即落とす
+              if [ "$code" = "000" ]; then
+                echo "::error::$fn: Edge Runtime に到達できない（curl 失敗）。supabase start が functions を配信していない"
+                exit 1
+              fi
+
+              if [ "$code" = "200" ]; then
+                el=$((SECONDS - fn_start))
+                if [ "$attempt" -gt 1 ]; then
+                  waited=$((waited + 1))
+                  echo "$fn: 200（起動待ちあり — ${attempt}回目 / ${el}秒）"
+                else
+                  echo "$fn: 200（${el}秒）"
+                fi
+                break
+              fi
+
+              # 200 でも 503 でもない応答は「起動待ち」では説明できない。
+              # 握りつぶすとプローブが何も温めていないのに緑になるので、ここで落とす
+              if [ "$code" != "503" ]; then
+                echo "::error::$fn: OPTIONS に $code を返した。起動待ち（503）でも到達不能（000）でもない"
+                echo "応答本文:"; cat /tmp/probe.txt || true
+                exit 1
+              fi
+
+              retries=$((retries + 1))
+
+              # **上限を超えたら必ず赤にする。** 503 を待ち続けて緑にしない
+              if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+                echo "::error::$fn: 503 が ${MAX_ATTEMPTS}回続いた（${SLEEP_SEC}秒間隔 / $((SECONDS - fn_start))秒）。起動待ちの上限を超えた"
+                echo "応答本文:"; cat /tmp/probe.txt || true
+                exit 1
+              fi
+              if [ "$((SECONDS - start))" -ge "$BUDGET_SEC" ]; then
+                echo "::error::全 Function の起動待ちが合計 ${BUDGET_SEC}秒を超えた（$fn の ${attempt}回目で打ち切り）"
+                echo "応答本文:"; cat /tmp/probe.txt || true
+                exit 1
+              fi
+              sleep "$SLEEP_SEC"
+            done
+          done
+
+          # 「起動待ちがあった事実」を残す。0本でも「0本だった」と言わせる
+          echo "起動完了: ${#fns[@]}本 / $((SECONDS - start))秒 / 起動待ちが発生した Function ${waited}本 / 503 を踏んだ総回数 ${retries}回"
 
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times

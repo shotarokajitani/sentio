@@ -294,6 +294,50 @@ jobs:
           # 「起動待ちがあった事実」を残す。0本でも「0本だった」と言わせる
           echo "起動完了: ${#fns[@]}本 / $((SECONDS - start))秒 / 起動待ちが発生した Function ${waited}本 / 503 を踏んだ総回数 ${retries}回"
 
+      # CI 専用の Function も温める（契約 S-3-1）。
+      #
+      # **本数の表示は上のステップのまま 18本で据え置く。** ここはデプロイ対象ではない
+      # ものを別枠で温めるステップであり、上の突合（プローブ対象 == deploy 対象）を
+      # 崩さないために分けてある。
+      #
+      # 分けずに温めずにいたら実際に事故った（run 32658483054・2026-08-23）。
+      # `investigate-stub` だけが未ウォームのまま `run-sense` の経路に入り、
+      # その時刻のコンテナログに
+      # `error in user worker connection: user body write aborted` が1行出て、
+      # 並行していた `deliver-alert` の anon リクエストが5秒タイムアウトした。
+      # **因果は確定していない**（観測できたのは時刻の一致と1行のログだけ）が、
+      # 上のプローブが「コンテナ内の Deno モジュールキャッシュを温める」ために
+      # 存在する以上、経路に入る Function を1本だけ温めない形は筋が通らない。
+      - name: Warm up CI-only functions
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          ci_only=("investigate-stub")
+          for fn in "${ci_only[@]}"; do
+            if [ ! -f "supabase/functions/$fn/index.ts" ]; then
+              echo "::error::$fn が supabase/functions に無い。ウォームアップの対象名がずれている"
+              exit 1
+            fi
+            attempt=0
+            while :; do
+              attempt=$((attempt + 1))
+              if ! code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$SUPABASE_URL/functions/v1/$fn"); then
+                code="000"
+              fi
+              if [ "$code" = "200" ]; then
+                echo "$fn: 200（${attempt}回目・CI 専用のため上の18本には数えない）"
+                break
+              fi
+              if [ "$attempt" -ge 30 ]; then
+                echo "::error::$fn: ウォームアップに失敗（最後の応答 $code）"
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times
         if: ${{ !cancelled() }}

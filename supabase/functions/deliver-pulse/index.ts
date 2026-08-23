@@ -15,6 +15,7 @@ import {
   deliverOnce,
   deliveryKey,
   isInvalidPeriodError,
+  resolveDeliveryIntent,
   resolvePulsePeriod,
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
@@ -35,7 +36,7 @@ Deno.serve(async (req: Request) => {
   if (!caller.ok) return caller.response;
 
   try {
-    const { company_id, email, target_date } = await req.json();
+    const { company_id, email, target_date, intent: requestedIntent } = await req.json();
 
     const scope = resolveCompanyId(caller.caller, company_id);
     if (!scope.ok) return scope.response;
@@ -60,9 +61,16 @@ Deno.serve(async (req: Request) => {
       throw e;
     }
 
-    // 送信設定は**予約より前**に見る。送るつもりが無いのに予約行を作らない（E+3 / E+5）
-    const mail = resolveMailConfig();
-    if (!mail.ok) {
+    // 送信を止める意思（defer）は **internal からしか受けない**（契約 S-3-1）。
+    // user 経路から通すと「予約行だけ作って送らない」＝送ったつもりの記録を
+    // 外部から自由に作れてしまう。判定は resolveCompanyId と同じ原則
+    const intent = resolveDeliveryIntent(caller.caller, requestedIntent);
+
+    // 送信設定は**予約より前**に見る。送るつもりが無いのに予約行を作らない（E+3 / E+5）。
+    // 繰り延べ（defer）は送らないので設定を要求しない
+    // （deliver-alert の静音時間と同じ扱い。あちらも mail 設定より前に defer を返す）
+    const mail = intent === "defer" ? null : resolveMailConfig();
+    if (mail && !mail.ok) {
       return json(500, {
         status: "error",
         reason: `${mail.missing.join(" / ")} が未設定。送信せずに停止しました`,
@@ -117,14 +125,19 @@ Deno.serve(async (req: Request) => {
         idempotencyKey: deliveryKey({ kind: "pulse", companyId, period }),
         content: { lines, period },
         now,
+        intent,
       },
-      () =>
-        sendEmail(mail.config, {
+      () => {
+        // deliverOnce は intent === "defer" のとき送信関数を呼ばない。
+        // 呼ばれたら配線が壊れているので、黙って送らずに落とす
+        if (!mail || !mail.ok) throw new Error("繰り延べ経路では送信しない");
+        return sendEmail(mail.config, {
           to: email,
           subject: "[Sentio] デイリーパルス",
           html: renderPulseHtml(lines),
           text: renderPulseText(lines),
-        }),
+        });
+      },
     );
 
     return deliveryResponse(result, { company_id: companyId, period, pulse: lines });

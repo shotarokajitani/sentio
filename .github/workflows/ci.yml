@@ -73,6 +73,42 @@ jobs:
         with:
           version: 2.113.0
 
+      # LLM の鍵が CI に載っていないことを機械で固定する（契約 S-3-1）。
+      # Resend の同型ガード（このファイル冒頭・契約 S-2-10）と同じ形。
+      # 置き場所が integration なのは、**run-sense が実際に走るのがこのジョブだから**である。
+      # 鍵が載ると investigate が本物の LLM を呼び、CI に課金と非決定性が乗る。
+      - name: "ANTHROPIC_API_KEY が CI 環境に載っていないことを確かめる"
+        run: |
+          set -uo pipefail
+          v=$(printenv ANTHROPIC_API_KEY || true)
+          if [ -n "$v" ]; then
+            echo "::error::ANTHROPIC_API_KEY が CI 環境に載っている。investigate が実LLMを呼びうる"
+            exit 1
+          fi
+          echo "ANTHROPIC_API_KEY: 未設定"
+
+      # run-sense の Investigator 宛先を、CI に限ってスタブへ向ける（契約 S-3-1）。
+      #
+      # **committed な config.toml は書き換えない。** ここで追記する形にしているのは、
+      # リポジトリ側に既定として置くと「ローカルでも本番でもスタブに落ちる」= fail-open に
+      # なるためである（`resolveInvestigateFunction` は env 未設定なら investigate に倒れる）。
+      # この追記は CI のワークスペース内だけで、コミットされない。
+      #
+      # 差し替えるのは **Function 名だけ**なので、宛先は必ず自分自身の Function になる。
+      # base URL は run-sense が scan を呼ぶのに使っている SUPABASE_URL をそのまま使う
+      # （コンテナ内から見えるホスト名を言い当てる必要が無い）。
+      - name: Point run-sense at the Investigator stub (CI 限定)
+        run: |
+          set -euo pipefail
+          # heredoc は使わない。YAML のインデントが本文に混ざり、
+          # 終端子も行頭に置けないため終端しない
+          printf '\n[edge_runtime.secrets]\nINVESTIGATE_FUNCTION = "investigate-stub"\n' \
+            >> supabase/config.toml
+          echo "===== 追記後の config.toml 末尾 ====="
+          tail -4 supabase/config.toml
+          # 追記が効いていることを実物で確かめる（黙って空振りしていたら止める）
+          grep -q '^INVESTIGATE_FUNCTION = "investigate-stub"$' supabase/config.toml
+
       - name: Start local Supabase
         run: supabase start
 
@@ -134,9 +170,10 @@ jobs:
       # 通っていたので、「Edge Runtime に到達できるか」は見えていたが
       # 「個々の Function が応答できる状態か」は見えていなかった。
       #
-      # `supabase/config.toml` は `[edge_runtime] policy = "oneshot"` なので、
-      # ワーカー自体はリクエストごとに作り直される。**ここで温めているのはワーカーではなく、
-      # コンテナ内の Deno モジュールキャッシュである**（各 Function の依存グラフの初回解決）。
+      # `supabase/config.toml` は 2026-08-24 に `[edge_runtime] policy = "per_worker"` へ
+      # 変えた（PR #37 / 実測は `docs/reports/2026-08-21_CI_503フレークの実測.md`）。
+      # ワーカーはリクエスト間で再利用される。**ここで温めているのはワーカーと、
+      # コンテナ内の Deno モジュールキャッシュの両方である**（各 Function の依存グラフの初回解決）。
       # これが 503 の機序だという確証は無い（実測できるのは CI の色だけ）。
       # 効いていなければ同じ 503 が再発するので、その時点で案を組み直す。
       #
@@ -153,13 +190,33 @@ jobs:
           # **本数を人が書き写さない。** 実物のディレクトリを数える
           # （`_shared` は Function ではなく共有モジュールなので除く）。
           # 番号や本数をワークフローに書くと必ずずれる（Apply all migrations と同じ理由）。
+          # `_shared` は Function ではなく共有モジュール。
+          # `investigate-stub` は CI 専用のスタブで、deploy.yml のデプロイ対象に入っていない
+          # （契約 S-3-1）。本番に出ない以上、本番相当の起動確認の対象でもない。
+          # 除外は名前で明示する。ここを数で書くと必ずずれる
+          not_functions=("_shared" "investigate-stub")
           fns=()
           for d in supabase/functions/*/; do
             [ -d "$d" ] || continue
             n=$(basename "$d")
-            [ "$n" = "_shared" ] && continue
+            skip=0
+            for x in "${not_functions[@]}"; do
+              [ "$n" = "$x" ] && skip=1
+            done
+            [ "$skip" = "1" ] && continue
             fns+=("$n")
           done
+
+          # 除外がデプロイ対象を削っていないことを機械で確かめる。
+          # プローブ対象と deploy.yml のデプロイ対象は一致していなければならない
+          deployed=$(grep -oE 'supabase functions deploy [A-Za-z0-9_-]+' \
+            .github/workflows/deploy.yml | awk '{print $4}' | sort -u)
+          probed=$(printf '%s\n' "${fns[@]}" | sort -u)
+          if [ "$deployed" != "$probed" ]; then
+            echo "::error::プローブ対象と deploy.yml のデプロイ対象がずれている"
+            diff <(echo "$deployed") <(echo "$probed") || true
+            exit 1
+          fi
           if [ "${#fns[@]}" -eq 0 ]; then
             echo "::error::supabase/functions/ に Function が1本も無い。列挙の仕方が壊れている"
             exit 1
@@ -236,6 +293,50 @@ jobs:
 
           # 「起動待ちがあった事実」を残す。0本でも「0本だった」と言わせる
           echo "起動完了: ${#fns[@]}本 / $((SECONDS - start))秒 / 起動待ちが発生した Function ${waited}本 / 503 を踏んだ総回数 ${retries}回"
+
+      # CI 専用の Function も温める（契約 S-3-1）。
+      #
+      # **本数の表示は上のステップのまま 18本で据え置く。** ここはデプロイ対象ではない
+      # ものを別枠で温めるステップであり、上の突合（プローブ対象 == deploy 対象）を
+      # 崩さないために分けてある。
+      #
+      # 分けずに温めずにいたら実際に事故った（run 32658483054・2026-08-23）。
+      # `investigate-stub` だけが未ウォームのまま `run-sense` の経路に入り、
+      # その時刻のコンテナログに
+      # `error in user worker connection: user body write aborted` が1行出て、
+      # 並行していた `deliver-alert` の anon リクエストが5秒タイムアウトした。
+      # **因果は確定していない**（観測できたのは時刻の一致と1行のログだけ）が、
+      # 上のプローブが「コンテナ内の Deno モジュールキャッシュを温める」ために
+      # 存在する以上、経路に入る Function を1本だけ温めない形は筋が通らない。
+      - name: Warm up CI-only functions
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          ci_only=("investigate-stub")
+          for fn in "${ci_only[@]}"; do
+            if [ ! -f "supabase/functions/$fn/index.ts" ]; then
+              echo "::error::$fn が supabase/functions に無い。ウォームアップの対象名がずれている"
+              exit 1
+            fi
+            attempt=0
+            while :; do
+              attempt=$((attempt + 1))
+              if ! code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$SUPABASE_URL/functions/v1/$fn"); then
+                code="000"
+              fi
+              if [ "$code" = "200" ]; then
+                echo "$fn: 200（${attempt}回目・CI 専用のため上の18本には数えない）"
+                break
+              fi
+              if [ "$attempt" -ge 30 ]; then
+                echo "::error::$fn: ウォームアップに失敗（最後の応答 $code）"
+                exit 1
+              fi
+              sleep 2
+            done
+          done
 
       # 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
       - name: Run integration suite 3 times

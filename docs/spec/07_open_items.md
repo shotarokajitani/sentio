@@ -555,3 +555,41 @@ S-2-9 で `resolveCaller` を17本すべてに入れたことで、
 **この判断は Google への再提出より前に要る。** 再提出時点で本番に出ている
 `/privacy` が約束の正本になるため、守れない記述のまま出すと、後から実態を合わせる
 義務だけが残る（`docs/runbooks/2026-08-20_google-oauth-verification.md` の解除条件2）。
+
+## `state-narratives` の呼び出し元をどこに置くか（2026-08-24 登録・**いま決めない**）
+
+契約 `slice-state-repair.md` の **S-3-4** で構成は確定した。
+夜間の記銘経路は `state-baselines` と `state-summary` の**2本**であり、
+`state-narratives` は**イベント駆動の単発API**で夜間 cron には載せない
+（契約 P-2 / `supabase/functions/state-narratives/index.ts:3-7`）。
+仕様 `02_state.md` の記銘3経路との整合は
+`docs/reports/2026-08-24_S-3-4_記銘経路の整理.md` に示した。
+
+**残っているのは「(b) narratives upsert を誰が呼ぶか」だけである。**
+
+**現状（2026-08-24 実測）:**
+
+```
+$ grep -rn '"dialogue"' supabase/functions/ src/ --include="*.ts" | grep -v test
+（0件）
+$ grep -rn "state-narratives" supabase/functions/ src/ --include="*.ts"
+（state-narratives/index.ts の自己言及のみ。本番コードからの呼び出しは0件）
+```
+
+**いま決めない理由:**
+
+- 発生源である「Sentioに聞く」が未実装で、契約 `docs/contracts/slice-ask.md` 自体が保留中である
+- **呼び出し元だけ先に作ると、誰も呼ばないコードが1本増えるだけになる。**
+  「連携解除の2経路」で顕在化した disconnect API と同じ形（実装はあるが経路が繋がっていない）を
+  もう1つ作ることになる
+- 記銘専用の Function を立てる案は**デプロイ対象を19本目にする**。
+  CI のプローブ対象と `deploy.yml` の突合（S-3 で追加）の期待値も変わる。
+  いま19本目を作る理由が無い
+
+**決め方:** `slice-ask` の契約で、発生源の設計と**一緒に**決める。
+そのとき候補になるのは次の2つ。`run-sense` の中に混ぜる案は契約 P-2 が既に排除している。
+
+1. **ingest 経路から呼ぶ** — `event_type: "dialogue"` を受けた時点で呼ぶ。
+   契約 S-3-4 の文言に忠実だが、ingest（取り込み層）が State 層を呼ぶ向きの依存が新しく生まれる
+2. **記銘専用の呼び出し元を1本立てる** — ingest はイベントを流すだけにし、
+   「何を記銘するか」の判断をそこに閉じる。依存の向きは綺麗だが Function が1本増える

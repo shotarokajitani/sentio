@@ -57,6 +57,13 @@
       `00023` は実行時に `server_version_num` を見て 15 未満なら**理由を書いて停止**する
       （素の `CREATE INDEX` だとパース時に落ちてメッセージが読めないため動的SQLにしてある）。
 
+- [ ] **Edge Runtime の policy**: ローカル・CI とも `supabase/config.toml` の
+      `[edge_runtime] policy` は **`per_worker`**（2026-08-24 に `oneshot` から変更。
+      経緯は `docs/reports/2026-08-21_CI_503フレークの実測.md`）。
+      ワーカーを使い回すため **Function のモジュールスコープの状態がリクエスト間で残る**。
+      ホスト版は `oneshot` ではないので本番も同じ側に倒れる。`oneshot` に戻すと
+      その型の不具合を CI が構造的に隠すようになる
+
 - [ ] **Extensions**: 本番プロジェクトで必要拡張が有効か（ローカル supabase start の
       自動有効化に騙されない）
 - [ ] **env / Secrets**: Vercel env と Supabase Function Secrets の両方に、最新値が

@@ -7,6 +7,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
+import { resolveInvestigateUrl } from "../_shared/investigate-url.ts";
 
 interface ScanCandidate {
   scanType: string;
@@ -126,7 +127,9 @@ Deno.serve(async (req: Request) => {
     };
 
     if (scanResult.candidates.length > 0) {
-      const investigateRes = await fetch(`${supabaseUrl}/functions/v1/investigate`, {
+      // 宛先だけ env で差し替え可能にする（契約 S-3-1）。
+      // 未設定なら self URL に倒れるので、本番の既定挙動は変わらない
+      const investigateRes = await fetch(resolveInvestigateUrl(undefined, supabaseUrl), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

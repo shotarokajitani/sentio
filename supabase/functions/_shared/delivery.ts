@@ -412,3 +412,21 @@ async function reserve(
 
   return { proceed: true, id: existing.id, attempts };
 }
+
+/**
+ * 送信を止める意思（`defer`）を**誰から受け付けるか**を決める（契約 S-3-1）。
+ *
+ * `resolveCompanyId` と同じ原則で、**ボディを信じるのは `internal` のときだけ**。
+ * user 経路から `defer` を通すと、外部の呼び出し元が
+ * 「予約行だけ作って送らない」＝**送ったつもりの記録**を自由に作れてしまう。
+ *
+ * 既定は `send` のままで、本番の挙動は変えない。
+ * 未知の値は `defer` に化けさせず `send` に倒す（緩い側へ倒さない）。
+ */
+export function resolveDeliveryIntent(
+  caller: { kind: "internal" | "user" },
+  requested: string | undefined,
+): "send" | "defer" {
+  if (caller.kind !== "internal") return "send";
+  return requested === "defer" ? "defer" : "send";
+}

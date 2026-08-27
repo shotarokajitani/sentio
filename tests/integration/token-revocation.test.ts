@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveRlsRunMode } from "../helpers/rls-run-mode";
-import { refreshToken } from "@edge/_shared/token-refresh";
+import { refreshToken, PROVIDER_CONFIG } from "@edge/_shared/token-refresh";
 import { upsertVaultToken, GOOGLE_CALENDAR_PROVIDER } from "../../src/security/vault-token";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
@@ -63,7 +63,10 @@ if (mode === "run") {
     const getEnv = (key: string): string | undefined =>
       ({ GOOGLE_CLIENT_ID: "cid", GOOGLE_CLIENT_SECRET: "csec" })[key];
 
-    let originalFetch: typeof globalThis.fetch;
+    // 差し替える前の本物。describe の評価時に1度だけ捕まえる。
+    // beforeEach で捕まえると、前のテストの差し替えが残っていた場合にそれを
+    // 「本物」として抱え込み、以後ずっと戻せなくなる
+    const REAL_FETCH = globalThis.fetch;
 
     /** 連携を「生きている」状態に戻す。Vault の秘密も作り直す */
     async function connect(): Promise<{ connectionId: string; vaultId: string }> {
@@ -101,15 +104,47 @@ if (mode === "run") {
       return data;
     }
 
-    /** トークンエンドポイントの応答を差し替える */
+    /**
+     * トークンエンドポイントの応答**だけ**を差し替える。
+     *
+     * **`globalThis.fetch` を丸ごと置き換えてはいけない。**
+     * `@supabase/supabase-js` は PostgREST も RPC も `globalThis.fetch` で叩くので、
+     * 無条件に差し替えると `read_vault_secret` や `connections` の読み書きまで
+     * 偽のトークン応答を受け取る。
+     *
+     * 2026-08-27 の CI（run 33045925885 / job 98429827497）で実際にそうなった。
+     * `refreshToken` の最初のDB呼び出しが「vault read failed」になり、
+     * 返ってきた物が PostgREST の応答形ではないので `error.message` が `undefined` になり、
+     * 続く `readConnection()` も同じ理由で落ちた。5xx のケースは応答が `headers` を
+     * 持たないため postgrest-js が返らず 5秒で打ち切られた。
+     * **症状はテスト側の細工であって、実装の不具合ではない。**
+     * 同 run の Edge Runtime は `Status=running` / `OOMKilled=false` / `RestartCount=0` で健全だった。
+     *
+     * 宛先で振り分け、OAuth のトークンエンドポイント以外は本物の `fetch` に通す。
+     * 応答も手作りのオブジェクトではなく本物の `Response` を返し、
+     * 「こちらが用意した形」に依存する余地を残さない。
+     *
+     * 宛先の正本は `PROVIDER_CONFIG`。ここに URL を書き写すと、実装が宛先を変えた日に
+     * このテストだけが古い URL を見張り続ける。
+     */
+    const TOKEN_URL = PROVIDER_CONFIG[GOOGLE_CALENDAR_PROVIDER].tokenUrl;
+    let tokenEndpointCalls = 0;
+
     function stubTokenEndpoint(status: number, body: string) {
-      globalThis.fetch = (async () =>
-        ({
-          ok: status >= 200 && status < 300,
-          status,
-          text: async () => body,
-          json: async () => JSON.parse(body),
-        }) as Response) as typeof globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+        if (url.startsWith(TOKEN_URL)) {
+          tokenEndpointCalls += 1;
+          return new Response(body, {
+            status,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return REAL_FETCH(input, init);
+      }) as typeof globalThis.fetch;
     }
 
     beforeAll(() => {
@@ -117,11 +152,11 @@ if (mode === "run") {
     });
 
     beforeEach(() => {
-      originalFetch = globalThis.fetch;
+      tokenEndpointCalls = 0;
     });
 
     afterEach(() => {
-      globalThis.fetch = originalFetch;
+      globalThis.fetch = REAL_FETCH;
     });
 
     afterAll(async () => {
@@ -152,6 +187,8 @@ if (mode === "run") {
       );
 
       expect(result.ok).toBe(false);
+      // 差し替えが宛先に当たっていること。当たっていなければ本物の Google を叩いている
+      expect(tokenEndpointCalls).toBe(1);
 
       const row = await readConnection();
       expect(row.status).toBe("reauth_required");
@@ -182,6 +219,7 @@ if (mode === "run") {
       );
 
       expect(result.ok).toBe(false);
+      expect(tokenEndpointCalls).toBe(1);
 
       const row = await readConnection();
       expect(row.status).toBe("revoked");
@@ -209,6 +247,7 @@ if (mode === "run") {
         admin,
         getEnv,
       );
+      expect(tokenEndpointCalls).toBe(1);
       expect((await readConnection()).revoked_at).not.toBeNull();
 
       // 再連携（OAuth コールバックと同じ upsert）

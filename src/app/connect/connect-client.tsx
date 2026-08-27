@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Masthead } from "@/components/Masthead";
 import { t } from "@/i18n";
 import type { ConnectionOverview, ConnectionRow } from "@/lib/connections/overview";
+import { requestDisconnect, type DisconnectOutcome } from "@/lib/connections/disconnect";
 
 interface ColumnMapping {
   date: string;
@@ -20,13 +21,29 @@ type CsvStep = "idle" | "analyzing" | "confirm" | "ingesting" | "done" | "error"
 // 読み込みの結果は3状態ある。0件（空）と失敗を同じ見た目にしない（運用ルール§6）
 type LoadState = "loading" | "loaded" | "failed";
 
+// 解除の進み方。confirming で二段確認を出し、通ったときだけ submitting に入る。
+// blocked（409）と failed を done と別に持つのは、**「消えた」と表示してよいのが
+// done だけ**だからである（受入基準 D-1-5）
+type DisconnectStep = "confirming" | "submitting" | "done" | "blocked" | "failed";
+
+interface DisconnectSession {
+  provider: string;
+  step: DisconnectStep;
+  typed: string;
+  outcome: DisconnectOutcome | null;
+}
+
 export function ConnectClient({
   failureMessage,
   initialOverview,
+  accountEmail,
 }: {
   failureMessage: string | null;
   // null はサーバ側で読み取りに失敗したことを表す。0件（空）とは別物
   initialOverview: ConnectionOverview | null;
+  // 解除の二段確認の照合対象（U-2・2026-08-27 確定）。取れなければ null で、
+  // その場合は照合が必ず落ちるので解除できない（fail-closed）
+  accountEmail: string | null;
 }) {
   const [connections, setConnections] = useState<ConnectionRow[]>(
     initialOverview?.connections ?? [],
@@ -61,6 +78,39 @@ export function ConnectClient({
       setLoad("failed");
     }
   }, []);
+
+  // 解除は一度に1つの連携だけ。開いている行を1つの状態で持つ
+  const [disconnect, setDisconnect] = useState<DisconnectSession | null>(null);
+
+  const submitDisconnect = useCallback(
+    async (provider: string, typed: string) => {
+      setDisconnect({ provider, step: "submitting", typed, outcome: null });
+
+      // 照合はこの関数の中で行われる。**通らなければ API は呼ばれない**（受入基準 D-1-2）
+      const outcome = await requestDisconnect({ provider, typed, accountEmail });
+
+      if (outcome.ok) {
+        setDisconnect({ provider, step: "done", typed, outcome });
+        // 行と件数を実際の状態から取り直す。画面の思い込みで消さない
+        await fetchConnections();
+        return;
+      }
+
+      // 一致しなかっただけ。入力欄を残したまま確認画面に戻す
+      if (outcome.reason === "confirmation_mismatch") {
+        setDisconnect({ provider, step: "confirming", typed, outcome });
+        return;
+      }
+
+      setDisconnect({
+        provider,
+        step: outcome.reason === "deletion_blocked" ? "blocked" : "failed",
+        typed,
+        outcome,
+      });
+    },
+    [accountEmail, fetchConnections],
+  );
 
   const getConnection = (provider: string) => connections.find((c) => c.provider === provider);
 
@@ -209,6 +259,21 @@ export function ConnectClient({
                   ]
                 : []
             }
+            // 解除 UI は Google カレンダーだけに置く（契約の非スコープ: 他 provider の解除 UI）
+            disconnect={{
+              session: disconnect?.provider === "google_calendar" ? disconnect : null,
+              accountEmail,
+              onOpen: () =>
+                setDisconnect({
+                  provider: "google_calendar",
+                  step: "confirming",
+                  typed: "",
+                  outcome: null,
+                }),
+              onTyped: (typed) => setDisconnect((s) => (s ? { ...s, typed, outcome: null } : s)),
+              onSubmit: (typed) => void submitDisconnect("google_calendar", typed),
+              onClose: () => setDisconnect(null),
+            }}
           />
 
           <SourceRow
@@ -351,20 +416,41 @@ export function ConnectClient({
   );
 }
 
+interface DisconnectProps {
+  /** この行の解除セッション。他の行のものは渡さない */
+  session: DisconnectSession | null;
+  accountEmail: string | null;
+  onOpen: () => void;
+  onTyped: (typed: string) => void;
+  onSubmit: (typed: string) => void;
+  onClose: () => void;
+}
+
 function SourceRow({
   name,
   desc,
   connection,
   connectHref,
   meta,
+  disconnect,
 }: {
   name: string;
   desc: string;
   connection: ConnectionRow | undefined;
   connectHref: string;
   meta: string[];
+  /** 渡さない行には解除 UI が出ない（契約の非スコープ: 他 provider の解除 UI） */
+  disconnect?: DisconnectProps;
 }) {
-  const needsReauth = connection?.status === "reauth_required";
+  // U-3（2026-08-27 確定）: revoked を検知してもお客様には通知しない。
+  // 画面に既存の「要再連携」が出るだけで、Sentio 側からは何も送らない。
+  // revoked と reauth_required の区別は DB（status / revoked_at）に残る
+  const needsReauth = connection?.status === "reauth_required" || connection?.status === "revoked";
+
+  // 解除ボタンは接続行がある限り出す。status は問わない（受入基準 D-1-1）。
+  // active でも reauth_required でも revoked でも、解除したい気持ちは同じである
+  const canDisconnect = Boolean(disconnect && connection);
+  const session = disconnect?.session ?? null;
 
   return (
     <div className={needsReauth ? "row row-attention" : "row"}>
@@ -378,9 +464,18 @@ function SourceRow({
             ))}
           </div>
         )}
+
+        {canDisconnect && session && disconnect && (
+          <DisconnectPanel name={name} session={session} disconnect={disconnect} />
+        )}
       </div>
 
       <div className="row-side">
+        {canDisconnect && disconnect && !session && (
+          <button className="btn btn-quiet" onClick={disconnect.onOpen}>
+            {t.connect.disconnect}
+          </button>
+        )}
         {needsReauth ? (
           <>
             <span className="state state-attention">{t.connect.needsReauth}</span>
@@ -395,6 +490,119 @@ function SourceRow({
             {t.connect.connect}
           </a>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 解除の二段確認。**入力がアカウントのメールアドレスと一致するまで API は呼ばれない**
+ * （照合の実体は `@/lib/connections/disconnect` にあり、`fetch` の手前に置いてある）。
+ *
+ * 409（`deletion_blocked`）を `done` と別の状態で描くのは受入基準 D-1-5 のためである。
+ * 消していないのに「消えました」と出す画面は、消したのに残っている画面と同じくらい悪い。
+ */
+function DisconnectPanel({
+  name,
+  session,
+  disconnect,
+}: {
+  name: string;
+  session: DisconnectSession;
+  disconnect: DisconnectProps;
+}) {
+  const mismatch =
+    session.outcome !== null &&
+    session.outcome.ok === false &&
+    session.outcome.reason === "confirmation_mismatch";
+
+  if (session.step === "done") {
+    const deleted = session.outcome?.ok ? session.outcome.eventsDeleted : 0;
+    return (
+      <div style={{ marginTop: 16 }}>
+        <p className="row-desc">{t.connect.disconnectDone(deleted)}</p>
+        <div className="actions">
+          <button className="btn btn-quiet" onClick={disconnect.onClose}>
+            {t.connect.disconnectClose}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (session.step === "blocked") {
+    const count =
+      session.outcome && !session.outcome.ok && session.outcome.reason === "deletion_blocked"
+        ? session.outcome.count
+        : null;
+
+    return (
+      <div className="failure" style={{ marginTop: 16 }}>
+        <p className="failure-title">{t.connect.disconnectBlocked}</p>
+        {count !== null && (
+          <p className="failure-body">{t.connect.disconnectBlockedCount(count)}</p>
+        )}
+        <p className="failure-body">{t.connect.disconnectBlockedHelp}</p>
+        <div className="actions">
+          <button className="btn btn-quiet" onClick={disconnect.onClose}>
+            {t.connect.disconnectCancel}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (session.step === "failed") {
+    return (
+      <div className="failure" style={{ marginTop: 16 }}>
+        <p className="failure-title">{t.connect.disconnectFailed}</p>
+        <div className="actions">
+          <button className="btn btn-quiet" onClick={disconnect.onClose}>
+            {t.connect.disconnectCancel}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const submitting = session.step === "submitting";
+
+  return (
+    <div className="failure" style={{ marginTop: 16 }}>
+      <p className="failure-title">{t.connect.disconnectTitle(name)}</p>
+      <p className="failure-body">{t.connect.disconnectLead}</p>
+
+      {disconnect.accountEmail ? (
+        <>
+          <label>
+            <span className="section-label">{t.connect.disconnectPrompt}</span>
+            <input
+              type="email"
+              autoComplete="off"
+              value={session.typed}
+              disabled={submitting}
+              onChange={(e) => disconnect.onTyped(e.target.value)}
+              style={{ width: "100%", marginTop: 8 }}
+            />
+          </label>
+          {mismatch && <p className="failure-body">{t.connect.disconnectMismatch}</p>}
+        </>
+      ) : (
+        // 照合の正本が無い。素通しにせず、解除できないことを言う（fail-closed）
+        <p className="failure-body">{t.connect.disconnectNoEmail}</p>
+      )}
+
+      <div className="actions">
+        <button
+          className="btn"
+          disabled={submitting || !disconnect.accountEmail}
+          onClick={() => disconnect.onSubmit(session.typed)}
+        >
+          {submitting ? t.connect.disconnectWorking : t.connect.disconnectSubmit}
+        </button>
+        <button className="btn btn-quiet" disabled={submitting} onClick={disconnect.onClose}>
+          {t.connect.disconnectCancel}
+        </button>
       </div>
     </div>
   );

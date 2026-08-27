@@ -78,6 +78,19 @@ checks:
       index.ts に型検査が掛かるのはこのジョブだけ。2026-08-19 に
       typecheck / lint / unit が全部緑の状態で deno check が28件で落ちた。
 
+  - id: check-endpoint-callers
+    script: "check:endpoint-callers"
+    file: "check-endpoint-callers.ts"
+    command: "pnpm run check:endpoint-callers"
+    contract: D-4-1
+    requires: []
+    must_run_in: ["ci.verify"]
+    note: >-
+      「API はあるが、どこからも到達しない」を止める。disconnect API は実装も
+      fail-closed の門も揃っていたのに呼び出し元が無く、privacy §6 の約束と
+      実態がずれていた（スライスD の発端）。check:caller-guard は Edge Function
+      しか見ないためこの形は捕まらない。src/ の静的走査だけなので live-db は要らない。
+
   - id: check-ci-coverage
     script: "check:ci-coverage"
     file: "check-ci-coverage.ts"

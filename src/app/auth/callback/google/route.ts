@@ -103,6 +103,9 @@ export async function GET(req: NextRequest) {
       status: "active",
       last_refresh: new Date().toISOString(),
       expires_at: expiresAt,
+      // 再連携が成立した以上、取り消しの記録は残さない（受入基準 D-2-6）。
+      // 残すと30日削除（契約 D-3）が、いま繋ぎ直したばかりの連携のデータを消す
+      revoked_at: null,
     },
     { onConflict: "company_id,provider", ignoreDuplicates: false },
   );

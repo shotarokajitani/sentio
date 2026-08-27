@@ -21,6 +21,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Sear
     <ConnectClient
       failureMessage={errorMessage(Array.isArray(raw) ? raw[0] : raw)}
       initialOverview={overview}
+      // 解除の二段確認の照合対象（U-2・2026-08-27 確定）。**セッション以外から取らない**。
+      // クエリやフォームから受け取ると、照合の正本を攻撃者が指定できてしまう
+      accountEmail={ctx.email}
     />
   );
 }

@@ -36,6 +36,41 @@ export function isTokenExpired(expiresAt: string | null): boolean {
   return Date.now() + EXPIRY_BUFFER_MS >= expiryTime;
 }
 
+/**
+ * 失敗の種別。`revoked` は「お客様が連携先で取り消した」と判別できた場合だけ。
+ * それ以外はすべて `reauth_required`（再認証すれば直りうる、fail-safe 側）。
+ */
+export type TokenFailureKind = "revoked" | "reauth_required";
+
+/**
+ * トークンエンドポイントが返した失敗応答を、取り消しと一時的失敗に分ける（契約 D-2）。
+ *
+ * **`revoked` に倒すのは `400` かつ本文の `error` が厳密に `"invalid_grant"` のときだけ。**
+ * それ以外は全部 `reauth_required` に落とす。理由は非対称だからである:
+ * 取り消しを見逃しても再認証を促すだけで済むが、取り消しでないものを `revoked` と
+ * 読むと Vault の秘密を破棄し、30日後の削除（契約 D-3）の起点まで立ってしまう。
+ * **消しすぎは取り返しがつかない。** 迷ったら `reauth_required`。
+ *
+ * status を先に見るのは、`5xx` / `429` の本文に何が入っていても取り消しと読まないため。
+ * 障害時のプロキシは上流の本文をそのまま返すことがある。
+ *
+ * 本文が JSON として読めない場合も `reauth_required`。判別できないことを
+ * 「取り消しだった」に丸めない。
+ */
+export function classifyTokenFailure(status: number, body: string): TokenFailureKind {
+  if (status !== 400) return "reauth_required";
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return "reauth_required";
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return "reauth_required";
+  return (parsed as { error?: unknown }).error === "invalid_grant" ? "revoked" : "reauth_required";
+}
+
 export interface RefreshResult {
   ok: true;
   accessToken: string;
@@ -50,7 +85,8 @@ export interface RefreshError {
 interface Connection {
   id: string;
   provider: string;
-  vault_secret_id: string;
+  /** 00007 では NULL 許容。認可が完了しなかった行には秘密が無い */
+  vault_secret_id: string | null;
   expires_at: string | null;
 }
 
@@ -120,7 +156,23 @@ export async function refreshToken(
 
   if (!tokenRes.ok) {
     const body = await tokenRes.text();
-    console.error(`token refresh failed for ${connection.provider}: ${tokenRes.status} ${body}`);
+    const kind = classifyTokenFailure(tokenRes.status, body);
+
+    // **本文をそのままログに出さない**（契約 スライスD の禁止事項）。
+    // 判別に使った結論（status と kind）だけ残す。応答本文は上流の実装次第で
+    // 何が入るか保証が無く、ログは秘密を置いてよい場所ではない
+    console.error(`token refresh failed for ${connection.provider}: ${tokenRes.status} (${kind})`);
+
+    if (kind === "revoked") {
+      const revoked = await markRevoked(supabase, connection);
+      return {
+        ok: false,
+        reason: revoked
+          ? `token endpoint returned ${tokenRes.status} (invalid_grant: revoked)`
+          : `token endpoint returned ${tokenRes.status} (invalid_grant: revoke incomplete)`,
+      };
+    }
+
     await markReauthRequired(supabase, connection.id, `token endpoint ${tokenRes.status}`);
     return {
       ok: false,
@@ -157,6 +209,9 @@ export async function refreshToken(
         expires_at: newExpiresAt,
         last_refresh: new Date().toISOString(),
         status: "active",
+        // リフレッシュが通った連携は取り消されていない。取り消しの記録を残したままにすると
+        // 30日削除（契約 D-3）が生きている連携のデータを消す起点になる（受入基準 D-2-6）
+        revoked_at: null,
       })
       .eq("id", connection.id),
     "token-refresh: connection update",
@@ -168,6 +223,59 @@ export async function refreshToken(
   }
 
   return { ok: true, accessToken: newAccessToken, expiresAt: newExpiresAt };
+}
+
+/**
+ * 取り消しと判別できた連携を `revoked` にし、**Vault の秘密を直ちに破棄する**。
+ *
+ * プライバシーポリシー §6「連携を解除した場合、アクセストークン・リフレッシュトークンを
+ * 直ちに破棄します」の実体（受入基準 D-2-2）。データの削除は30日以内でよいが、
+ * **トークンの破棄は「直ちに」と書いてある。** 検知した時点で消す。
+ *
+ * 破棄を status の更新より先に行うのは disconnect API と同じ理由である。
+ * 逆順にすると「`revoked` と記録したのに秘密は生きている」中間状態が残り、
+ * しかも `vault_secret_id` を消した後だと**破棄する手がかりごと失う**。
+ *
+ * 破棄に失敗したら `revoked` にせず `reauth_required` に留める。
+ * 秘密が残っているのに「取り消し済み」と記録すると、30日後に参照だけ消えて
+ * 秘密が Vault に残り続ける。**約束を守れていない状態を守れたことにしない。**
+ *
+ * @returns `revoked` を書けたら true。書けなかった（＝ reauth_required に留めた）なら false
+ */
+async function markRevoked(supabase: any, connection: Connection): Promise<boolean> {
+  if (connection.vault_secret_id) {
+    // 00025 は p_id が NULL だと例外を上げる。NULL なら破棄すべき物が無いので呼ばない
+    const { error: destroyError } = await supabase.rpc("delete_vault_secret", {
+      p_id: connection.vault_secret_id,
+    });
+
+    if (destroyError) {
+      console.error("failed to destroy vault secret on revoke:", destroyError.message);
+      await markReauthRequired(supabase, connection.id, "vault destroy failed on revoke");
+      return false;
+    }
+  }
+
+  const error = await takeError(
+    supabase
+      .from("connections")
+      .update({
+        status: "revoked",
+        revoked_at: new Date().toISOString(),
+        // 破棄済みの秘密への参照を残さない。残すと「参照はあるが実体は無い」状態になり、
+        // 再連携時の update_vault_secret が空振りしてから作り直す遠回りになる
+        vault_secret_id: null,
+      })
+      .eq("id", connection.id),
+    "token-refresh: mark revoked",
+  );
+
+  if (error) {
+    console.error("failed to mark revoked:", error.message);
+    return false;
+  }
+
+  return true;
 }
 
 /** 接続ステータスを reauth_required に更新するヘルパー */

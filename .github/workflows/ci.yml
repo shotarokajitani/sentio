@@ -53,6 +53,11 @@ jobs:
       # 実DBを要求しない静的解析なので、Docker が落ちた日にこの検査ごと消えることはない。
       # 宣言の正本は docs/checklists/ci-coverage.yml（自分自身も宣言に入っている）。
       - run: pnpm run check:ci-coverage
+      # D-4-1: 「API はあるが、どこからも到達しない」を止める。
+      # disconnect API は実装も門も揃っていたのに呼び出し元が無く、privacy §6 の
+      # 約束と実態がずれていた。check:caller-guard は Edge Function しか見ない。
+      # 実DBを要求しない静的解析なので verify に置く。
+      - run: pnpm run check:endpoint-callers
 
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 

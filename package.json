@@ -17,7 +17,8 @@
     "check:caller-guard": "tsx scripts/check-caller-guard.ts",
     "check:schema": "tsx scripts/check-schema-contract.ts",
     "check:edge-types": "tsx scripts/check-edge-types.ts",
-    "check:ci-coverage": "tsx scripts/check-ci-coverage.ts"
+    "check:ci-coverage": "tsx scripts/check-ci-coverage.ts",
+    "check:endpoint-callers": "tsx scripts/check-endpoint-callers.ts"
   },
   "keywords": [],
   "author": "",

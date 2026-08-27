@@ -101,6 +101,8 @@ export async function GET(req: NextRequest) {
       status: "active",
       last_refresh: new Date().toISOString(),
       expires_at: expiresAt,
+      // google 側と同じ理由（受入基準 D-2-6）。provider ごとに書き分ける理由が無い
+      revoked_at: null,
     },
     { onConflict: "company_id,provider", ignoreDuplicates: false },
   );

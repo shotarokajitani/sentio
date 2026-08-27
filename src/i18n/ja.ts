@@ -81,6 +81,29 @@ export const ja = {
     emptyBody: "上のいずれかを接続すると、ここに同期の状況が表示されます。",
     loadFailedTitle: "接続状況を読み込めませんでした",
     loadFailedBody: "通信が一時的に途切れた可能性があります。もう一度読み込んでください。",
+
+    // 連携解除（契約 スライスD / privacy §6「Sentio の画面から解除した場合」の経路）。
+    // 二段確認はアカウントのメールアドレス入力（U-2・2026-08-27 確定）
+    disconnect: "連携を解除",
+    disconnectTitle: (name: string) => `${name}の連携を解除します`,
+    disconnectLead:
+      "この連携から取り込んだデータはすべて削除され、アクセストークン・リフレッシュトークンは直ちに破棄されます。取り消せません。",
+    disconnectPrompt: "続けるには、ログイン中のメールアドレスを入力してください。",
+    disconnectSubmit: "連携を解除する",
+    disconnectCancel: "やめる",
+    disconnectClose: "閉じる",
+    disconnectWorking: "解除しています",
+    disconnectMismatch: "メールアドレスが一致しません。",
+    disconnectNoEmail:
+      "ログイン情報を確認できませんでした。読み込み直すか、いったんログインし直してください。",
+    disconnectDone: (n: number) => `連携を解除し、${n}件のデータを削除しました。`,
+    // 409（deletion_blocked）。**「消えた」と読める言い方をしない**（受入基準 D-1-5）
+    disconnectBlocked:
+      "解除を中止しました。削除対象の件数が想定を超えています。データは削除されていません。",
+    disconnectBlockedCount: (n: number) => `対象として数えられた件数: ${n}件`,
+    disconnectBlockedHelp: "お手数ですが、サポートへご連絡ください。",
+    disconnectFailed:
+      "解除できませんでした。データが削除されたかどうかは確認できていません。接続状況を読み込み直してください。",
   },
 
   csv: {

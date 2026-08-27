@@ -104,6 +104,25 @@ jobs:
             2??)
               echo "本文 SHA-256: $(sha256sum response.txt | awk '{print $1}')"
               echo "（2xx の本文は顧客データを含みうるため出力しない）"
+
+              # 本文は伏せたまま、**件数スカラーだけ**を allowlist で抽出して出す（契約 S-3-5）。
+              #
+              # 上の訂正（本文を出さない）を弱めるものではない。弱めずに済ませるための穴である。
+              # S-3-5 の受入基準は「エラーなく完走し、findings 0件」だが、その 0 は本文の中に
+              # しか無い。本来の取得元とされた Supabase の Function Logs は、検収者が
+              # ダッシュボードを開けず（docs/reports/2026-08-20_現状サマリ.md §6）、
+              # 実行側も本番 Ref への CLI 直接操作を禁じられている。双方から到達できない。
+              #
+              # 形は check:allowlist（S-5-4）と同じ fail-closed。
+              # 「出してよいキーを列挙し、それ以外は一切出さない」。除外リストにはしない
+              # （新しいキーが増えた瞬間に漏れるため）。陰性コントロールは
+              # tests/unit/extract-invoke-metrics.test.ts が固定している。
+              #
+              # jq ではなく node を使う。抽出規則をテストで固定できる場所に置くためで、
+              # シェルに直書きすると check:ci-coverage の視界外に落ちる
+              # （.claude/rules/ci-coverage.md の残存制約2 と同じ形）。
+              # pnpm install はしない。依存ゼロの .mjs なので runner の node で走る
+              node scripts/extract-invoke-metrics.mjs response.txt
               ;;
             *)
               echo "--- response body（非2xx。エラー本文なので全文を出す） ---"

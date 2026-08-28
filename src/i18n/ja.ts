@@ -45,8 +45,7 @@ export const ja = {
     aboutTitle: "Sentio について",
     about:
       "Sentio は、Google カレンダーや会計データなど、すでに社内にある情報を読み取り専用で接続し、そこから業務の変化や予兆を自動で検出して知らせるサービスです。",
-    about2:
-      "日々の入力や報告は必要ありません。接続した分だけ、会社の状況が見えるようになります。",
+    about2: "日々の入力や報告は必要ありません。接続した分だけ、会社の状況が見えるようになります。",
   },
 
   register: {
@@ -104,6 +103,45 @@ export const ja = {
     disconnectBlockedHelp: "お手数ですが、サポートへご連絡ください。",
     disconnectFailed:
       "解除できませんでした。データが削除されたかどうかは確認できていません。接続状況を読み込み直してください。",
+
+    // 週次レポートへの導線（契約 スライスW・実装順3）。/connect から1本だけ出す
+    weeklyReport: "今週の会社を見る",
+  },
+
+  // 週次レポート画面（契約 スライスW）。Google カレンダーから取り込んだ予定だけを集計する
+  report: {
+    title: "今週の会社",
+    lead: "接続した Google カレンダーの予定から、今週の会議の量を集計しています。",
+    // 週の範囲は JST で描く。サーバ（UTC）で切ると月曜の早朝が前週に見える
+    weekRange: (start: string, end: string) => `${start} 〜 ${end}`,
+    meetingsLabel: "会議",
+    minutesLabel: "総会議時間",
+    attendeesLabel: "のべ出席者",
+    allDayCountLabel: "うち終日",
+    countUnit: (n: number) => `${n}件`,
+    peopleUnit: (n: number) => `${n}人`,
+    duration: (minutes: number) => {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      if (h === 0) return `${m}分`;
+      return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+    },
+    // 前週比。増加は符号を付けて向きを一目で分かるようにする
+    change: (percent: number) => `前週比 ${percent > 0 ? "+" : ""}${percent}%`,
+    previous: (value: string) => `前週 ${value}`,
+    // 前週の実績が無いとき。**「0%」と書かない**（受入基準 W-1-5）
+    noComparison: "比較できるだけの履歴がありません",
+    scheduleHeading: "今週の予定",
+    untitled: "（件名なし）",
+    allDayLabel: "終日",
+    // 出席者は人数だけを出す（W-D4）。メールアドレスは画面に出さない
+    attendeeCount: (n: number) => `出席者 ${n}人`,
+    emptyTitle: "この週に予定がありません",
+    emptyBody:
+      "カレンダーに予定が無かったか、まだ同期されていない可能性があります。接続の状況を確認できます。",
+    loadFailedTitle: "週次レポートを読み込めませんでした",
+    loadFailedBody: "通信が一時的に途切れた可能性があります。もう一度読み込んでください。",
+    backToConnect: "接続の設定へ",
   },
 
   csv: {

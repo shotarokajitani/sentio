@@ -217,6 +217,15 @@ export function ConnectClient({
       <h1>{t.connect.title}</h1>
       <p className="lead">{t.connect.lead}</p>
 
+      {/* 週次レポートへの導線（契約 スライスW・実装順3）。**1本だけ置く。**
+          取り込んだ予定が何に使われるかは、この画面では分からない。
+          Google 審査のシーン4もこの導線から /report へ入る */}
+      <div className="actions">
+        <a className="btn btn-quiet" href="/report">
+          {t.connect.weeklyReport}
+        </a>
+      </div>
+
       {failureMessage && (
         <div className="failure" role="alert" style={{ marginTop: 24 }}>
           <p className="failure-title">{failureMessage}</p>

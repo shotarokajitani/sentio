@@ -433,7 +433,10 @@ to Calendar.
 
 2. DEMO VIDEO
 
-A new recording is attached. It shows, in order: the product, the connection
+  <PASTE THE PUBLIC VIDEO URL HERE>
+
+The recording is provided as a publicly accessible link, not as an attachment.
+It shows, in order: the product, the connection
 entry point (/connect), the full Google consent screen with the single requested
 scope held on screen, the import result, the user-facing output at
 https://sentio-ai.jp/report which is generated entirely from Calendar events,
@@ -474,6 +477,27 @@ card, and no invitation code.
 
 Please let us know if anything else is required.
 ```
+
+## 実施記録（2026-08-29）
+
+**返信を送信済み。** スレッド `[Action Needed] OAuth Verification Request Acknowledgement` の
+2026-08-24「スコープ不一致」のメールに対する返信として送った。
+
+| 項目 | 内容 |
+| --- | --- |
+| 宛先 | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com` |
+| 動画 | **公開アクセス可能な YouTube の限定公開 URL**（本文に記載。ここには書かない） |
+| テスト資格情報 | `shotaro.kajitani+google-review@mdc-diseno.com`（パスワードはここには書かない） |
+| 構成 | 1. スコープ不一致の解消 / 2. 最小スコープの根拠 / 3. 動画 / 4. テスト資格情報＋手順1〜8 / 5. プライバシーポリシー |
+
+**送信後に見つかった不具合**: Gmail が本文中の URL を `google.com/url?q=...` に
+書き換えた。1行だけ壊れている。
+
+> The authorization URI our app generates ... it contains scope=https%3A%2F% ...
+
+パーセントエンコードした文字列が途中で切れてリンクに化けた。**内容の誤りではない**
+（同じ主張は第1節で正しく書けている）。次回以降、**本文にパーセントエンコードした
+URL を書かない**こと。
 
 ---
 

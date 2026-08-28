@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 // 未認証で開かせない画面。ここに無い画面は公開扱い
-const PROTECTED_PREFIXES = ["/connect", "/register/complete"];
+const PROTECTED_PREFIXES = ["/connect", "/register/complete", "/report"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

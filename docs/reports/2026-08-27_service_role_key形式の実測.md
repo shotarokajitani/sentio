@@ -98,9 +98,22 @@ users = 2 / active_sessions = 8 / live_connections = 1
 
 ## 残る宿題
 
-- [ ] `docs/secrets-runbook.md` の「保管先3箇所」の記述を、**新形式が正である**前提に直す
-- [ ] Vault `sentio_service_role_key`（cron の Bearer）が**どちらの形式か**を確認する。
-      レガシーのままなら cron は静かに 401 している可能性がある（停止点2-b）
+- [x] `docs/secrets-runbook.md` の「保管先3箇所」の記述を、**新形式が正である**前提に直す
+      → 2026-08-27 修正済み。併せて同ファイルの
+      「不一致はゲートウェイ層でも 401 になる」という記述を**取り消し線で否定**した
+      （下の追実測で覆っているため。この誤記が原因究明を遠回りさせた）
+- [x] Vault `sentio_service_role_key`（cron の Bearer）が**どちらの形式か**を確認する
+      → **レガシーのままだった。cron は静かに 401 していた。**
+
+      | 実測 | 値 |
+      | --- | --- |
+      | `net._http_response` の直近 | `id 194` / `status_code 401` / `2026-08-27 06:00:00 UTC` |
+      | Vault 更新後の `updated_at` | `2026-08-27 09:55:53 UTC`（`sb_secret_...` へ差し替え済み） |
+
+      `cron.job_run_details` は succeeded のままで、**どこにも赤が出ていなかった。**
+      本ファイル上部の `net.http_post` 非同期の落とし穴が、実際にそのまま起きていた。
+      **実疎通の確認は次の発火（`0 0,6,12,18 * * *` UTC ＝ 12:00 UTC / 21:00 JST）待ち。**
+      停止点 2-b はそれまで閉じない
 - [ ] Vercel env の `SUPABASE_SERVICE_ROLE_KEY` がどちらの形式かを確認する
 - [ ] `07_open_items` のレガシー JWT 項目の書き直し
 

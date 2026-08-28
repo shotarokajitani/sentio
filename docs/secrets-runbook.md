@@ -60,6 +60,16 @@ cron が失敗するまで表面化せず、**しかも cron は失敗しない*
 
 ## service_role キーの保管先は3箇所ある（2026-08-20 登録）
 
+> **2026-08-27 訂正。正しい値は新形式の Secret key `sb_secret_...` であって、
+> レガシー JWT（`eyJ...`）ではない。**
+> Supabase が Edge Function に注入する `SUPABASE_SERVICE_ROLE_KEY` が `sb_secret_...` であり、
+> `resolveCaller` は**文字列の完全一致**で `internal` を判定する
+> （`supabase/functions/_shared/caller.ts:117`）。
+> したがって**下の3箇所すべてが `sb_secret_...` でなければ 401 になる。**
+> レガシー JWT を入れて 401 を出し続けた実測は
+> `docs/reports/2026-08-27_service_role_key形式の実測.md`。
+> ダッシュボードの「Legacy anon, service_role API keys」タブから採った値を入れてはいけない。
+
 `GOOGLE_CLIENT_SECRET` と同じ形の事故が、service_role キーでも起きうる。
 **同じ値を3つの保管先が別々に持つ。**片方だけ更新すると、更新しなかった側の経路だけが静かに壊れる。
 
@@ -69,9 +79,21 @@ cron が失敗するまで表面化せず、**しかも cron は失敗しない*
 | **Edge Function 実行環境の `SUPABASE_SERVICE_ROLE_KEY`**（Supabase が自動注入） | `resolveCaller` が `internal` 判定に使う突き合わせ相手 | 全 Function が 401。パイプライン全停止 |
 | **GitHub Secrets `SUPABASE_SERVICE_ROLE_KEY`**（`invoke-function.yml` 用・2026-08-20 新設） | 手動実行ワークフロー | 手動実行が 401。**「封鎖が効いている」と誤読されやすい**のが一番の危険 |
 
-`--no-verify-jwt` を17本すべてから外した（スライスS・S-4）ため、
+~~`--no-verify-jwt` を17本すべてから外した（スライスS・S-4）ため、
 不一致は**ゲートウェイ層**でも 401 になる。関数の中に入る前に落ちるので、
-Function Logs にすら手掛かりが出ないケースがある。
+Function Logs にすら手掛かりが出ないケースがある。~~
+
+> **2026-08-27 に実測で否定された。取り消す。**
+> 本番へ「ヘッダ無し」「`Bearer not-a-jwt-at-all`」「署名の壊れた JWT」の3通りを投げたところ、
+> **3件とも本文が `{"error":"unauthorized"}`**、すなわち `caller.ts` の `unauthorized()` の出力だった。
+> 不正な JWT がユーザーワーカーまで届いている以上、**ゲートウェイは JWT を検証していない。**
+> 401 を返しているのは `resolveCaller` **だけ**である（一層。二層ではない）。
+> 実測は `docs/reports/2026-08-27_service_role_key形式の実測.md` の「追実測」節。
+>
+> **この誤った記述が、2026-08-27 の 401 の原因究明を遠回りさせた。**
+> 「ゲートウェイで落ちているなら Function Logs に出ないはずだ」という前提で探したが、
+> 実際には 401 の本文が Sentio 自身のものだった（24バイト）ことが切り分けの決め手になった。
+> 「二層で守られている」という前提で運用判断をしないこと。
 
 ### ローテーション手順
 

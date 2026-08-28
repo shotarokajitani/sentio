@@ -376,7 +376,29 @@ WHAT SENTIO DOES WITH CALENDAR DATA
 
 ## 【4】審査への返答文（英文）
 
-Cloud Console の再提出フォーム、または審査担当への返信に貼る。
+> **2026-08-29 訂正。Cloud Console に再提出フォームは無い。**
+> 検証センターは進捗表示だけで、入力欄は存在しない（実測）。
+> Google 側も
+> 「**reply directly to this email** with clarification and/or your new
+> demonstration video to continue the review」と明示している。
+> **提出は審査担当へのメール返信で行う。**
+>
+> | 項目 | 値 |
+> | --- | --- |
+> | スレッド | `[Action Needed] OAuth Verification Request Acknowledgement` |
+> | 返信先 | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com` |
+> | 返信対象 | 2026-08-24 のスコープ不一致の指摘メール |
+>
+> **動画は「公開アクセス可能な URL」で渡す。** 添付ではない。
+> 2026-08-19 に一度「video link にアクセスできない」で差し戻されているので、
+> **サインアウト状態で開けることを確認してから**貼ること（前回は YouTube の限定公開を使用）。
+>
+> 検証センターの現況（2026-08-29 実測）:
+> ブランドの取り扱いガイドライン ✅（最終審査日 2026/08/24）/
+> ホームページの要件・プライバシーポリシーの要件・アプリの機能・
+> 適切なデータアクセス・最小スコープのリクエスト は審査中。
+
+以下は返信本文。
 
 ```text
 Thank you for the review. We have addressed all three items.
@@ -412,11 +434,12 @@ to Calendar.
 2. DEMO VIDEO
 
 A new recording is attached. It shows, in order: the product, the connection
-entry point, the full consent screen with the single requested scope, the
-user-facing output generated from Calendar events, our evaluation of narrower
-scopes, and the disconnection flow. The app's publishing status remained
-"In Production" and the recording uses a dedicated demo account, not production
-customer data.
+entry point (/connect), the full Google consent screen with the single requested
+scope held on screen, the import result, the user-facing output at
+https://sentio-ai.jp/report which is generated entirely from Calendar events,
+our evaluation of narrower scopes, and the disconnection flow carried out to
+completion. The app's publishing status remained "In Production" and the
+recording uses a dedicated demo account, not production customer data.
 
 3. TEST CREDENTIALS
 
@@ -442,10 +465,12 @@ card, and no invitation code.
       access to production data.
 
   - Section 6 "Retention and deletion of Google user data"
-      Google user data is deleted 24 months after collection. On disconnection,
-      tokens are destroyed immediately and the derived Calendar data is deleted
-      within 30 days. On an account deletion request, all data is deleted within
-      30 days. Backups roll over within 35 days.
+      Google user data is deleted 24 months after collection. The policy commits
+      to deleting the derived Calendar data within 30 days of disconnection; in
+      the current implementation both the tokens and the imported Calendar events
+      are destroyed immediately, in the same request. On an account deletion
+      request, all data is deleted within 30 days. Backups roll over within
+      35 days.
 
 Please let us know if anything else is required.
 ```

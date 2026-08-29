@@ -111,7 +111,9 @@ jobs:
       #
       # 現に守っているのは内側の `resolveCaller`（S-2-9）**だけ**である。
       # 漏洩はしていない（fail-closed で 401 を返している）が、片方が壊れたときの余地が無い。
-      # **二層に戻すか、一層でよいと判断するかは未判断**（`07_open_items` の書き直し待ち）。
+      # **一層で確定**（2026-08-29・`docs/adr/0002-auth-boundary.md`）。
+      # `resolveCaller` を唯一の認証境界と宣言し、追加の層は置かない。
+      # 保証は `check:caller-guard`（全 Function が `resolveCaller` を通ることを CI で機械検査）。
       #
       # **401 に当たったからといってこのフラグを戻さないこと。** 戻すなら契約側から。
       - name: Deploy sync-connections

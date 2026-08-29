@@ -427,50 +427,31 @@ S-2-9 で `resolveCaller` を17本すべてに入れたことで、
 プラン具体値）なので、**プラン別可変化はスライス5**。それまでは定数1つのまま動かさない。
 環境変数化もしない（S-6-5）。
 
-## レガシー JWT キーの廃止と、ゲートウェイ JWT 検証の依存（2026-08-20 登録・**期限あり**・未判断）
+## ~~レガシー JWT キーの廃止と、ゲートウェイ JWT 検証の依存~~ → **クローズ（2026-08-29・ADR-0002）**
 
-**期限: 2026年末（Supabase 公式の廃止予定）。スライスS の設計がこれに依存している。**
+**決定済み。この項目はもう判断待ちではない。正本は `docs/adr/0002-auth-boundary.md`。**
 
-出所は Supabase 公式ドキュメント
-（`https://supabase.com/docs/guides/getting-started/api-keys`）。次の2点が併記されている。
+- **決定**: 認証境界は `resolveCaller`（`supabase/functions/_shared/caller.ts`）の**一層**とする。
+  追加の層は置かない。保証は `check:caller-guard`（デプロイ対象の全 Function が
+  `resolveCaller` を通ることを CI で機械検査する）
+- **期限は消滅した。** レガシー JWT キーからの移行は**すでに完了している**
+  （Edge Function の env / Vault `sentio_service_role_key` / GitHub Secrets の3箇所とも
+  新形式 `sb_secret_...`）。2026年末の廃止予定に追われる理由は無くなった
 
-> Edge Functions **only support JWT verification** via the `anon` and `service_role`
-> JWT-based API keys. You will need to use the `--no-verify-jwt` option when using
-> publishable and secret keys.
+**この項目が立っていた前提は、4つとも実測で崩れた。**
+崩れた前提の全文（何がいつどう崩れたか）は **ADR-0002 の「背景」に移した**。
+判断材料は `docs/reports/2026-08-29_認証境界は一層である_判断材料.md`、
+鍵形式の実測は `docs/reports/2026-08-27_service_role_key形式の実測.md`。要点だけ残す:
 
-> They will be deprecated **by the end of 2026**, and you should now use the
-> publishable (`sb_publishable_xxx`) and secret (`sb_secret_xxx`) keys instead.
+- **ゲートウェイは JWT を検証していない**（2026-08-27 本番実測）。
+  「ゲートウェイ検証に依存する設計」という前提が事実でなかった
+- 本番の service_role キーは**新形式**であり、レガシー形式ではなかった
+- したがって「鍵の移行が認証境界を1層まるごと外す」は起きない。**外れる層が最初から無かった**
+- 案D（`config.toml` に `verify_jwt = true`）は**採れない**。新形式キーでは JWT 検証が動かず、
+  有効化すると内部呼び出し（cron・`invoke-function`・Day0）が全部止まる
 
-**なぜ課題なのか。この2つはこのままだと衝突する。**
-
-- 本スライス（S-4）で **17本すべてから `--no-verify-jwt` を外した**。
-  これは**ゲートウェイ層での JWT 検証に依存する設計**である（S-方針2 の案B）
-- そのゲートウェイ検証は、**レガシー JWT キー（`eyJ` 形式）でしか動かない**
-- そのレガシーキーが **2026年末に廃止予定**である
-- 新形式（`sb_secret_...`）へ移ると、ゲートウェイ検証が使えなくなり
-  **`--no-verify-jwt` を戻すことになる ＝ S-方針2 の案B が失われる**
-
-つまり、鍵の移行そのものが**認証境界を1層まるごと外す**。
-鍵をローテーションするだけの作業に見えて、実際は設計変更である。
-
-**現状の実測（2026-08-20・停止点2-a）**: 本番の service_role キーは `prefix = eyJ` で
-レガシー形式。ゲートウェイの `verify_jwt` を通る。**今は問題なく動いている。**
-実測結果は `docs/runbooks/2026-08-20_cron-bearer-key-match_result.md`。
-
-**未判断の点（勝手に確定させないこと）:**
-
-- 移行時に、ゲートウェイ層の代わりに**何を担保に置くか**。
-  候補は (a) `apikey` ヘッダの自前検証を Function 内に実装する、
-  (b) 別の層（プロキシ等）を立てる、(c) Supabase 側が新形式でも
-  ゲートウェイ検証を提供するのを待つ
-- (a) を採る場合、`resolveCaller`（S-2-9）がその責務を負うのか、
-  その手前に別のガードを置くのかも未定
-- **いつやるか。** 2026年末が期限だが、前倒しでやる利点（新形式の方が
-  失効・スコープ制御ができる）と、いま設計を触る危険を天秤にかける必要がある
-
-**着手前に必要なもの:** 新形式キーがゲートウェイで実際にどう扱われるかの**実測**。
-「弾かれる可能性がある」は 2026-08-20 時点で**未実測の推測**であり、
-公式ドキュメントの記述からの推論にとどまる。設計を決める前に本番以外で確かめること。
+**再決定の条件（ADR-0002 と同じ）:** Supabase が新形式キーでもゲートウェイの JWT 検証を
+提供したら見直す。それまでこの項目は開かない。
 
 ## アカウント削除APIの実装（2026-08-20 登録・**公開済みの約束あり**・未着手）
 

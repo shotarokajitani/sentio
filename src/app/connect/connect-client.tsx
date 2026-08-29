@@ -114,16 +114,6 @@ export function ConnectClient({
 
   const getConnection = (provider: string) => connections.find((c) => c.provider === provider);
 
-  const formatDate = (iso: string | null) => {
-    if (!iso) return t.connect.never;
-    return new Date(iso).toLocaleString("ja-JP", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const handleFile = async (file: File) => {
     setCsvError("");
     setCsvStep("analyzing");
@@ -615,6 +605,32 @@ function DisconnectPanel({
       </div>
     </div>
   );
+}
+
+/**
+ * 日時は必ず JST で描く。**`timeZone` を省かない。**
+ *
+ * 省くと実行環境の既定タイムゾーンで描かれる。この画面は client component なので、
+ * サーバ（Vercel = UTC）とブラウザ（JST）の両方で描かれ、差はちょうど9時間になる。
+ * 同じ props から違う文字列が出るので React は hydration を諦め、本番で
+ * React error #418 が出ていた（2026-08-27 / 08-28 実測）。
+ * `src/app/report/report-view.tsx` が同じ形を作らなかった書き方に揃える。
+ *
+ * モジュールスコープに置くのは、描画のたびに作り直さないためでもある。
+ */
+const LAST_SYNC_FORMAT = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+// null は「まだ一度も同期していない」。例外にせず既存どおり never を出す
+function formatDate(iso: string | null): string {
+  if (!iso) return t.connect.never;
+  return LAST_SYNC_FORMAT.format(new Date(iso));
 }
 
 const MAPPING_FIELDS: [keyof ColumnMapping, string][] = [

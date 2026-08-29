@@ -19,6 +19,14 @@ import {
   resolveWeeklyPeriod,
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
+import {
+  jstWeekRange,
+  summarizeWeek,
+  MEETING_EVENT_TYPE,
+  MEETING_SOURCE,
+  type EventRow,
+} from "../../../shared/report/weekly.ts";
+import { buildWeeklySections, weekReference } from "../_shared/weekly-sections.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -78,9 +86,24 @@ Deno.serve(async (req: Request) => {
       "deliver-weekly: findings",
     );
 
-    const baselines = await mustData(
-      supabase.from("baselines").select("metric_key, is_established").eq("company_id", companyId),
-      "deliver-weekly: baselines",
+    // 対象週は `period` から導く。`new Date()` を渡すと、`target_week` を指定したときに
+    // **件名の週と本文の数字がずれる**（契約 落とし穴2）
+    const reference = weekReference(period);
+    const week = jstWeekRange(reference);
+    // 前週比のために前週の頭から取る。画面側（`src/lib/report/events.ts`）と同じ窓
+    const from = jstWeekRange(new Date(week.start.getTime() - 1)).start;
+
+    // `*` を書かない。`check:schema`（S-5-1）が参照列を静的に読めなくなる（契約 落とし穴3）
+    const weeklyEvents = await mustData(
+      supabase
+        .from("events")
+        .select("source, event_type, period_start, period_end, metrics")
+        .eq("company_id", companyId)
+        .eq("source", MEETING_SOURCE)
+        .eq("event_type", MEETING_EVENT_TYPE)
+        .gte("period_start", from.toISOString())
+        .lt("period_start", week.end.toISOString()),
+      "deliver-weekly: weekly events",
     );
 
     const connections = await mustData(
@@ -111,59 +134,18 @@ Deno.serve(async (req: Request) => {
       "deliver-weekly: calendar event count",
     );
 
-    const established = baselines.filter((b) => b.is_established);
-    const totalBaselines = baselines.length;
     const activeProviders = connections.filter((c) => c.status === "active").map((c) => c.provider);
 
-    const topFindings = findings.slice(0, 2);
-    const findingCount = topFindings.length;
+    // 画面（`/report`）と同じ `summarizeWeek` を使う。メール側で数え直さない（WM-1-2）
+    const summary = summarizeWeek(weeklyEvents as EventRow[], reference);
 
-    const sources: string[] = [];
-    if (activeProviders.includes("google_calendar")) sources.push(`カレンダー(${calCount}件)`);
-    if (csvCount > 0) sources.push(`会計CSV(暫定集計・${csvCount}件)`);
-    if (activeProviders.includes("freee")) sources.push("freee会計");
-    const sourceSummary =
-      sources.length > 0
-        ? `データソース: ${sources.join("、")}。`
-        : "データソース: まだ接続されていません。";
-
-    const sections = [
-      {
-        type: "digest",
-        content:
-          findingCount > 0
-            ? `今週は${findingCount}件のFindingがあります。${established.length}指標を追跡中です。${sourceSummary}`
-            : `${sourceSummary}${totalBaselines > 0 ? `全${established.length}指標が安定しています。` : "基準値はデータ蓄積後に確立されます。"}`,
-      },
-      {
-        type: "finding",
-        content: topFindings.length > 0 ? topFindings.map((f) => `- ${f.what}`).join("\n") : "",
-      },
-      {
-        type: "followup",
-        content:
-          findings
-            .filter((f) => f.status === "watching")
-            .map((f) => `- 経過観察中: ${f.what}`)
-            .join("\n") || "",
-      },
-      {
-        type: "stable_coverage",
-        content:
-          totalBaselines > 0
-            ? `${established.length}指標が平常。カバレッジ: ${totalBaselines}指標中${established.length}指標が確立済み。`
-            : `カバレッジ: ${sources.length}データソース接続済み。基準値はデータ蓄積後に確立されます。`,
-      },
-      {
-        type: "nudge",
-        content:
-          !activeProviders.includes("google_calendar") ||
-          csvCount === 0 ||
-          established.length < totalBaselines
-            ? "データソースを追加接続すると、より多くの指標を監視できます。"
-            : "",
-      },
-    ];
+    const sections = buildWeeklySections({
+      summary,
+      findings,
+      activeProviders,
+      csvCount,
+      calCount,
+    });
 
     const result = await deliverOnce(
       asDeliveryDb(supabase),

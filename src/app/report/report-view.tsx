@@ -1,6 +1,6 @@
 import { Masthead } from "@/components/Masthead";
 import { t } from "@/i18n";
-import type { Comparison, Meeting, WeeklySummary } from "@/lib/report/weekly";
+import type { Comparison, Meeting, WeeklySummary } from "@shared/report/weekly";
 
 /**
  * 週次レポートの表示（契約 スライスW）。

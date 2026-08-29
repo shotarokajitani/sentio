@@ -6,7 +6,7 @@ import {
   MEETING_SOURCE,
   type EventRow,
   type WeeklySummary,
-} from "./weekly";
+} from "@shared/report/weekly";
 
 /**
  * 週次レポートの読み取り口（契約 スライスW・W-D1）。

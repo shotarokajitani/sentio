@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { jstWeekRange, summarizeWeek, type EventRow } from "@/lib/report/weekly";
+import { jstWeekRange, summarizeWeek, type EventRow } from "@shared/report/weekly";
 
 /**
  * 契約 W-1 系 / W-2-1 / W-2-4（`docs/contracts/slice-weekly-report.md`）。

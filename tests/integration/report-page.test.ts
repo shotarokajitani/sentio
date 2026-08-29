@@ -19,7 +19,7 @@ import { NextRequest } from "next/server";
 import { resolveRlsRunMode } from "../helpers/rls-run-mode";
 import { makeTenant, type Tenant } from "../helpers/tenant";
 import { fetchWeeklyReport } from "@/lib/report/events";
-import { jstWeekRange } from "@/lib/report/weekly";
+import { jstWeekRange } from "@shared/report/weekly";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "http://127.0.0.1:54321";
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || "";

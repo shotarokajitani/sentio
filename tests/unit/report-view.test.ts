@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReportView } from "@/app/report/report-view";
-import { summarizeWeek, type EventRow, type WeeklySummary } from "@/lib/report/weekly";
+import { summarizeWeek, type EventRow, type WeeklySummary } from "@shared/report/weekly";
 import { ja } from "@/i18n/ja";
 
 /**

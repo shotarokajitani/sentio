@@ -63,7 +63,7 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(candidates.length).toBeGreaterThan(0);
   });
 
-  it("D1: 現在地は 5/7（合格線6・未達）", () => {
+  it("D1: 現在地は 6/7（合格線6・達成）", () => {
     const candidates = runScan(company.events, baselines);
     const result = countDetectedSignals(positiveSignals, candidates);
 
@@ -77,7 +77,34 @@ describe("Engine eval suite (D1-D2)", () => {
     }
 
     /**
-     * **契約の合格線は6。現在地は5で未達である。**
+     * **契約の合格線は6。現在地は6で達成した。**
+     *
+     * **2026-08-31（3）: 5 → 6。途絶（沈黙）を本番に実装した。**
+     * 検出器（`_shared/scan.ts`）と `schedule_interval` ベースラインの生成
+     * （`state-baselines`）を対で入れている。片方だけでは発火しない。
+     *
+     * **合格線に届いたことを「検知が十分になった」と読まないこと。**
+     * この途絶は `entity_id = null`、すなわち**会社全体の予定間隔**を見ており、
+     * 捉えるのは「会社の予定が丸ごと途絶えた」であって
+     * 「毎週の定例が消えた」ではない。会議が密な会社ではほぼ発火しない。
+     * 限界は `_shared/scan.ts` の走査6に明記した。
+     *
+     * **2026-08-31（2）: 4 → 5 に更新した。仕様適合の修正による。**
+     * `scanMetricChange` が「連続N期同方向」を見ているのに `deviation` と
+     * 名乗っていたのを `trend` に直した（`docs/spec/03_sense.md` の
+     * 乖離＝平常レンジ逸脱 / 傾向＝連続N期同方向 という定義に合わせた）。
+     * **この走査はベースラインを一度も参照しない**ので、定義上「乖離」ではありえない。
+     * 仕込み `#3 reply_delay` / `#6 inquiry_decline` の期待も同じ理由で
+     * `deviation` → `trend` に揃えた（同じ検出器から出ているため）。
+     *
+     * **2026-08-31（1）: 5 → 4 に更新した。Scanner の挙動は変わっていない。**
+     * このスイートが測る対象を `src/sense/scanner.ts` から
+     * `@edge/_shared/scan`（**本番が動かす実装**）に向け直したためである。
+     * それまで測っていた `src/sense/scanner.ts` は `tests/` と `scripts/` からしか
+     * 参照されておらず、**本番では1行も走っていなかった**
+     * （`run-sense` が `functions/v1/scan` を叩く）。
+     * 差の内訳は `#7 meeting_silence` で、**本番には silence 検出器が無い。**
+     * 経緯は `docs/reports/2026-08-31_検知5of7の内訳実測.md`。
      *
      * **2026-08-31（2）: 4 → 5 に更新した。仕様適合の修正による。**
      * `scanMetricChange` が「連続N期同方向」を見ているのに `deviation` と
@@ -115,7 +142,7 @@ describe("Engine eval suite (D1-D2)", () => {
      * `tests/eval/` は `verify` の除外対象に入っていない。
      * また常設した赤は一週間で「CI は赤いもの」になり、本物の回帰がその後ろに隠れる。
      */
-    expect(result.detected).toBe(5);
+    expect(result.detected).toBe(6);
   });
 
   it("D2: false positives <= 2", () => {

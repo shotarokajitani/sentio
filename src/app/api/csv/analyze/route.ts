@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { inspectHeaderRow } from "@shared/csv/header-guard";
 
 interface TypeStat {
   type: string;
@@ -29,7 +30,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "headers required" }, { status: 400 });
   }
 
+  /**
+   * 1行目が列名の行でなければ、プロンプトを組む前に断る（契約 スライスCH・CH-D2）。
+   *
+   * 判定はクライアントと**同じ純関数**を読む（CH-D3）。ここは多層目である
+   * ——この API は画面を経由せず直接叩けるので、クライアント側の関門だけでは閉じない。
+   *
+   * 400 であって 500 ではない（CH-D6）。Sentio は壊れていない。入力の形が違う。
+   *
+   * **応答に入力セルの中身を載せない**（CH-1-4）。載せると、下の
+   * 「no string cell values - PII protection」で塞いだ経路が、エラー本文で開く。
+   * 返すのは件数と割合だけである。
+   */
+  const verdict = inspectHeaderRow(headers);
+  if (!verdict.isHeader) {
+    return NextResponse.json(
+      {
+        error: "no_header_row",
+        total: verdict.total,
+        non_name_like: verdict.nonNameLike,
+        ratio: Math.round((verdict.nonNameLike / verdict.total) * 100) / 100,
+      },
+      { status: 400 },
+    );
+  }
+
   // Build column description for Claude (no string cell values - PII protection)
+  // ↑ この保護は「1行目が列名である」ことを前提にしている。前提は直前で検査済みである
   const columnDescriptions = headers
     .map((h) => {
       const stat = type_stats[h];

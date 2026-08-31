@@ -13,15 +13,8 @@ import { errorResponse } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
 import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
-
-const QUIET_HOUR_EXCEPTIONS = new Set(["site_down"]);
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-
-function isQuietHour(date: Date): boolean {
-  const jstTime = new Date(date.getTime() + JST_OFFSET_MS);
-  const hour = jstTime.getUTCHours();
-  return hour >= 23 || hour < 6;
-}
+// 静音時間の規則は `_shared` にある。ここに直書きすると正本と静かにずれる
+import { isQuietHour, QUIET_HOUR_EXCEPTIONS } from "../_shared/quiet-hours.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {

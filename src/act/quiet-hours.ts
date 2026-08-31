@@ -1,3 +1,10 @@
+/**
+ * 静音時間の規則。**このファイルが正本。**
+ *
+ * Edge Function 側の写しは `supabase/functions/_shared/quiet-hours.ts`。
+ * Edge は `supabase/functions/` の外を import できないため二重に持つ
+ * （`retention` 対と同じ形）。ずれは `tests/unit/quiet-hours.test.ts` が機械で止める。
+ */
 export interface DeliveryInput {
   urgency: "immediate" | "weekly" | "monthly";
   category: string;
@@ -9,11 +16,11 @@ export interface DeliveryResult {
 }
 
 // Ongoing-loss exceptions: delivered even during quiet hours
-const QUIET_HOUR_EXCEPTIONS = new Set(["site_down"]);
+export const QUIET_HOUR_EXCEPTIONS = new Set(["site_down"]);
 
 // Quiet hours: 23:00 - 06:00 JST
-const QUIET_START_HOUR = 23;
-const QUIET_END_HOUR = 6;
+export const QUIET_START_HOUR = 23;
+export const QUIET_END_HOUR = 6;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 function toJSTHour(date: Date): number {
@@ -21,7 +28,7 @@ function toJSTHour(date: Date): number {
   return jstTime.getUTCHours();
 }
 
-function isQuietHour(date: Date): boolean {
+export function isQuietHour(date: Date): boolean {
   const hour = toJSTHour(date);
   return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
 }

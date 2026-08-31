@@ -139,7 +139,7 @@ export function generateSyntheticCompany(): SyntheticCompany {
     id: 3,
     label: "reply_delay",
     type: "positive",
-    scanType: "deviation",
+    scanType: "trend",
     eventIds: signal3Ids,
   });
 
@@ -200,7 +200,7 @@ export function generateSyntheticCompany(): SyntheticCompany {
     id: 6,
     label: "inquiry_decline",
     type: "positive",
-    scanType: "deviation",
+    scanType: "trend",
     eventIds: signal6Ids,
   });
 

@@ -1,3 +1,19 @@
+/**
+ * **このファイルは本番で走っていない。**（2026-08-31 実測）
+ *
+ * 本番の Scanner は `supabase/functions/_shared/scan.ts` である
+ * （`run-sense` が `functions/v1/scan` を叩く）。こちらを import しているのは
+ * `tests/` と `scripts/` だけで、`src/` からも `supabase/` からも参照が無い。
+ *
+ * 2026-07-15 に両方が同じコミットで生まれ、Edge 側だけが更新され続けた。
+ * その間、評価スイートはこちらを測っていたため、**製品の中核が
+ * 6週間、実質的に測られていなかった**（`docs/reports/2026-08-31_検知5of7の内訳実測.md`）。
+ * 評価は本番実装に向け直し済みである。
+ *
+ * **消すか、こちらを正本にして Edge を寄せるかは未判断。**
+ * `docs/spec/07_open_items.md` の判断待ちであり、勝手に決めない。
+ * ここに検知を足しても本番は変わらないことだけ、先に分かるようにしておく。
+ */
 export interface TimelineEvent {
   event_id: string;
   company_id: string | null;

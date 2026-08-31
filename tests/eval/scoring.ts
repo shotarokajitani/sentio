@@ -12,7 +12,7 @@
  */
 
 import type { PlantedSignal } from "../../scripts/generate-synthetic-company";
-import type { ScanCandidate } from "../../src/sense/scanner";
+import type { ScanCandidate } from "@edge/_shared/scan";
 
 export interface SignalMatch {
   signalId: number;

@@ -656,8 +656,16 @@ const cell: React.CSSProperties = {
   borderBottom: "1px solid var(--rule)",
 };
 
-// CSVの1行をクォート考慮で分解する
-function parseCSVLine(line: string): string[] {
+/**
+ * CSVの1行をクォート考慮で分解する。
+ *
+ * **export しているのは試験のためである。** 列名の行かどうかの判定は
+ * この関数が返したセルの配列に対して行われる（契約 スライスCH）。
+ * 手で組んだ配列だけで判定を試験すると、この関数の挙動が変わった日に
+ * **テストは緑のまま本番だけ抜ける。** 生のCSVテキストから判定までを
+ * 一本で通す試験が `tests/unit/csv-analyze-guard.test.ts` にある。
+ */
+export function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;

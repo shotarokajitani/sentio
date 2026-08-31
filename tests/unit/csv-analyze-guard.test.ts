@@ -14,7 +14,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { CSV_ANALYZE_ENDPOINT, requestColumnMapping, type CsvTypeStat } from "@/lib/csv/analyze";
-import { ZENGIN_FIRST_ROW, BANK_HEADER_ROW } from "../fixtures/csv-rows";
+import {
+  ZENGIN_FIRST_ROW,
+  BANK_HEADER_ROW,
+  ZENGIN_CSV_TEXT,
+  BANK_CSV_TEXT,
+} from "../fixtures/csv-rows";
+import { parseCSVLine } from "@/app/connect/connect-client";
 
 /** 呼ばれたら記録するだけの fetch。**呼ばれないこと**を見るために使う */
 function spyFetch(response?: Response) {
@@ -209,5 +215,60 @@ describe("サーバ: /api/csv/analyze も同じ判定で閉じる", () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("headers required");
+  });
+});
+
+/**
+ * **生のCSVテキストから判定までを一本で通す。**
+ *
+ * ここまでの試験は手で組んだ配列を食わせている。本番が食わせるのは
+ * `parseCSVLine(text.trim().split("\n")[0])` の結果である。
+ * この間に BOM・CRLF・ダブルクォートの処理が挟まっており、そこが変われば
+ * **テストは緑のまま本番だけ抜ける。** その隙間をここで閉じる。
+ */
+describe("生のCSVテキストから判定するまで（本番と同じ手順）", () => {
+  /** `handleFile` が実際にやっている2行と同じ */
+  function headerCellsOf(csvText: string): string[] {
+    const lines = csvText.trim().split("\n");
+    return parseCSVLine(lines[0]);
+  }
+
+  it("BOM・CRLF・クォート込みの全銀協テキストでも断る", async () => {
+    const headers = headerCellsOf(ZENGIN_CSV_TEXT);
+    const fetchImpl = spyFetch();
+
+    const result = await requestColumnMapping({
+      headers,
+      rowCount: 1,
+      typeStats: typeStats(headers),
+      fetchImpl,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      reason: "no_header_row",
+      verdict: { isHeader: false, total: 17, nonNameLike: 14 },
+    });
+  });
+
+  it("パースを通しても手で組んだ配列と同じセルになる（BOM とクォートが落ちている）", () => {
+    expect(headerCellsOf(ZENGIN_CSV_TEXT)).toEqual(ZENGIN_FIRST_ROW);
+  });
+
+  it("列名付きの銀行明細テキストは通り、API を1回呼ぶ", async () => {
+    const headers = headerCellsOf(BANK_CSV_TEXT);
+    const fetchImpl = spyFetch();
+
+    const result = await requestColumnMapping({
+      headers,
+      rowCount: 2,
+      typeStats: typeStats(headers),
+      fetchImpl,
+    });
+
+    expect(headers).toEqual(BANK_HEADER_ROW);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: true, mapping: MAPPING });
   });
 });

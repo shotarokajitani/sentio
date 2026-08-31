@@ -44,7 +44,7 @@ Google の差し戻し理由は
 
 | # | 論点 | 決定 |
 | --- | --- | --- |
-| **W-D1** | 経路 | `/report`。Server Component。`getAuthedContext()` → RLS クライアント → `src/lib/report/weekly.ts` → クライアント表示。`/connect` と同じ形にする |
+| **W-D1** | 経路 | `/report`。Server Component。`getAuthedContext()` → RLS クライアント → `src/lib/report/weekly.ts` → クライアント表示。`/connect` と同じ形にする。**2026-08-31: 集計の正本は `shared/report/weekly.ts` へ移動済み（スライスWM の WM-D1）。表示する週の選択は `slice-report-fallback.md` を参照** |
 | **W-D2** | 集計元 | `events` を直接読む。`baselines` は使わない。**理由**: `state-baselines` の `is_established` が `false` で `observation_count: 0`（2026-08-27 実測）。まだ比較の土台になっていない |
 | **W-D3** | 比較 | 当週 vs 前週の**同じ計算をもう一度回すだけ**。前週のデータが無いときは比を出さず「比較できるだけの履歴がありません」と出す（**0%と書かない**） |
 | **W-D4** | 出席者 | **メールアドレスを画面に出さない。人数だけを出す。** `metrics.attendees` は S1 の個人データであり、件数以外の用途が無い |
@@ -92,6 +92,9 @@ Google の差し戻し理由は
 - freee / CSV 由来の集計。**今回は Google カレンダーだけ**
 - グラフ・チャート。数字と前週比の文字表示で足りる
 - 期間の切り替え UI。**当週固定**
+  - **2026-08-31 追記**: 当週が0件のときのみ直近の実績週へ遡る
+    （契約 `docs/contracts/slice-report-fallback.md` RF-D2）。
+    **既定が当週であることは変わらない。** 期間の切り替え UI は引き続き非スコープである
 - デイリーパルスのメール本文の変更（案B は採らなかった）
 
 ## 停止点

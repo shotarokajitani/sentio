@@ -57,6 +57,14 @@ export interface WeeklySummary {
   meetings: Meeting[];
   meetingCountChange: Comparison;
   meetingMinutesChange: Comparison;
+  /**
+   * 当週が0件だったため**過去の週に遡って表示している**か（契約 スライスRF・RF-D1）。
+   *
+   * `summarizeWeek` 単体は常に `false` を返す。**遡ったかどうかを知っているのは
+   * 週を選んだ側だけ**であり、この関数は渡された `reference` の週を数えるだけだからである。
+   * 遡りを含めて集計するときは `summarizeWeekWithFallback` を使う。
+   */
+  isFallback: boolean;
 }
 
 /**
@@ -109,6 +117,55 @@ export function summarizeWeek(rows: EventRow[], reference: Date): WeeklySummary 
     meetings,
     meetingCountChange: compare(meetings.length, previousMeetings.length),
     meetingMinutesChange: compare(totalMeetingMinutes, sumMinutes(previousMeetings)),
+    // 週を選んだのは呼び出し側なので、ここでは遡りを主張しない（RF-D1）
+    isFallback: false,
+  };
+}
+
+/**
+ * 当週が0件のときに遡る上限（契約 スライスRF・RF-D3）。
+ *
+ * **定数1つで固定する。env や設定で可変にしない。**
+ * 可変にすると「どこまで遡ったか」が環境で変わり、実測が再現しなくなる。
+ */
+export const FALLBACK_MAX_WEEKS = 8;
+
+/**
+ * 表示する週の基準時刻を決める（RF-D1 / RF-D3 / RF-D4）。
+ *
+ * 当週に会議が1件でもあれば `now` をそのまま返す。**黙って週をずらさない**（RF-1-1）。
+ * 0件なら1週ずつ遡り、会議が1件以上ある**最初の週**の基準時刻を返す。
+ * 遡る向きが「新しい方から」なので、最初に見つかった週が**最も新しい週**になる（RF-1-4）。
+ *
+ * `FALLBACK_MAX_WEEKS` 週まで遡って見つからなければ `now` を返す（RF-1-5）。
+ * 無限に遡って「半年前の週」を今週として見せない。
+ *
+ * **未来の週は絶対に選ばない**（RF-D4 / RF-1-6）。オフセットは負の方向にしか動かさない。
+ * 同期は `timeMax = now` なので未来の行はそもそも来ないが、
+ * ここが唯一の週選択なので、来ても選ばない形にしておく。
+ */
+export function resolveWeekReference(rows: EventRow[], now: Date): Date {
+  for (let weeksAgo = 0; weeksAgo <= FALLBACK_MAX_WEEKS; weeksAgo++) {
+    const reference = new Date(now.getTime() - weeksAgo * 7 * DAY_MS);
+    const week = jstWeekRange(reference);
+    if (collect(rows, week.start, week.end).length > 0) return reference;
+  }
+  return now;
+}
+
+/**
+ * 週の選択と集計をまとめて行う（スライスRF の入口）。
+ *
+ * **`summarizeWeek` のシグネチャは変えていない。** 渡す `reference` が変わるだけである。
+ * `deliver-weekly` は `summarizeWeek` を直接呼んでおり、この関数を通らない（RF-D6）。
+ * メールは ISO 週を冪等キーに使っているので、対象週を動かすと過去の配信記録と衝突する。
+ */
+export function summarizeWeekWithFallback(rows: EventRow[], now: Date): WeeklySummary {
+  const reference = resolveWeekReference(rows, now);
+  const summary = summarizeWeek(rows, reference);
+  return {
+    ...summary,
+    isFallback: summary.weekStart !== jstWeekRange(now).start.toISOString(),
   };
 }
 

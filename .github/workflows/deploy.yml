@@ -189,3 +189,12 @@ jobs:
       - name: Deploy retention-purge
         if: ${{ !cancelled() }}
         run: supabase functions deploy retention-purge --project-ref "$SUPABASE_PROJECT_REF"
+
+      # 配信ディスパッチャ（契約 slice-cron-dispatch.md）。cron はこの2本だけを叩く
+      - name: Deploy dispatch-daily
+        if: ${{ !cancelled() }}
+        run: supabase functions deploy dispatch-daily --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy dispatch-weekly
+        if: ${{ !cancelled() }}
+        run: supabase functions deploy dispatch-weekly --project-ref "$SUPABASE_PROJECT_REF"

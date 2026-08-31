@@ -170,6 +170,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm run check:schema
 
+      # cron.job の実物と docs/checklists/cron-jobs.yml の突合（契約 スライスCD）。
+      # migration の適用は CI ログで見えるが cron.job の中身は誰も見ていなかった。
+      # 実DBが要るので verify には載せられない
+      - name: "check:cron-jobs — cron.job を宣言と突合する"
+        if: ${{ !cancelled() }}
+        run: pnpm run check:cron-jobs
+
       # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する（契約 S-5-2）。
       # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
       # 「動いているはず」で進めずここで実測する。

@@ -44,6 +44,9 @@ export interface ScanBaseline {
   count: number;
 }
 
+/** 平常の間隔の何倍空いたら「途絶」と見なすか。定数1つで固定する */
+const SILENCE_MULTIPLIER = 3;
+
 const metricExtractors: Array<{
   eventType: string;
   metricKey: string;
@@ -80,7 +83,11 @@ const metricExtractors: Array<{
  * 中身は `scan/index.ts` にあったものと同一である。移設にあたって
  * `events || []` が引数になった以外の変更はしていない。
  */
-export function runScan(events: ScanEvent[], baselines: ScanBaseline[]): ScanCandidate[] {
+export function runScan(
+  events: ScanEvent[],
+  baselines: ScanBaseline[],
+  now: number = Date.now(),
+): ScanCandidate[] {
   const candidates: ScanCandidate[] = [];
   const established = baselines.filter((b) => b.is_established);
 
@@ -199,6 +206,41 @@ export function runScan(events: ScanEvent[], baselines: ScanBaseline[]): ScanCan
         description: `${extractor.label}: ${first} → ${last} (${recent.length} consecutive points)`,
         score: Math.abs(last - first) / (Math.abs(first) || 1),
       });
+    }
+  }
+
+  // 6. Silence scan（途絶）— 予定が平常の間隔を大きく超えて空いている
+  //
+  // **守れない範囲（設計上の限界。仕様であって不具合ではない）。**
+  // これが見ているのは「**会社の予定が丸ごと途絶えた**」であって、
+  // 「**毎週の定例が消えた**」ではない。ベースラインが会社全体（`entity_id = null`）だからである。
+  // 会議が密な会社は平常の間隔が1日前後になり、3倍でも3日なので**ほぼ発火しない**。
+  // 定例シリーズごとに見るには `entities` 行の生成（シリーズの同定キーの決定）が要り、
+  // それは別の作業である（2026-08-31 梶谷さん判断で、まず会社全体を作った）。
+  // **合格線に届いたことを「検知が十分になった」と読まないこと。**
+  const intervalBaseline = baselines.find(
+    (b) => b.metric_key === "schedule_interval" && b.is_established,
+  );
+  if (intervalBaseline) {
+    const scheduleEvents = events
+      .filter((e) => e.event_type === "schedule")
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+
+    if (scheduleEvents.length > 0) {
+      const lastEvent = scheduleEvents[0];
+      const daysSinceLast =
+        (now - new Date(lastEvent.occurred_at).getTime()) / (24 * 60 * 60 * 1000);
+
+      if (daysSinceLast > intervalBaseline.median * SILENCE_MULTIPLIER) {
+        candidates.push({
+          scanType: "silence",
+          source: "schedule",
+          suggestedUrgency: "weekly",
+          evidence_event_ids: [lastEvent.event_id],
+          description: `No schedule event for ${Math.round(daysSinceLast)} days (expected every ${intervalBaseline.median} days)`,
+          score: daysSinceLast / intervalBaseline.median,
+        });
+      }
     }
   }
 

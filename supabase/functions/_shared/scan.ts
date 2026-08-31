@@ -188,7 +188,11 @@ export function runScan(events: ScanEvent[], baselines: ScanBaseline[]): ScanCan
       const first = recent[0].value;
       const last = recent[recent.length - 1].value;
       candidates.push({
-        scanType: "deviation",
+        // **傾向であって乖離ではない。** 仕様 `docs/spec/03_sense.md` は
+        // 乖離＝平常レンジ逸脱 / 傾向＝連続N期同方向 と定義している。
+        // この走査は**ベースラインを一度も参照しない**（reply_time にも inquiry にも
+        // 平常レンジが存在しない）。レンジを見ない検出器が「レンジ逸脱」を名乗れない
+        scanType: "trend",
         source: extractor.eventType,
         suggestedUrgency: "weekly",
         evidence_event_ids: recent.map((d) => d.event_id),

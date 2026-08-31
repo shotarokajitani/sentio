@@ -63,7 +63,7 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(candidates.length).toBeGreaterThan(0);
   });
 
-  it("D1: 現在地は 4/7（合格線6・未達）", () => {
+  it("D1: 現在地は 5/7（合格線6・未達）", () => {
     const candidates = runScan(company.events, baselines);
     const result = countDetectedSignals(positiveSignals, candidates);
 
@@ -77,9 +77,17 @@ describe("Engine eval suite (D1-D2)", () => {
     }
 
     /**
-     * **契約の合格線は6。現在地は4で未達である。**
+     * **契約の合格線は6。現在地は5で未達である。**
      *
-     * **2026-08-31: 5 → 4 に更新した。Scanner の挙動は変わっていない。**
+     * **2026-08-31（2）: 4 → 5 に更新した。仕様適合の修正による。**
+     * `scanMetricChange` が「連続N期同方向」を見ているのに `deviation` と
+     * 名乗っていたのを `trend` に直した（`docs/spec/03_sense.md` の
+     * 乖離＝平常レンジ逸脱 / 傾向＝連続N期同方向 という定義に合わせた）。
+     * **この走査はベースラインを一度も参照しない**ので、定義上「乖離」ではありえない。
+     * 仕込み `#3 reply_delay` / `#6 inquiry_decline` の期待も同じ理由で
+     * `deviation` → `trend` に揃えた（同じ検出器から出ているため）。
+     *
+     * **2026-08-31（1）: 5 → 4 に更新した。Scanner の挙動は変わっていない。**
      * このスイートが測る対象を `src/sense/scanner.ts` から
      * `@edge/_shared/scan`（**本番が動かす実装**）に向け直したためである。
      * それまで測っていた `src/sense/scanner.ts` は `tests/` と `scripts/` からしか
@@ -96,18 +104,18 @@ describe("Engine eval suite (D1-D2)", () => {
      * すなわち「なぜ変わったか」を確かめ、契約 `docs/contracts/slice-eval-repair.md` の
      * 実測記録を書き換えてから、この期待値を新しい実測値に合わせる。
      *
-     * 落ちている3件の内訳は別物である。**まとめて「ラベルのずれ」と呼ばない。**
-     * `#4 overtime_creep` は現象を捉えているが `deviation` と名乗っている（ラベル）。
-     * `#1 order_interval_elongation` は発注間隔を見る検出器が無い（未実装）。
-     * `#7 meeting_silence` は本番に silence 検出器が無い（未実装）。
-     * どれをどう直すかは `docs/spec/07_open_items.md` の判断待ちである。
+     * 残る2件は**どちらも未実装**であり、ラベルの問題ではない。
+     * `#1 order_interval_elongation` は発注間隔を見る検出器が無い。
+     * `#7 meeting_silence` は途絶の検出器が無く、**加えて `schedule_interval` の
+     * ベースラインを誰も作っていない**（本番は `revenue` のみ）。
+     * 検出器だけ足しても発火しない。両方を要する（`07_open_items` の判断待ち）。
      *
      * 赤を常設しない理由（2026-08-29 梶谷さん判断）: main が赤だと `deploy.yml` の
      * `verify` が落ちて `deploy-migrations` に到達せず、**本番へ何も出せなくなる**。
      * `tests/eval/` は `verify` の除外対象に入っていない。
      * また常設した赤は一週間で「CI は赤いもの」になり、本物の回帰がその後ろに隠れる。
      */
-    expect(result.detected).toBe(4);
+    expect(result.detected).toBe(5);
   });
 
   it("D2: false positives <= 2", () => {

@@ -1,16 +1,24 @@
 import { describe, it, expect } from "vitest";
+/**
+ * **本番の Scanner を検査する。**
+ *
+ * 2026-08-31 まで、このファイルは `src/sense/scanner.ts` という
+ * **本番で走っていない別実装**を検査していた（`tests/` と `scripts/` からしか
+ * 参照が無く、本番は `run-sense` → `functions/v1/scan` を通る）。
+ * 死にコードを消すにあたり、**テストは捨てずに本番実装へ付け替えた。**
+ * 経緯は `docs/reports/2026-08-31_検知5of7の内訳実測.md`。
+ */
 import {
   runScan,
-  type TimelineEvent,
-  type Baseline,
+  type ScanEvent as TimelineEvent,
+  type ScanBaseline as Baseline,
   type ScanCandidate,
-} from "../../src/sense/scanner";
+} from "@edge/_shared/scan";
 
 // Helper to create timeline events
 function makeEvent(overrides: Partial<TimelineEvent> = {}): TimelineEvent {
   return {
     event_id: "evt_" + Math.random().toString(36).slice(2, 8),
-    company_id: "550e8400-e29b-41d4-a716-446655440000",
     occurred_at: new Date().toISOString(),
     source: "test",
     event_type: "transaction",
@@ -47,7 +55,20 @@ describe("Scanner (D1-D2, D4)", () => {
     expect(candidates.some((c) => c.scanType === "deviation")).toBe(true);
   });
 
-  it("trend scan: detects N consecutive same-direction periods", () => {
+  /**
+   * **本番には売上の傾向検知が無い。現在地としてここに固定する。**
+   *
+   * 削除した `src/sense/scanner.ts` には `scanTrend`（売上が N期連続で同方向）が
+   * あったが、本番の `_shared/scan.ts` には無い。移植しなかったのは、
+   * 評価で**正常データに誤検知していた**ためである
+   * （`trend: Rising trend over 4 periods` が仕込みのどれとも交差しなかった）。
+   *
+   * このテストは「無いこと」を陽性で主張しているのではなく、
+   * **黙って消えたのではないと分かるようにする**ためにある。
+   * 足すと決めたらここが赤くなり、現在地の更新を強制する。
+   * 未検知の `#1 order_interval_elongation` はこの穴と関係している。
+   */
+  it("売上の連続同方向は検知しない（本番に傾向走査が無い・現在地の固定）", () => {
     // 5 consecutive declining revenue events
     const now = Date.now();
     const events: TimelineEvent[] = Array.from({ length: 5 }, (_, i) =>
@@ -59,7 +80,10 @@ describe("Scanner (D1-D2, D4)", () => {
     );
     const baselines: Baseline[] = [makeBaseline()];
     const candidates = runScan(events, baselines);
-    expect(candidates.some((c) => c.scanType === "trend")).toBe(true);
+    // 売上由来の傾向候補は出ない（`source: "transaction"` の trend）
+    expect(candidates.filter((c) => c.scanType === "trend" && c.source === "transaction")).toEqual(
+      [],
+    );
   });
 
   it("silence scan: detects expected interval exceeded", () => {
@@ -106,7 +130,6 @@ describe("Scanner (D1-D2, D4)", () => {
       makeEvent({
         event_type: "external",
         sensitivity: "S0",
-        company_id: null,
         metrics: { relevance: "competitor_hiring" },
         source: "gbizinfo",
       }),
@@ -167,7 +190,7 @@ describe("Scanner (D1-D2, D4)", () => {
     ];
     const candidates = runScan(events, []);
     const replyCandidate = candidates.find(
-      (c) => c.source === "communication" && c.scanType === "deviation",
+      (c) => c.source === "communication" && c.scanType === "trend",
     );
     expect(replyCandidate).toBeDefined();
     expect(replyCandidate!.evidence_event_ids).toHaveLength(3);
@@ -185,7 +208,7 @@ describe("Scanner (D1-D2, D4)", () => {
     );
     const candidates = runScan(events, []);
     const inquiryCandidate = candidates.find(
-      (c) => c.source === "web" && c.scanType === "deviation",
+      (c) => c.source === "web" && c.scanType === "trend",
     );
     expect(inquiryCandidate).toBeDefined();
     expect(inquiryCandidate!.evidence_event_ids).toHaveLength(4);

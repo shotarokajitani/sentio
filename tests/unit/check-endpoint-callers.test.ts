@@ -13,6 +13,8 @@ import { describe, it, expect } from "vitest";
 import {
   aliasSpecifier,
   findUnreachable,
+  isConventionFile,
+  ENDPOINT_SPECS,
   type EndpointSpec,
 } from "../../scripts/check-endpoint-callers";
 
@@ -127,5 +129,100 @@ describe("findUnreachable — 陰性コントロール", () => {
     ]);
 
     expect(findings).toEqual([{ id: "disconnect", reason: "no-caller" }]);
+  });
+});
+
+
+/**
+ * 2026-08-31 の修理。**宣言が1件しか無いことが穴だった**が、
+ * 広げようとすると到達しているエンドポイントまで `no-importer` になった。
+ * 原因は2つあり、どちらも「実際には到達しているのに、見方が狭い」形である。
+ */
+describe("到達の見方（2026-08-31 の修理）", () => {
+  const SIBLING_SPEC: EndpointSpec = {
+    id: "csv-analyze",
+    endpoint: "/api/csv/analyze",
+    route: "src/app/api/csv/analyze/route.ts",
+    contract: "CH-D2",
+  };
+
+  it("兄弟の相対 import（`./connect-client`）を到達と認める", () => {
+    const sources = [
+      { file: "src/app/connect/connect-client.tsx", source: 'fetch("/api/csv/analyze")' },
+      { file: "src/app/connect/page.tsx", source: 'import { ConnectClient } from "./connect-client";' },
+    ];
+    expect(findUnreachable([SIBLING_SPEC], () => true, sources)).toEqual([]);
+  });
+
+  it("陰性: ファイル名が違えば到達と認めない", () => {
+    const sources = [
+      { file: "src/app/connect/connect-client.tsx", source: 'fetch("/api/csv/analyze")' },
+      { file: "src/app/connect/page.tsx", source: 'import { Other } from "./other-client";' },
+    ];
+    expect(findUnreachable([SIBLING_SPEC], () => true, sources)).toEqual([
+      { id: "csv-analyze", reason: "no-importer" },
+    ]);
+  });
+
+  it("規約ファイル（page.tsx / middleware.ts）は import されなくても到達と認める", () => {
+    const spec: EndpointSpec = {
+      id: "auth-session",
+      endpoint: "/api/auth/session",
+      route: "src/app/api/auth/session/route.ts",
+      contract: "A-1",
+    };
+    // login/page.tsx は誰からも import されない。Next が規約で直接読む
+    const sources = [{ file: "src/app/login/page.tsx", source: 'fetch("/api/auth/session")' }];
+    expect(findUnreachable([spec], () => true, sources)).toEqual([]);
+  });
+
+  it("陰性: 規約ファイルでない孤立したモジュールは到達と認めない", () => {
+    const spec: EndpointSpec = {
+      id: "auth-session",
+      endpoint: "/api/auth/session",
+      route: "src/app/api/auth/session/route.ts",
+      contract: "A-1",
+    };
+    const sources = [{ file: "src/lib/auth/session-caller.ts", source: 'fetch("/api/auth/session")' }];
+    expect(findUnreachable([spec], () => true, sources)).toEqual([
+      { id: "auth-session", reason: "no-importer" },
+    ]);
+  });
+});
+
+describe("isConventionFile", () => {
+  it("Next が規約で読むものを認める", () => {
+    for (const f of [
+      "src/app/login/page.tsx",
+      "src/app/layout.tsx",
+      "src/middleware.ts",
+      "src/app/x/not-found.tsx",
+    ]) {
+      expect(isConventionFile(f), f).toBe(true);
+    }
+  });
+
+  it("普通のモジュールは規約ファイルではない", () => {
+    for (const f of ["src/lib/connections/disconnect.ts", "src/app/connect/connect-client.tsx"]) {
+      expect(isConventionFile(f), f).toBe(false);
+    }
+  });
+});
+
+describe("実物の宣言", () => {
+  it("**空にしない。** 0件で緑になるのは検査の空洞そのもの", () => {
+    expect(ENDPOINT_SPECS.length).toBeGreaterThan(0);
+  });
+
+  it("id が重複していない", () => {
+    const ids = ENDPOINT_SPECS.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("宣言した route が src/app/api 配下を指している", () => {
+    for (const s of ENDPOINT_SPECS) {
+      expect(s.route.startsWith("src/app/api/"), s.id).toBe(true);
+      expect(s.endpoint.startsWith("/api/"), s.id).toBe(true);
+    }
   });
 });

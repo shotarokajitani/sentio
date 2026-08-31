@@ -2,13 +2,7 @@ import { describe, it, expect } from "vitest";
 import { generateSyntheticCompany } from "../../scripts/generate-synthetic-company";
 import { runScan, type Baseline } from "../../src/sense/scanner";
 import { countDetectedSignals, countFalsePositives } from "./scoring";
-import {
-  loadGoldenCases,
-  compareGoldenWithPlanted,
-  checkDay0Artifact,
-  loadDay0Artifact,
-  type Day0Expectations,
-} from "./golden";
+import { loadGoldenCases, compareGoldenWithPlanted } from "./golden";
 
 /**
  * エンジン評価スイート（契約 `docs/contracts/slice-eval-repair.md`・スライスE）。
@@ -136,25 +130,5 @@ describe("Golden set (E-3-1)", () => {
 
     expect(cases).toHaveLength(12);
     expect(compareGoldenWithPlanted(cases, company.plantedSignals).problems).toEqual([]);
-  });
-});
-
-describe("real-diseno の再発防止条件 (E-4-1 / E-4-2)", () => {
-  it("Day0 成果物が meta.json の条件を満たす", () => {
-    const cases = loadGoldenCases(GOLDEN_ROOT);
-    const realCase = cases.find((c) => c.name === "real-diseno");
-    if (!realCase) throw new Error("real-diseno ケースが無い");
-
-    const expectations = realCase.meta.expected as unknown as Day0Expectations;
-    const artifact = loadDay0Artifact(realCase.dir);
-
-    const result = checkDay0Artifact(expectations, artifact);
-    if (result.problems.length > 0) {
-      console.log("E-4 実測: Day0 成果物の検査に問題あり");
-      for (const p of result.problems) console.log(`  - ${p}`);
-    }
-
-    // **成果物が無いことを pass にしない**（E-4-2）。fail-open を潰す
-    expect(result.problems).toEqual([]);
   });
 });

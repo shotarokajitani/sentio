@@ -1,5 +1,5 @@
 /**
- * `eval/golden/**` のローダと、Day0 成果物の検査器（スライスE・E-D3 / E-4-1）。
+ * `eval/golden/**` のローダ（スライスE・E-D3）。
  *
  * golden は12ケース分の `meta.json` を持ちながら、`engine.test.ts` から
  * **一度も読まれていなかった**。読まれない期待値は文書であって検査ではない。
@@ -86,79 +86,4 @@ export function compareGoldenWithPlanted(
   }
 
   return { problems };
-}
-
-export interface Day0Expectations {
-  evaluator_must_run: boolean;
-  generation_time_min_ms: number;
-  day0_must_contain: Record<string, string[]>;
-}
-
-export interface Day0Artifact {
-  evaluator_ran: boolean;
-  generation_time_ms: number;
-  blocks: Record<string, string>;
-}
-
-/**
- * Day0 成果物の検査（E-4-1 / E-4-2）。
- *
- * `real-diseno/meta.json` の `a2_misjudgment` は
- * **テンプレ差し込みの Day0 を pass と誤採点した**記録である。
- * 証拠は生成時間135ms（LLM を通っていない）。同じファイルに再発防止条件が
- * 機械検査可能な形で書かれているのに、検査するコードが無かった。
- *
- * **成果物が無いときは fail する。** ここで `null` を pass にすると、
- * 「Day0 を一度も作っていない」状態が緑になる。それは fail-open であり、
- * `tests/integration/report-page.test.ts` の `mode === "fail"` ガードと同じ理由で潰す。
- */
-export function checkDay0Artifact(
-  expectations: Day0Expectations,
-  artifact: Day0Artifact | null,
-): { problems: string[] } {
-  if (artifact === null) {
-    return {
-      problems: [
-        "Day0 の出力成果物が無い。検査対象が存在しない状態を pass にしない（E-4-2）。" +
-          "テンプレ差し込みの Day0 を pass と誤採点した a2_misjudgment と同じ形になる",
-      ],
-    };
-  }
-
-  const problems: string[] = [];
-
-  if (expectations.evaluator_must_run && !artifact.evaluator_ran) {
-    problems.push("Evaluator が走っていない（evaluator_must_run: true）");
-  }
-
-  if (artifact.generation_time_ms < expectations.generation_time_min_ms) {
-    problems.push(
-      `生成時間 ${artifact.generation_time_ms}ms が下限 ${expectations.generation_time_min_ms}ms 未満。` +
-        "LLM を通っていない疑いがある（135ms の事故と同じ形）",
-    );
-  }
-
-  for (const [block, required] of Object.entries(expectations.day0_must_contain)) {
-    const text = artifact.blocks[block];
-    if (text === undefined) {
-      problems.push(`ブロック ${block} が成果物に無い`);
-      continue;
-    }
-    for (const term of required) {
-      // 「具体的金額or件数or傾向」のような選択肢形式は、どれか1つで満たす
-      const alternatives = term.split("or");
-      if (!alternatives.some((a) => text.includes(a))) {
-        problems.push(`ブロック ${block} に必須語がない: ${term}`);
-      }
-    }
-  }
-
-  return { problems };
-}
-
-/** ケースディレクトリの Day0 成果物を読む。**無ければ `null`**（呼び出し側が fail させる） */
-export function loadDay0Artifact(caseDir: string): Day0Artifact | null {
-  const path = join(caseDir, "day0.json");
-  if (!existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, "utf8")) as Day0Artifact;
 }

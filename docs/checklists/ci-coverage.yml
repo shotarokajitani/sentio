@@ -78,6 +78,20 @@ checks:
       index.ts に型検査が掛かるのはこのジョブだけ。2026-08-19 に
       typecheck / lint / unit が全部緑の状態で deno check が28件で落ちた。
 
+  - id: check-dual-impl
+    script: "check:dual-impl"
+    file: "check-dual-impl.ts"
+    command: "pnpm run check:dual-impl"
+    contract: CH-監査
+    requires: []
+    must_run_in: ["ci.verify"]
+    note: >-
+      src/ と supabase/functions/ の両方に同名の実装があるのに、ずれを止める突合テストが
+      無い状態を検出する。2026-08-31、runScan（Scanner）が2つあり本番で走っている方だけが
+      更新され、評価スイートは走っていない方を6週間測り続けていた。
+      この検査器は止め具を強制しない（pinnedBy: null を許す）。止めるのは
+      「新しい二重実装が黙って増えること」である。静的走査だけなので live-db は要らない。
+
   - id: check-endpoint-callers
     script: "check:endpoint-callers"
     file: "check-endpoint-callers.ts"

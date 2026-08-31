@@ -73,7 +73,26 @@ function isNonNameLike(cell: string): boolean {
 }
 
 /**
+ * **末尾の空セルだけ**を判定の対象から外す。
+ *
+ * `日付,摘要,入金,出金,,,,` は**正しい列名の行**である。Excel や会計ソフトの書き出しは、
+ * 人が触った列まで区切りを打つので末尾に空セルが並ぶ。これを数えると
+ * ちょうど半数に届いて**正常なCSVが断られる**（2026-08-31 実測で再現した）。
+ *
+ * **途中の空セルは落とさない。** 全銀協の実物は17列目の手前が空欄であり、
+ * それは「列名の行ではない」ことの証拠そのものである。落とすのは末尾だけでよい。
+ */
+function dropTrailingEmpty(cells: string[]): string[] {
+  let end = cells.length;
+  while (end > 0 && cells[end - 1].trim() === "") end--;
+  return cells.slice(0, end);
+}
+
+/**
  * 1行目の内訳を数える。
+ *
+ * `total` は**判定した列数**である（末尾の空セルを外した後）。断ったときに返す件数と
+ * 割合が、判定に使った母数と食い違わないようにするためである。
  *
  * **空配列は列名の行ではない**（`isHeader: false`）。列が1つも無いものに対応表は作れず、
  * ここで true を返すと「0件だから通す」という素通しの穴になる。fail-closed に倒す。
@@ -82,8 +101,9 @@ function isNonNameLike(cell: string): boolean {
  * `["摘要"]` は通り、`["9999999"]` は落ちる。
  */
 export function inspectHeaderRow(cells: string[]): HeaderRowVerdict {
-  const total = cells.length;
-  const nonNameLike = cells.filter(isNonNameLike).length;
+  const judged = dropTrailingEmpty(cells);
+  const total = judged.length;
+  const nonNameLike = judged.filter(isNonNameLike).length;
 
   // 「半数以上なら列名の行ではない」＝ちょうど半数は落とす。
   // したがって通すのは**半数未満**のときだけである（CH-2-4 が固定している境界）

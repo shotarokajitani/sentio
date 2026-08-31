@@ -49,7 +49,10 @@ export async function POST(req: NextRequest) {
         error: "no_header_row",
         total: verdict.total,
         non_name_like: verdict.nonNameLike,
-        ratio: Math.round((verdict.nonNameLike / verdict.total) * 100) / 100,
+        // 末尾の空セルを外した結果 0列になることがある（1行目が空セルだけの場合）。
+        // そのまま割ると NaN になり、JSON では null に化けて件数の意味が消える
+        ratio:
+          verdict.total === 0 ? 0 : Math.round((verdict.nonNameLike / verdict.total) * 100) / 100,
       },
       { status: 400 },
     );

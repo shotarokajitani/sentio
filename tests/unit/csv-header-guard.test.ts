@@ -108,8 +108,65 @@ describe("「列名らしくない」の中身", () => {
     }
   });
 
-  it("空: 空文字と空白だけのセルを数える", () => {
-    expect(inspectHeaderRow(["", "   ", "\t"]).nonNameLike).toBe(3);
+  it("空: 空文字も空白だけのセルも空として数える（末尾でない位置で確かめる）", () => {
+    // 末尾の空セルは判定の対象外なので、後ろに列名を1つ置いて「途中の空」にしている
+    expect(inspectHeaderRow(["", "   ", "	", "摘要"])).toEqual({
+      isHeader: false,
+      total: 4,
+      nonNameLike: 3,
+    });
+  });
+});
+
+describe("末尾の空列（Excel の余分なカンマ）を誤検知にしない", () => {
+  /**
+   * `日付,摘要,入金,出金,,,,` は**正しい列名の行**である。
+   * 会計ソフトや Excel の書き出しは、触った列まで区切りを打つので末尾に空セルが並ぶ。
+   * これを「列名らしくない」と数えると、ちょうど半数で**正常なCSVが断られる**。
+   * 判定の前に末尾の空セルだけを落とす理由がこれである。
+   */
+  it("末尾に空列が並んでも通る（4列＋空4で落ちない）", () => {
+    expect(inspectHeaderRow(["日付", "摘要", "入金", "出金", "", "", "", ""])).toEqual({
+      isHeader: true,
+      total: 4,
+      nonNameLike: 0,
+    });
+  });
+
+  it("末尾のカンマ1つ（空セル1）でも通る", () => {
+    expect(looksLikeHeaderRow([...BANK_HEADER_ROW, ""])).toBe(true);
+  });
+
+  it("2列＋空2でも通る", () => {
+    expect(looksLikeHeaderRow(["日付", "金額", "", ""])).toBe(true);
+  });
+
+  it("**途中**の空セルは落とさない。列名の行が無い証拠として数える", () => {
+    expect(inspectHeaderRow(["日付", "", "摘要", "金額"])).toEqual({
+      isHeader: true,
+      total: 4,
+      nonNameLike: 1,
+    });
+  });
+
+  it("全銀協の判定は変わらない（末尾が空でないので1つも落ちない）", () => {
+    expect(inspectHeaderRow(ZENGIN_FIRST_ROW)).toEqual({
+      isHeader: false,
+      total: 17,
+      nonNameLike: 14,
+    });
+  });
+
+  it("全銀協の行の末尾に空が付いても断る", () => {
+    expect(looksLikeHeaderRow([...ZENGIN_FIRST_ROW, "", ""])).toBe(false);
+  });
+
+  it("空セルだけの行は列名の行ではない（全部落ちて0列になる。fail-closed）", () => {
+    expect(inspectHeaderRow(["", "", ""])).toEqual({
+      isHeader: false,
+      total: 0,
+      nonNameLike: 0,
+    });
   });
 });
 

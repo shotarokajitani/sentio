@@ -186,6 +186,20 @@ describe("サーバ: /api/csv/analyze も同じ判定で閉じる", () => {
     expect((await res.json()).error).toContain("ANTHROPIC_API_KEY");
   });
 
+  it("空セルだけの1行目でも 400。割合が NaN で落ちない", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "unit-test-placeholder");
+    vi.stubEnv("ANTHROPIC_MODEL", "unit-test-placeholder");
+    const { POST } = await import("@/app/api/csv/analyze/route");
+
+    // headers.length は 0 でないので既存の「headers required」は通り抜ける。
+    // 末尾の空セルを外すと判定対象が0列になり、割合の分母が 0 になる
+    const res = await POST(post({ headers: ["", "", ""], row_count: 3, type_stats: {} }));
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body).toEqual({ error: "no_header_row", total: 0, non_name_like: 0, ratio: 0 });
+  });
+
   it("列名が無い（配列が空）ときの既存の 400 を壊さない", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "unit-test-placeholder");
     vi.stubEnv("ANTHROPIC_MODEL", "unit-test-placeholder");

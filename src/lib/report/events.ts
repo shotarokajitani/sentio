@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   jstWeekRange,
-  summarizeWeek,
+  summarizeWeekWithFallback,
+  FALLBACK_MAX_WEEKS,
   MEETING_EVENT_TYPE,
   MEETING_SOURCE,
   type EventRow,
@@ -27,8 +28,17 @@ export async function fetchWeeklyReport(
   reference: Date,
 ): Promise<WeeklySummary | null> {
   const week = jstWeekRange(reference);
-  // 前週比のために前週の頭から取る。集計側が同じ週の切り方でもう一度回す（W-D3）
-  const from = jstWeekRange(new Date(week.start.getTime() - 1)).start;
+  /**
+   * 取得窓は**遡り上限＋その前週**まで広げる（契約 スライスRF）。
+   *
+   * 当週が0件のとき最大 `FALLBACK_MAX_WEEKS` 週まで遡り（RF-D3）、
+   * さらに**表示する週の前週**と比べる（RF-D5）ので、
+   * 最も古い場合で「当週の9週前の週頭」まで要る。
+   *
+   * **週の選択はここでしない。** どの週を出すかは純関数（`summarizeWeekWithFallback`）が決める。
+   * DB のクエリで週を決めると、選択規則が SQL と TypeScript に割れる。
+   */
+  const from = new Date(week.start.getTime() - (FALLBACK_MAX_WEEKS + 1) * 7 * DAY_MS);
 
   const { data, error } = await supabase
     .from("events")
@@ -45,5 +55,8 @@ export async function fetchWeeklyReport(
     return null;
   }
 
-  return summarizeWeek((data ?? []) as EventRow[], reference);
+  // 上端は当週の終わり。**未来の週は取りに行かない**（RF-D4。純関数側でも選ばない）
+  return summarizeWeekWithFallback((data ?? []) as EventRow[], reference);
 }
+
+const DAY_MS = 86_400_000;

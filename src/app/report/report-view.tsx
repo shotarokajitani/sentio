@@ -48,6 +48,13 @@ function Summary({ summary }: { summary: WeeklySummary }) {
 
   return (
     <>
+      {/*
+        遡ったことを黙って隠さない（契約 スライスRF・RF-D1）。
+        先週の数字を「今週」として見せるのは、報告ゼロで見えるという約束に反する。
+        何週前かは書かない。**週の範囲が直下に出ている**方が正確である
+      */}
+      {summary.isFallback && <p className="lead">{t.report.fallbackNotice}</p>}
+
       <p className="section-label" style={{ marginTop: 24 }}>
         {t.report.weekRange(formatDate(summary.weekStart), formatDate(lastDay.toISOString()))}
       </p>

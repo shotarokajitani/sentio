@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateSyntheticCompany } from "../../scripts/generate-synthetic-company";
-import { runScan, type Baseline } from "../../src/sense/scanner";
+// **本番が動かす実装を測る。** `src/sense/scanner.ts` は本番で走っていない
+import { runScan, type ScanBaseline } from "@edge/_shared/scan";
 import { countDetectedSignals, countFalsePositives } from "./scoring";
 import { loadGoldenCases, compareGoldenWithPlanted } from "./golden";
 
@@ -22,7 +23,7 @@ import { loadGoldenCases, compareGoldenWithPlanted } from "./golden";
 const GOLDEN_ROOT = "eval/golden";
 
 // Build baselines from normal transaction data
-function buildBaselines(): Baseline[] {
+function buildBaselines(): ScanBaseline[] {
   return [
     {
       metric_key: "revenue",
@@ -62,7 +63,7 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(candidates.length).toBeGreaterThan(0);
   });
 
-  it("D1: 現在地は 5/7（合格線6・未達）", () => {
+  it("D1: 現在地は 4/7（合格線6・未達）", () => {
     const candidates = runScan(company.events, baselines);
     const result = countDetectedSignals(positiveSignals, candidates);
 
@@ -76,7 +77,16 @@ describe("Engine eval suite (D1-D2)", () => {
     }
 
     /**
-     * **契約の合格線は6。現在地は5で未達である。**
+     * **契約の合格線は6。現在地は4で未達である。**
+     *
+     * **2026-08-31: 5 → 4 に更新した。Scanner の挙動は変わっていない。**
+     * このスイートが測る対象を `src/sense/scanner.ts` から
+     * `@edge/_shared/scan`（**本番が動かす実装**）に向け直したためである。
+     * それまで測っていた `src/sense/scanner.ts` は `tests/` と `scripts/` からしか
+     * 参照されておらず、**本番では1行も走っていなかった**
+     * （`run-sense` が `functions/v1/scan` を叩く）。
+     * 差の内訳は `#7 meeting_silence` で、**本番には silence 検出器が無い。**
+     * 経緯は `docs/reports/2026-08-31_検知5of7の内訳実測.md`。
      *
      * `toBeGreaterThanOrEqual` にしない。**実測値そのものに固定する。**
      * 上振れ（6/7 になった）も赤にして、**現在地の更新を強制する**ためである。
@@ -86,17 +96,18 @@ describe("Engine eval suite (D1-D2)", () => {
      * すなわち「なぜ変わったか」を確かめ、契約 `docs/contracts/slice-eval-repair.md` の
      * 実測記録を書き換えてから、この期待値を新しい実測値に合わせる。
      *
-     * Scanner のラベリング修正は**別スライス**（`docs/spec/07_open_items.md`
-     * 「Scanner の `scanType` ラベリングが仕込みとずれている」）。
-     * 落ちている2件は「見えていない」のではなく、`scanType` の名前がずれている。
-     * 証拠（`evidence_event_ids`）の交差だけで数えれば **7/7** である。
+     * 落ちている3件の内訳は別物である。**まとめて「ラベルのずれ」と呼ばない。**
+     * `#4 overtime_creep` は現象を捉えているが `deviation` と名乗っている（ラベル）。
+     * `#1 order_interval_elongation` は発注間隔を見る検出器が無い（未実装）。
+     * `#7 meeting_silence` は本番に silence 検出器が無い（未実装）。
+     * どれをどう直すかは `docs/spec/07_open_items.md` の判断待ちである。
      *
      * 赤を常設しない理由（2026-08-29 梶谷さん判断）: main が赤だと `deploy.yml` の
      * `verify` が落ちて `deploy-migrations` に到達せず、**本番へ何も出せなくなる**。
      * `tests/eval/` は `verify` の除外対象に入っていない。
      * また常設した赤は一週間で「CI は赤いもの」になり、本物の回帰がその後ろに隠れる。
      */
-    expect(result.detected).toBe(5);
+    expect(result.detected).toBe(4);
   });
 
   it("D2: false positives <= 2", () => {

@@ -1,14 +1,25 @@
 import { describe, it, expect } from "vitest";
 import { generateSyntheticCompany } from "../../scripts/generate-synthetic-company";
 import { runScan, type Baseline } from "../../src/sense/scanner";
+import { countDetectedSignals, countFalsePositives } from "./scoring";
+import { loadGoldenCases, compareGoldenWithPlanted } from "./golden";
 
 /**
- * Engine evaluation suite — tests Scanner detection against synthetic company
- * with 8 planted signals (7 positive, 1 negative control).
+ * エンジン評価スイート（契約 `docs/contracts/slice-eval-repair.md`・スライスE）。
  *
- * D1: Positive detection rate >= 6/7
- * D2: False positive rate <= 2 AND negative control ⑤ never detected
+ * D1: 陽性7件のうち6件以上を検知する
+ * D2: 誤検知2件以下 ＋ 陰性コントロール⑤は検知されない
+ *
+ * **判定は証拠まで見る。** 直す前は `c.scanType === signal.scanType` しか見ておらず、
+ * 仕込み7件が5種類の `scanType` しか持たないため、
+ * **正しい型の候補が5件あれば 7/7 と採点されていた**（`detectedTypes` は計算されるだけで未使用だった）。
+ * 採点器そのものの検査は `tests/unit/eval-scoring.test.ts` にある。
+ *
+ * Scanner（`src/sense/scanner.ts`）はこのスライスでは直さない（E-D5）。
+ * **測り方だけを直す。** 測った結果が合格線に届かないなら、それが現在地である。
  */
+
+const GOLDEN_ROOT = "eval/golden";
 
 // Build baselines from normal transaction data
 function buildBaselines(): Baseline[] {
@@ -37,6 +48,7 @@ function buildBaselines(): Baseline[] {
 describe("Engine eval suite (D1-D2)", () => {
   const company = generateSyntheticCompany();
   const baselines = buildBaselines();
+  const positiveSignals = company.plantedSignals.filter((s) => s.type === "positive");
 
   it("synthetic company has expected signal counts", () => {
     const positive = company.plantedSignals.filter((s) => s.type === "positive");
@@ -50,42 +62,53 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(candidates.length).toBeGreaterThan(0);
   });
 
-  it("D1: detects >= 6 of 7 positive signals", () => {
+  it("D1: 現在地は 5/7（合格線6・未達）", () => {
     const candidates = runScan(company.events, baselines);
-    const detectedTypes = new Set(candidates.map((c) => c.scanType));
+    const result = countDetectedSignals(positiveSignals, candidates);
 
-    // Check which planted positives are covered
-    const positiveSignals = company.plantedSignals.filter((s) => s.type === "positive");
-    let detected = 0;
-    for (const signal of positiveSignals) {
-      // Check if any candidate matches this signal's scan type and references its events
-      const hasCandidate = candidates.some((c) => {
-        if (
-          signal.scanType === "deviation" ||
-          signal.scanType === "trend" ||
-          signal.scanType === "silence" ||
-          signal.scanType === "deadline" ||
-          signal.scanType === "external"
-        ) {
-          return c.scanType === signal.scanType;
-        }
-        return false;
-      });
-      if (hasCandidate) detected++;
+    // 実測値を必ずログに残す。赤の理由が閾値ではなく実測であることを証跡にする
+    console.log(`D1 実測: ${result.detected}/7 検知`);
+    for (const m of result.matched) {
+      console.log(`  ✓ signal ${m.signalId} ← 候補#${m.candidateIndex}（証拠 ${m.overlap.length}件）`);
+    }
+    for (const s of result.missed) {
+      console.log(`  ✗ signal ${s.id} ${s.label}（scanType=${s.scanType}）を検知できていない`);
     }
 
-    expect(detected).toBeGreaterThanOrEqual(6);
+    /**
+     * **契約の合格線は6。現在地は5で未達である。**
+     *
+     * `toBeGreaterThanOrEqual` にしない。**実測値そのものに固定する。**
+     * 上振れ（6/7 になった）も赤にして、**現在地の更新を強制する**ためである。
+     * 4/7 への回帰も同じく赤になる。
+     *
+     * 数字が変わったら、**この行を直すのではなく現在地を更新すること**。
+     * すなわち「なぜ変わったか」を確かめ、契約 `docs/contracts/slice-eval-repair.md` の
+     * 実測記録を書き換えてから、この期待値を新しい実測値に合わせる。
+     *
+     * Scanner のラベリング修正は**別スライス**（`docs/spec/07_open_items.md`
+     * 「Scanner の `scanType` ラベリングが仕込みとずれている」）。
+     * 落ちている2件は「見えていない」のではなく、`scanType` の名前がずれている。
+     * 証拠（`evidence_event_ids`）の交差だけで数えれば **7/7** である。
+     *
+     * 赤を常設しない理由（2026-08-29 梶谷さん判断）: main が赤だと `deploy.yml` の
+     * `verify` が落ちて `deploy-migrations` に到達せず、**本番へ何も出せなくなる**。
+     * `tests/eval/` は `verify` の除外対象に入っていない。
+     * また常設した赤は一週間で「CI は赤いもの」になり、本物の回帰がその後ろに隠れる。
+     */
+    expect(result.detected).toBe(5);
   });
 
   it("D2: false positives <= 2", () => {
     const candidates = runScan(company.events, baselines);
-    // All candidates should map to a planted positive signal's scan type
-    const plantedScanTypes = new Set(
-      company.plantedSignals.filter((s) => s.type === "positive").map((s) => s.scanType),
-    );
+    const result = countFalsePositives(positiveSignals, candidates);
 
-    const falsePositives = candidates.filter((c) => !plantedScanTypes.has(c.scanType));
-    expect(falsePositives.length).toBeLessThanOrEqual(2);
+    console.log(`D2 実測: 誤検知 ${result.count}件 / 候補 ${candidates.length}件`);
+    for (const c of result.candidates) {
+      console.log(`  誤検知: scanType=${c.scanType} 証拠=${c.evidence_event_ids.slice(0, 3).join(",")}`);
+    }
+
+    expect(result.count).toBeLessThanOrEqual(2);
   });
 
   it("D2: negative control ⑤ (seasonal normal) is NOT detected", () => {
@@ -93,11 +116,19 @@ describe("Engine eval suite (D1-D2)", () => {
     // Normal seasonal revenue (93k in Aug) should be within p25-p75 range
     // and not trigger deviation scan
     const seasonalFalsePositive = candidates.filter((c) => {
-      // Check if any deviation candidate is from the normal seasonal data
       if (c.scanType !== "deviation") return false;
-      // Check if the evidence events are from normal baseline transactions
       return c.evidence_event_ids.some((id) => id.startsWith("txn_normal"));
     });
     expect(seasonalFalsePositive).toHaveLength(0);
+  });
+});
+
+describe("Golden set (E-3-1)", () => {
+  it("eval/golden の meta.json を実際に読み、仕込みと突き合わせる", () => {
+    const cases = loadGoldenCases(GOLDEN_ROOT);
+    const company = generateSyntheticCompany();
+
+    expect(cases).toHaveLength(12);
+    expect(compareGoldenWithPlanted(cases, company.plantedSignals).problems).toEqual([]);
   });
 });

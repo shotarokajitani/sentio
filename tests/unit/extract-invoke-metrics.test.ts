@@ -206,3 +206,93 @@ describe("extractMetrics — fail-closed（読めないときに本文へ倒れ�
     expect(renderReport(r)).not.toContain("山田商事");
   });
 });
+
+/**
+ * dispatch-daily / dispatch-weekly の件数スカラー（2026-09-01 追加）。
+ *
+ * **これが載っていなかったため、dispatch-daily の数字が run ログから黙って消えた。**
+ * 応答には7つのキーがあったのに「抽出できた件数スカラーは 0 件」とだけ出ていた。
+ * 数字が出ないことと、応答が空だったことが、ログ上で区別できていなかった。
+ */
+describe("dispatch-* の件数スカラー", () => {
+  /** `_shared/dispatch.ts` の DispatchSummary と同じ形 */
+  const DISPATCH_SUMMARY = {
+    kind: "daily",
+    companies: 3,
+    delivered: 2,
+    skipped_no_connection: 1,
+    skipped_no_email: 0,
+    failed: 0,
+    sense_failed: 0,
+  };
+
+  it("陽性: 7キーのうち**6つの数値**が抽出される", () => {
+    const result = extractMetrics(JSON.stringify(DISPATCH_SUMMARY));
+
+    expect(result.ok).toBe(true);
+    expect(result.metrics).toEqual({
+      companies: 3,
+      delivered: 2,
+      skipped_no_connection: 1,
+      skipped_no_email: 0,
+      failed: 0,
+      sense_failed: 0,
+    });
+    expect(result.extractedCount).toBe(6);
+  });
+
+  it("陰性: `kind` は**値もキー名も**出力に現れない（文字列なので載せていない）", () => {
+    const result = extractMetrics(JSON.stringify(DISPATCH_SUMMARY));
+    const report = renderReport(result);
+
+    expect(result.metrics).not.toHaveProperty("kind");
+    expect(report).not.toContain("daily");
+    expect(report).not.toContain("kind");
+    // 除外1件として数えられているだけ
+    expect(result.excludedCount).toBe(1);
+  });
+
+  it("`kind` を allowlist に載せていたら型ガードで弾かれていた（載せない理由）", () => {
+    // 文字列は件数スカラーではない。載せると `<想定外の型 string>` になり、
+    // 「allowlist にあるのに出ない」紛らわしいキーが増える
+    const result = extractMetrics(JSON.stringify({ ...DISPATCH_SUMMARY, delivered: "2" }));
+    expect(result.metrics).not.toHaveProperty("delivered");
+    expect(result.unexpectedTypes).toContainEqual({ key: "delivered", type: "string" });
+  });
+});
+
+/**
+ * 「0件」の2つの意味を分ける（2026-09-01 追加）。
+ *
+ * **応答が空だった**のか、**応答に中身はあったが allowlist が追いついていない**のか。
+ * 後者は allowlist の更新漏れであり、黙って通すと数字が消えたことに誰も気づけない。
+ */
+describe("抽出0件のときの警告", () => {
+  it("抽出0件かつ除外1件以上 → ::warning:: を出す（更新漏れの可能性）", () => {
+    const report = renderReport(extractMetrics(JSON.stringify({ unknown_key: 42 })));
+
+    expect(report).toContain("抽出できた件数スカラーは 0 件");
+    expect(report).toContain("::warning::");
+    expect(report).toContain("METRIC_ALLOWLIST");
+    // 警告でもキー名は出さない
+    expect(report).not.toContain("unknown_key");
+  });
+
+  it("抽出0件かつ除外0件 → 警告を出さない（**空の応答を誤報しない**）", () => {
+    const report = renderReport(extractMetrics("{}"));
+
+    expect(report).toContain("抽出できた件数スカラーは 0 件");
+    expect(report).not.toContain("::warning::");
+  });
+
+  it("抽出できていれば、除外があっても警告を出さない", () => {
+    const report = renderReport(extractMetrics(JSON.stringify({ delivered: 2, other: "x" })));
+
+    expect(report).toContain("delivered: 2");
+    expect(report).not.toContain("::warning::");
+  });
+
+  it("本文が読めなかったときは警告を出さない（別の経路で報告済み）", () => {
+    expect(renderReport(extractMetrics("not json"))).not.toContain("::warning::");
+  });
+});

@@ -130,7 +130,7 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(result.detected).toBe(6);
   });
 
-  it("D2: false positives <= 2", () => {
+  it("D2: 現在地は誤検知 0件（合格線2以下・達成）", () => {
     const candidates = runScan(company.events, baselines);
     const result = countFalsePositives(positiveSignals, candidates);
 
@@ -141,7 +141,23 @@ describe("Engine eval suite (D1-D2)", () => {
       );
     }
 
-    expect(result.count).toBeLessThanOrEqual(2);
+    /**
+     * **D1 と同じく実測値そのものに固定する。**
+     *
+     * **2026-09-01: `toBeLessThanOrEqual(2)` から `toBe(0)` に変えた。**
+     * 合格線で受けていると、**誤検知が 1 や 2 に増えても緑のまま通る。**
+     * PR #51 の判断は「上振れも赤にして現在地の更新を強制する」であり、
+     * D1 だけをその形にして D2 を合格線のまま残していたのは、その判断の適用漏れである。
+     *
+     * 誤検知が 0 でなくなったら、**この行を直すのではなく現在地を更新すること。**
+     * すなわち「なぜ増えたか」を確かめ、契約 `docs/contracts/slice-eval-repair.md` の
+     * 実測記録を書き換えてから、期待値を新しい実測値に合わせる。
+     *
+     * いま 0 件なのは、誤検知を出していた `trend`（売上の連続同方向）が
+     * **本番の走査に存在しない**ためである（2026-08-31 実測）。
+     * 売上の傾向検知を足すと、まずここが赤くなる。**それは正しい赤である。**
+     */
+    expect(result.count).toBe(0);
   });
 
   it("D2: negative control ⑤ (seasonal normal) is NOT detected", () => {

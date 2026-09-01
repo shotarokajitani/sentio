@@ -8,7 +8,9 @@ import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
 import {
   BASELINE_NATURAL_KEY,
   REVENUE_BASELINE,
+  SCHEDULE_INTERVAL_BASELINE,
   buildBaselineStats,
+  scheduleDayIntervals,
 } from "../_shared/baseline-stats.ts";
 
 const MIN_OBS = 5;
@@ -73,12 +75,54 @@ Deno.serve(async (req: Request) => {
       "state-baselines: baselines upsert",
     );
 
+    // ── 予定の発生間隔（途絶＝沈黙シグナルの土台）──
+    //
+    // **検出器だけでは動かない。** `scan` の途絶走査はこのベースラインが
+    // 成立していなければ何もしない（抑制①「ベースライン未成立は対象外」）。
+    // 2026-08-31 の時点で `schedule_interval` を作る場所はどこにも無く、
+    // 走査を足しても一度も発火しない状態だった。ここが対になる半分である。
+    const scheduleEvents = await mustData(
+      supabase
+        .from("events")
+        .select("occurred_at")
+        .eq("company_id", company_id)
+        .eq("event_type", "schedule")
+        .order("occurred_at", { ascending: true }),
+      "state-baselines: schedule events",
+    );
+
+    const intervals = scheduleDayIntervals(
+      (scheduleEvents || []).map((e) => e.occurred_at as string),
+    );
+    const intervalStats = buildBaselineStats(intervals, MIN_OBS);
+
+    await mustOk(
+      supabase.from("baselines").upsert(
+        {
+          company_id,
+          metric_key: SCHEDULE_INTERVAL_BASELINE.metricKey,
+          entity_id: SCHEDULE_INTERVAL_BASELINE.entityId,
+          granularity: SCHEDULE_INTERVAL_BASELINE.granularity,
+          stats: intervalStats ?? {},
+          min_obs: MIN_OBS,
+          is_established: intervalStats !== null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: BASELINE_NATURAL_KEY },
+      ),
+      "state-baselines: schedule_interval upsert",
+    );
+
     return new Response(
       JSON.stringify({
         status: "ok",
         company_id,
         is_established: isEstablished,
         observation_count: revenues.length,
+        schedule_interval: {
+          is_established: intervalStats !== null,
+          observation_count: intervals.length,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

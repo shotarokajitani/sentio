@@ -20,6 +20,8 @@
  */
 
 /** `baselines.stats` JSONB の中身。**これが正本の形。** */
+import { jstDateKey } from "./jst.ts";
+
 export interface BaselineStats {
   median: number;
   iqr: number;
@@ -141,3 +143,37 @@ export const REVENUE_BASELINE = {
 
 /** `baselines` の自然キー。`00023` の一意索引と同じ順・同じ列（契約 S-方針1 / S-D2）。 */
 export const BASELINE_NATURAL_KEY = "company_id,metric_key,entity_id,granularity";
+
+/**
+ * 予定の発生間隔のベースライン（途絶＝沈黙シグナルの土台）。
+ *
+ * `entity_id` は `null`、すなわち**会社全体**の予定間隔である。
+ * 仕様（`docs/spec/02_state.md`）は「指標×エンティティ(任意)×粒度」を許しており、
+ * 定例シリーズごとに持つのが本来の形だが、`entity_id` は UUID で
+ * `entities` 行の生成（シリーズの同定キーの決定）が要る。
+ * **まず会社全体で作る**（2026-08-31 梶谷さん判断）。限界は `scan.ts` に明記した。
+ */
+export const SCHEDULE_INTERVAL_BASELINE = {
+  metricKey: "schedule_interval",
+  granularity: "event",
+  entityId: null,
+} as const;
+
+/**
+ * 予定が入っている「**日**」の間隔（日数）を返す。
+ *
+ * **同じ日に何件予定があっても1日と数える。** イベントごとの間隔をそのまま使うと、
+ * 1日に複数の会議がある会社で中央値が 0 日になり、**あらゆる空白が途絶に見える**。
+ * 日単位に丸めることでそれを構造的に防ぐ。
+ *
+ * 日の境界は JST（`jstDateKey`）。Sentio の日次キーは例外なく JST 基準である。
+ */
+export function scheduleDayIntervals(occurredAt: readonly string[]): number[] {
+  const days = [...new Set(occurredAt.map((iso) => jstDateKey(new Date(iso))))].sort();
+  const intervals: number[] = [];
+  for (let i = 1; i < days.length; i++) {
+    const diff = Date.parse(`${days[i]}T00:00:00Z`) - Date.parse(`${days[i - 1]}T00:00:00Z`);
+    intervals.push(Math.round(diff / (24 * 60 * 60 * 1000)));
+  }
+  return intervals;
+}

@@ -56,6 +56,55 @@ export const ENDPOINT_SPECS: EndpointSpec[] = [
     route: "src/app/api/connections/disconnect/route.ts",
     contract: "D-4-1",
   },
+  // ── 2026-08-31 追加。宣言が1件しか無いことが穴だった ──
+  //
+  // この検査器は「宣言したものが到達可能か」しか見ない。**宣言に無いものは見ない。**
+  // その結果、`/api/analyze-url` と `/api/competitors/suggest` が
+  // **一度も呼び出し元を持たないまま**残っていた（どちらも 2026-07-23 の
+  // 接続画面のコミットで生まれ、`git log -S` で探しても呼び出し元が存在した形跡が無い）。
+  // 検査器の穴ではなく**宣言の穴**である。到達している分をすべて載せて塞ぐ。
+  {
+    id: "connections",
+    endpoint: "/api/connections",
+    route: "src/app/api/connections/route.ts",
+    contract: "A-2-1",
+  },
+  {
+    id: "csv-analyze",
+    endpoint: "/api/csv/analyze",
+    route: "src/app/api/csv/analyze/route.ts",
+    contract: "CH-D2",
+  },
+  {
+    id: "csv-ingest",
+    endpoint: "/api/csv/ingest",
+    route: "src/app/api/csv/ingest/route.ts",
+    contract: "B1-B3",
+  },
+  {
+    id: "auth-google",
+    endpoint: "/api/auth/google",
+    route: "src/app/api/auth/google/route.ts",
+    contract: "A-1",
+  },
+  {
+    id: "auth-freee",
+    endpoint: "/api/auth/freee",
+    route: "src/app/api/auth/freee/route.ts",
+    contract: "A-1",
+  },
+  {
+    id: "auth-session",
+    endpoint: "/api/auth/session",
+    route: "src/app/api/auth/session/route.ts",
+    contract: "A-1",
+  },
+  {
+    id: "auth-signout",
+    endpoint: "/api/auth/signout",
+    route: "src/app/api/auth/signout/route.ts",
+    contract: "A-1",
+  },
 ];
 
 export type UnreachableReason = "missing-route" | "no-caller" | "no-importer";
@@ -93,6 +142,28 @@ export function aliasSpecifier(file: string): string {
     .replace(/\.(ts|tsx)$/, "");
 }
 
+/**
+ * Next.js がファイル名の規約で直接読むもの。**import されずに動く。**
+ *
+ * これらを呼び出し元に持つエンドポイントに「誰かが import しているか」を問うと、
+ * 実際に到達しているのに `no-importer` になる。
+ */
+export function isConventionFile(file: string): boolean {
+  const name = toPosix(file).split("/").pop() ?? "";
+  return [
+    "page.tsx",
+    "page.ts",
+    "layout.tsx",
+    "template.tsx",
+    "loading.tsx",
+    "error.tsx",
+    "not-found.tsx",
+    "default.tsx",
+    "middleware.ts",
+    "proxy.ts",
+  ].includes(name);
+}
+
 /** API ルート自身は「呼び出し元」に数えない。数えると検査が自分で自分を満たしてしまう */
 function isApiRoute(file: string): boolean {
   return toPosix(file).startsWith("src/app/api/");
@@ -123,15 +194,35 @@ export function findUnreachable(
     }
 
     // 呼び出しの実体が、別のファイルから import されているか。
-    // エイリアス（`@/lib/...`）と相対（`../../lib/...`）の両方を認める
+    //
+    // 3つの形を認める。
+    //   1. エイリアス      `@/lib/connections/disconnect`
+    //   2. パスを含む相対  `../../lib/connections/disconnect`
+    //   3. **兄弟の相対**  `./connect-client`
+    //
+    // 3 を認めていなかったため、**呼び出し元が画面コンポーネントであるエンドポイントは
+    // すべて `no-importer` になっていた**（2026-08-31 実測）。それが宣言を
+    // `disconnect` 1件に留めていた理由であり、その結果 `/api/analyze-url` と
+    // `/api/competitors/suggest` が呼び出し元を持たないまま残った。
+    //
+    // 3 はファイル名だけで照合するので、**同名の別モジュールを import している場合に
+    // 到達扱いになりうる**。この検査器はもともと完全な到達可能性解析ではなく
+    // 「1件も呼び出し元が無い」を止めるものなので、取りこぼすより過剰に見る側に倒す。
     const imported = callers.some((caller) => {
+      // **Next.js の規約ファイルは import されずに動く。** `page.tsx` や `middleware.ts` は
+      // フレームワークが直接読むので、「誰かが import しているか」を問うこと自体が誤りである
+      // （この検査器は `route.ts` について同じことを冒頭に書いている）。
+      // これを見ていなかったため `/api/auth/session` は、`login/page.tsx` と
+      // `middleware.ts` から実際に呼ばれているのに `no-importer` になっていた。
+      if (isConventionFile(caller.file)) return true;
+
       const alias = aliasSpecifier(caller.file);
       const tail = alias.replace(/^@/, "");
-      return stripped.some(
-        (other) =>
-          other.file !== caller.file &&
-          new RegExp(`from\\s+["'][^"']*${escapeRegExp(tail)}["']`).test(other.code),
+      const base = tail.slice(tail.lastIndexOf("/") + 1);
+      const pattern = new RegExp(
+        `from\\s+["'](?:[^"']*${escapeRegExp(tail)}|\\.{1,2}/(?:[^"']*/)?${escapeRegExp(base)})["']`,
       );
+      return stripped.some((other) => other.file !== caller.file && pattern.test(other.code));
     });
 
     if (!imported) {

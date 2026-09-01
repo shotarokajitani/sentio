@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { generateSyntheticCompany } from "../../scripts/generate-synthetic-company";
-import { runScan, type Baseline, type ScanCandidate } from "../../src/sense/scanner";
+// 本番の Scanner を通す（`src/sense/scanner.ts` は 2026-08-31 に削除）
+import {
+  runScan,
+  type ScanBaseline as Baseline,
+  type ScanCandidate,
+} from "@edge/_shared/scan";
 import {
   renderWeekly,
   type FindingSummary,

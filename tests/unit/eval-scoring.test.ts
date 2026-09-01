@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { PlantedSignal } from "../../scripts/generate-synthetic-company";
-import type { ScanCandidate } from "../../src/sense/scanner";
+import type { ScanCandidate } from "@edge/_shared/scan";
 import { countDetectedSignals, countFalsePositives } from "../eval/scoring";
 
 function signal(id: number, scanType: string, eventIds: string[]): PlantedSignal {

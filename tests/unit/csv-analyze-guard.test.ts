@@ -19,6 +19,8 @@ import {
   BANK_HEADER_ROW,
   ZENGIN_CSV_TEXT,
   BANK_CSV_TEXT,
+  AOZORA_HEADER_ROW,
+  AOZORA_HEADER_LINE,
 } from "../fixtures/csv-rows";
 import { parseCSVLine } from "@/app/connect/connect-client";
 
@@ -254,6 +256,12 @@ describe("生のCSVテキストから判定するまで（本番と同じ手順�
 
   it("パースを通しても手で組んだ配列と同じセルになる（BOM とクォートが落ちている）", () => {
     expect(headerCellsOf(ZENGIN_CSV_TEXT)).toEqual(ZENGIN_FIRST_ROW);
+  });
+
+  it("あおぞらの実ファイルは全フィールドが引用符囲み。外したうえで判定に渡る", () => {
+    // 実ファイルは Shift-JIS・6列・全フィールドがダブルクォート囲み（2026-09-01 確認）。
+    // `parseCSVLine` が引用符を外すことまで通して確かめる
+    expect(parseCSVLine(AOZORA_HEADER_LINE)).toEqual(AOZORA_HEADER_ROW);
   });
 
   it("列名付きの銀行明細テキストは通り、API を1回呼ぶ", async () => {

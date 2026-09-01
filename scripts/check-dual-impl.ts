@@ -92,12 +92,11 @@ export const DUAL_IMPL_SPECS: DualImplSpec[] = [
   {
     fn: "isQuietHour",
     src: "src/act/quiet-hours.ts",
-    edge: "supabase/functions/deliver-alert/index.ts",
-    pinnedBy: null,
+    edge: "supabase/functions/_shared/quiet-hours.ts",
+    pinnedBy: "tests/unit/quiet-hours.test.ts",
     reason:
-      "送信時刻の規則。Edge 側が `_shared/` ではなく関数本体に直書きのため import できず、" +
-      "突合テストを書けない。`_shared/quiet-hours.ts` への切り出しと突合追加を別PRで実施済み。" +
-      "そちらがマージされたら pinnedBy を設定すること",
+      "送信時刻の規則。2026-08-31 まで Edge 側が `deliver-alert/index.ts` に直書きで、" +
+      "import できず突合テストを書けなかった。`_shared/quiet-hours.ts` に切り出して止め具を付けた",
   },
   {
     fn: "generateEventId",
@@ -139,15 +138,6 @@ export const DUAL_IMPL_SPECS: DualImplSpec[] = [
     edge: "supabase/functions/_shared/caller.ts",
     pinnedBy: null,
     reason: "401 を返すだけのヘルパ。挙動の一致に意味が無いので止め具を付けない",
-  },
-  {
-    fn: "analyzeUrl",
-    src: "src/app/api/analyze-url/route.ts",
-    edge: "supabase/functions/day0/index.ts",
-    pinnedBy: null,
-    reason:
-      "src 側は呼び出し元が無く別PRで削除済み。そちらがマージされたら `dangling` になるので、" +
-      "この宣言ごと消すこと",
   },
 ];
 

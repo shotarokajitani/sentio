@@ -98,7 +98,15 @@ function Summary({ summary }: { summary: WeeklySummary }) {
         </div>
       ) : (
         <section className="section">
-          <p className="section-label">{t.report.scheduleHeading}</p>
+          {/*
+            遡り表示のときは見出しも遡り用に差し替える（契約 スライスRF の追補）。
+            2026-08-31 の本番実測で、フォールバック中に「今週の予定」の下へ
+            先週の予定が並んでいた。数字と注意書きだけ直しても、
+            リストの見出しが残っていれば読み手には今週に見える
+          */}
+          <p className="section-label">
+            {summary.isFallback ? t.report.fallbackScheduleHeading : t.report.scheduleHeading}
+          </p>
           <div className="rows">
             {summary.meetings.map((m) => (
               <MeetingRow key={`${m.startsAt}-${m.title ?? ""}`} meeting={m} />

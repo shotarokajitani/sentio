@@ -58,6 +58,11 @@ jobs:
       # 約束と実態がずれていた。check:caller-guard は Edge Function しか見ない。
       # 実DBを要求しない静的解析なので verify に置く。
       - run: pnpm run check:endpoint-callers
+      # 二重実装の見張り。src/ と supabase/functions/ の両方に同名の実装があるのに
+      # ずれを止めるものが無い状態を検出する。2026-08-31、Scanner が2つあり
+      # 本番で走っていない方を評価スイートが測り続けていた（6週間）。
+      # 実DBを要求しない静的解析なので verify に置く。
+      - run: pnpm run check:dual-impl
 
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 

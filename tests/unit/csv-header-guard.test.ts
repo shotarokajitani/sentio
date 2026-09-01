@@ -17,7 +17,7 @@ import {
   STRIPE_HEADER_ROW,
   YAYOI_HEADER_ROW,
   MONTHLY_HEADER_ROW,
-  AOZORA_HEADER_ROW_PLACEHOLDER,
+  AOZORA_HEADER_ROW,
 } from "../fixtures/csv-rows";
 
 describe("CH-1-1 断る: 列名の行が無いファイル", () => {
@@ -56,9 +56,13 @@ describe("CH-2 通す: 列名の行があるファイルを1つも落とさな�
     });
   });
 
-  it("CH-2-5 あおぞら銀行の列名付き入出金明細の列名（**実物未確認・仮置き**）", () => {
-    // この1件だけ実物ではない。差し替え待ちであることを名前で見えるようにしてある
-    expect(looksLikeHeaderRow(AOZORA_HEADER_ROW_PLACEHOLDER)).toBe(true);
+  it("CH-2-5 あおぞら銀行の列名付き入出金明細の列名（**実物**・2026-09-01 確認）", () => {
+    // 6列すべてが文字列なので 0/6。閾値に対して余裕がある
+    expect(inspectHeaderRow(AOZORA_HEADER_ROW)).toEqual({
+      isHeader: true,
+      total: 6,
+      nonNameLike: 0,
+    });
   });
 
   it("CH-D5 半角カナは判定に使わない。カナだけの列名でも通る", () => {

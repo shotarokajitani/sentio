@@ -15,3 +15,11 @@ supabase/.temp/
 # Playwright MCP の作業生成物（スクリーンショット・page snapshot・console log）。
 # MCP サーバがセッションごとに再生成するため、削除しても再び未追跡で現れる。
 .playwright-mcp/
+
+# 動画。**リポジトリに入れない。**
+# Google 審査用のデモ動画（`demo.mp4`）は 377MB あり、GitHub の推奨上限（50MB）と
+# ハード上限（100MB）をどちらも超える。一度でも履歴に入ると、以後すべての clone が
+# その重さを引きずる（履歴からの除去は全員の再clone を要求する）。
+# 動画の共有は YouTube の限定公開で行う（審査への提出もその形）。
+*.mp4
+*.mov

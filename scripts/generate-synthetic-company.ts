@@ -4,7 +4,11 @@
  * No real names, companies, keys, or contacts.
  */
 
-import type { TimelineEvent } from "../src/sense/scanner";
+// 本番の Scanner が受け取る形（`src/sense/scanner.ts` は 2026-08-31 に削除）
+import type { ScanEvent } from "@edge/_shared/scan";
+
+/** 合成会社のイベント。走査が見る形に `company_id` を足したもの */
+type TimelineEvent = ScanEvent & { company_id: string | null };
 
 export interface SyntheticCompany {
   meta: {
@@ -139,7 +143,7 @@ export function generateSyntheticCompany(): SyntheticCompany {
     id: 3,
     label: "reply_delay",
     type: "positive",
-    scanType: "deviation",
+    scanType: "trend",
     eventIds: signal3Ids,
   });
 
@@ -200,7 +204,7 @@ export function generateSyntheticCompany(): SyntheticCompany {
     id: 6,
     label: "inquiry_decline",
     type: "positive",
-    scanType: "deviation",
+    scanType: "trend",
     eventIds: signal6Ids,
   });
 

@@ -196,4 +196,29 @@ describe("RF-3: 表示側", () => {
     expect(html).not.toContain("attendee-");
     expect(html).not.toContain("@");
   });
+
+  it("遡ったときは予定リストの見出しを「この週の予定」にする", () => {
+    // 本番実測（2026-08-31）で、遡り表示なのに見出しが「今週の予定」のまま
+    // 先週の予定が並んでいた。契約の書き漏れ（追補）
+    const html = render([IN_WEEK_MINUS_1], NOW_MONDAY);
+
+    expect(html).toContain(ja.report.fallbackScheduleHeading);
+    expect(html).not.toContain(ja.report.scheduleHeading);
+  });
+
+  it("陰性コントロール: 遡っていないときは「今週の予定」のままにする", () => {
+    // 常に差し替える実装・両方出す実装はここで落ちる
+    const html = render([IN_CURRENT_WEEK], NOW_WEDNESDAY);
+
+    expect(html).toContain(ja.report.scheduleHeading);
+    expect(html).not.toContain(ja.report.fallbackScheduleHeading);
+  });
+
+  it("見出しに「先週」と書かない（遡り先は前週とは限らない・最大8週）", () => {
+    // 3週前に遡ったのに「先週の予定」と書くと嘘になる
+    const html = render([IN_WEEK_MINUS_3], NOW_MONDAY);
+
+    expect(html).toContain(ja.report.fallbackScheduleHeading);
+    expect(html).not.toContain("先週の予定");
+  });
 });

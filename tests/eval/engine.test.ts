@@ -70,7 +70,9 @@ describe("Engine eval suite (D1-D2)", () => {
     // 実測値を必ずログに残す。赤の理由が閾値ではなく実測であることを証跡にする
     console.log(`D1 実測: ${result.detected}/7 検知`);
     for (const m of result.matched) {
-      console.log(`  ✓ signal ${m.signalId} ← 候補#${m.candidateIndex}（証拠 ${m.overlap.length}件）`);
+      console.log(
+        `  ✓ signal ${m.signalId} ← 候補#${m.candidateIndex}（証拠 ${m.overlap.length}件）`,
+      );
     }
     for (const s of result.missed) {
       console.log(`  ✗ signal ${s.id} ${s.label}（scanType=${s.scanType}）を検知できていない`);
@@ -88,23 +90,6 @@ describe("Engine eval suite (D1-D2)", () => {
      * 捉えるのは「会社の予定が丸ごと途絶えた」であって
      * 「毎週の定例が消えた」ではない。会議が密な会社ではほぼ発火しない。
      * 限界は `_shared/scan.ts` の走査6に明記した。
-     *
-     * **2026-08-31（2）: 4 → 5 に更新した。仕様適合の修正による。**
-     * `scanMetricChange` が「連続N期同方向」を見ているのに `deviation` と
-     * 名乗っていたのを `trend` に直した（`docs/spec/03_sense.md` の
-     * 乖離＝平常レンジ逸脱 / 傾向＝連続N期同方向 という定義に合わせた）。
-     * **この走査はベースラインを一度も参照しない**ので、定義上「乖離」ではありえない。
-     * 仕込み `#3 reply_delay` / `#6 inquiry_decline` の期待も同じ理由で
-     * `deviation` → `trend` に揃えた（同じ検出器から出ているため）。
-     *
-     * **2026-08-31（1）: 5 → 4 に更新した。Scanner の挙動は変わっていない。**
-     * このスイートが測る対象を `src/sense/scanner.ts` から
-     * `@edge/_shared/scan`（**本番が動かす実装**）に向け直したためである。
-     * それまで測っていた `src/sense/scanner.ts` は `tests/` と `scripts/` からしか
-     * 参照されておらず、**本番では1行も走っていなかった**
-     * （`run-sense` が `functions/v1/scan` を叩く）。
-     * 差の内訳は `#7 meeting_silence` で、**本番には silence 検出器が無い。**
-     * 経緯は `docs/reports/2026-08-31_検知5of7の内訳実測.md`。
      *
      * **2026-08-31（2）: 4 → 5 に更新した。仕様適合の修正による。**
      * `scanMetricChange` が「連続N期同方向」を見ているのに `deviation` と
@@ -151,7 +136,9 @@ describe("Engine eval suite (D1-D2)", () => {
 
     console.log(`D2 実測: 誤検知 ${result.count}件 / 候補 ${candidates.length}件`);
     for (const c of result.candidates) {
-      console.log(`  誤検知: scanType=${c.scanType} 証拠=${c.evidence_event_ids.slice(0, 3).join(",")}`);
+      console.log(
+        `  誤検知: scanType=${c.scanType} 証拠=${c.evidence_event_ids.slice(0, 3).join(",")}`,
+      );
     }
 
     expect(result.count).toBeLessThanOrEqual(2);

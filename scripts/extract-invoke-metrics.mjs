@@ -56,6 +56,17 @@ export const METRIC_ALLOWLIST = [
   // deliver-*（本文 `pulse` は載せない。送ったか否かと試行回数だけ）
   "email_sent",
   "attempts",
+  // dispatch-daily / dispatch-weekly（`_shared/dispatch.ts` の DispatchSummary）
+  //
+  // **`kind` は載せない。** 文字列なので `isMetricScalar` の型ガードで弾かれ、
+  // 「allowlist に載っているのに出力されない（`<想定外の型 string>` になる）」
+  // という紛らわしいキーになる。載せてよいのは件数スカラーだけである。
+  "companies",
+  "delivered",
+  "skipped_no_connection",
+  "skipped_no_email",
+  "failed",
+  "sense_failed",
 ];
 
 /** 長さだけを出してよいキー。中身（ID 列）は出さない。 */
@@ -188,6 +199,24 @@ export function renderReport(result) {
 
   if (result.extractedCount === 0) {
     lines.push("抽出できた件数スカラーは 0 件");
+
+    // **1件も抽出できず、しかも除外したキーが在る**——これは「応答が空だった」ではなく
+    // 「**応答に中身はあったのに allowlist が追いついていない**」形である。
+    // 2026-08-31 に dispatch-daily の数字が黙って消えたのがこれで、
+    // ログには「0 件」とだけ出ていたため気づけなかった。
+    //
+    // このスクリプトはワークフローの `case "${status}" in 2??)` の枝でしか呼ばれない。
+    // すなわちここに来た時点で 2xx である。
+    //
+    // **fail にはしない。** 件数スカラーを持たない関数の正常な 2xx まで赤くなるためで、
+    // それは CLI 末尾の「exit 1 にしない」判断と同じ理由である。
+    if (result.excludedCount > 0) {
+      lines.push(
+        `::warning::allowlist から抽出できた件数スカラーが 0 件だが、除外したキーが ` +
+          `${result.excludedCount} 件ある。応答に中身はあるので、METRIC_ALLOWLIST の` +
+          `更新漏れの可能性がある（キー名は出力しない）`,
+      );
+    }
   }
 
   // 除外したキーは名前も出さない。件数だけで「取りこぼしが無いか」は判断できる

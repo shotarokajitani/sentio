@@ -5,16 +5,9 @@ import { Masthead } from "@/components/Masthead";
 import { t } from "@/i18n";
 import type { ConnectionOverview, ConnectionRow } from "@/lib/connections/overview";
 import { requestDisconnect, type DisconnectOutcome } from "@/lib/connections/disconnect";
-
-interface ColumnMapping {
-  date: string;
-  description: string | null;
-  amount: string | null;
-  direction: string | null;
-  credit: string | null;
-  debit: string | null;
-  balance: string | null;
-}
+// 列の対応推定は「1行目が列名の行か」を確かめてからでないと呼べない（契約 スライスCH）。
+// 関門ごとモジュールに移してあるので、ここからは直接 fetch しない
+import { requestColumnMapping, type ColumnMapping } from "@/lib/csv/analyze";
 
 type CsvStep = "idle" | "analyzing" | "confirm" | "ingesting" | "done" | "error";
 
@@ -61,6 +54,8 @@ export function ConnectClient({
     total_lines?: number;
   } | null>(null);
   const [csvError, setCsvError] = useState("");
+  // 断った理由の本文。原因ごとに「何を直せばいいか」が違うので、題と別に持つ（CH-D7）
+  const [csvErrorBody, setCsvErrorBody] = useState("");
 
   // 初期表示はサーバ側で確定済み。ここを通るのは再読み込みとCSV取込後だけ
   const fetchConnections = useCallback(async () => {
@@ -116,6 +111,7 @@ export function ConnectClient({
 
   const handleFile = async (file: File) => {
     setCsvError("");
+    setCsvErrorBody("");
     setCsvStep("analyzing");
     setCsvFileName(file.name);
 
@@ -137,25 +133,27 @@ export function ConnectClient({
       }
 
       const headers = parseCSVLine(lines[0]);
-      const res = await fetch("/api/csv/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          headers,
-          row_count: lines.length - 1,
-          type_stats: computeTypeStats(lines, headers),
-        }),
+      const outcome = await requestColumnMapping({
+        headers,
+        rowCount: lines.length - 1,
+        typeStats: computeTypeStats(lines, headers),
       });
 
-      if (!res.ok) {
-        console.error("csv/analyze 失敗:", res.status);
-        setCsvError(t.csv.analyzeFailed);
+      if (!outcome.ok) {
+        // 列名の行が無いのと、推定そのものに失敗したのは別の原因である。
+        // 同じ1文に飲み込むと、利用者は何を直せばいいのか分からない（CH-D7）
+        if (outcome.reason === "no_header_row") {
+          setCsvError(t.csv.noHeaderRowTitle);
+          setCsvErrorBody(t.csv.noHeaderRowBody);
+        } else {
+          console.error("csv/analyze 失敗:", outcome.status);
+          setCsvError(t.csv.analyzeFailed);
+        }
         setCsvStep("error");
         return;
       }
 
-      const data = await res.json();
-      setMapping(data.mapping);
+      setMapping(outcome.mapping);
       setCsvStep("confirm");
     } catch (e) {
       console.error("CSV解析に失敗:", e);
@@ -386,12 +384,14 @@ export function ConnectClient({
               {csvStep === "error" && (
                 <div className="failure" style={{ marginTop: 16 }}>
                   <p className="failure-title">{csvError}</p>
+                  {csvErrorBody && <p className="failure-body">{csvErrorBody}</p>}
                   <div className="actions">
                     <button
                       className="btn btn-quiet"
                       onClick={() => {
                         setCsvStep("idle");
                         setCsvError("");
+                        setCsvErrorBody("");
                       }}
                     >
                       {t.csv.restart}
@@ -656,8 +656,16 @@ const cell: React.CSSProperties = {
   borderBottom: "1px solid var(--rule)",
 };
 
-// CSVの1行をクォート考慮で分解する
-function parseCSVLine(line: string): string[] {
+/**
+ * CSVの1行をクォート考慮で分解する。
+ *
+ * **export しているのは試験のためである。** 列名の行かどうかの判定は
+ * この関数が返したセルの配列に対して行われる（契約 スライスCH）。
+ * 手で組んだ配列だけで判定を試験すると、この関数の挙動が変わった日に
+ * **テストは緑のまま本番だけ抜ける。** 生のCSVテキストから判定までを
+ * 一本で通す試験が `tests/unit/csv-analyze-guard.test.ts` にある。
+ */
+export function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;

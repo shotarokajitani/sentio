@@ -70,7 +70,9 @@ describe("Engine eval suite (D1-D2)", () => {
     // 実測値を必ずログに残す。赤の理由が閾値ではなく実測であることを証跡にする
     console.log(`D1 実測: ${result.detected}/7 検知`);
     for (const m of result.matched) {
-      console.log(`  ✓ signal ${m.signalId} ← 候補#${m.candidateIndex}（証拠 ${m.overlap.length}件）`);
+      console.log(
+        `  ✓ signal ${m.signalId} ← 候補#${m.candidateIndex}（証拠 ${m.overlap.length}件）`,
+      );
     }
     for (const s of result.missed) {
       console.log(`  ✗ signal ${s.id} ${s.label}（scanType=${s.scanType}）を検知できていない`);
@@ -134,7 +136,9 @@ describe("Engine eval suite (D1-D2)", () => {
 
     console.log(`D2 実測: 誤検知 ${result.count}件 / 候補 ${candidates.length}件`);
     for (const c of result.candidates) {
-      console.log(`  誤検知: scanType=${c.scanType} 証拠=${c.evidence_event_ids.slice(0, 3).join(",")}`);
+      console.log(
+        `  誤検知: scanType=${c.scanType} 証拠=${c.evidence_event_ids.slice(0, 3).join(",")}`,
+      );
     }
 
     expect(result.count).toBeLessThanOrEqual(2);

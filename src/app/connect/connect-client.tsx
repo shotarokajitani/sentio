@@ -10,6 +10,9 @@ import { requestDisconnect, type DisconnectOutcome } from "@/lib/connections/dis
 import { requestColumnMapping, type ColumnMapping } from "@/lib/csv/analyze";
 // 競合の推定は自社サイトのURLがあるときだけ起こす。URL が無ければネットワークに出ない
 import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
+// 購読の開始は関門ごとモジュールに置いてある（契約 スライスBU）。
+// 連打の抑止も遷移も、ここからは直接書かない
+import { checkoutFailureMessage, startCheckout } from "@/lib/billing/checkout";
 
 type CsvStep = "idle" | "analyzing" | "confirm" | "ingesting" | "done" | "error";
 
@@ -20,6 +23,10 @@ type LoadState = "loading" | "loaded" | "failed";
 // blocked（409）と failed を done と別に持つのは、**「消えた」と表示してよいのが
 // done だけ**だからである（受入基準 D-1-5）
 type DisconnectStep = "confirming" | "submitting" | "done" | "blocked" | "failed";
+
+// 購読の手続きの進み方（契約 スライスBU）。**画面が持つのはこれだけ**で、
+// 購読しているかどうかは持たない。状態の正本はサーバから渡る status である（BU-D2）
+type BillingStep = "idle" | "starting" | "failed";
 
 interface DisconnectSession {
   provider: string;
@@ -33,6 +40,7 @@ export function ConnectClient({
   initialOverview,
   accountEmail,
   siteUrl,
+  subscriptionStatus,
 }: {
   failureMessage: string | null;
   // null はサーバ側で読み取りに失敗したことを表す。0件（空）とは別物
@@ -42,6 +50,13 @@ export function ConnectClient({
   accountEmail: string | null;
   // 登録時に受け取った自社サイト。任意項目なので null がありうる
   siteUrl: string | null;
+  /**
+   * 購読の状態（契約 スライスBU・BU-D2）。`user_metadata.subscription.status` をそのまま渡す。
+   * **Webhook が書いている値がここに来る。** 画面から Stripe に問い合わせない
+   * （遅く、失敗しうる。落ちたときに購読者へ購読ボタンを見せることになる）。
+   * 購読が一度も無ければ null。
+   */
+  subscriptionStatus: string | null;
 }) {
   const [connections, setConnections] = useState<ConnectionRow[]>(
     initialOverview?.connections ?? [],
@@ -61,6 +76,33 @@ export function ConnectClient({
   const [csvError, setCsvError] = useState("");
   // 断った理由の本文。原因ごとに「何を直せばいいか」が違うので、題と別に持つ（CH-D7）
   const [csvErrorBody, setCsvErrorBody] = useState("");
+
+  // 購読の手続き（契約 スライスBU）。**購読しているかどうかはここに持たない。**
+  // 持つと Webhook が書いた正本と画面の思い込みが二重になる
+  const [billingStep, setBillingStep] = useState<BillingStep>("idle");
+  const [billingError, setBillingError] = useState("");
+
+  /**
+   * 標準プランの購読を始める。
+   *
+   * **成功したときは何もしない。** `startCheckout` が Stripe の支払い画面へ送り出すので、
+   * この画面はそのまま置き去りになる。成功の表示を足すと、遷移との競争になる。
+   *
+   * 連打（`in_flight`）も失敗として扱わない。**前の1回がまだ動いているだけ**で、
+   * 押した人から見れば何も起きていない（BU-2-3）。
+   */
+  const handleSubscribe = useCallback(async () => {
+    setBillingError("");
+    setBillingStep("starting");
+
+    const outcome = await startCheckout();
+    if (outcome.ok || outcome.reason === "in_flight") return;
+
+    // 原因はコンソールにだけ残す。画面には内部コードもステータスも出さない（BU-D5）
+    console.error("billing/checkout 失敗:", outcome.status);
+    setBillingError(checkoutFailureMessage(outcome) ?? "");
+    setBillingStep("failed");
+  }, []);
 
   /**
    * 競合の推定を1度だけ起こす（`entities` を埋める唯一の経路）。
@@ -219,6 +261,18 @@ export function ConnectClient({
   const csvCount = counts["csv:accounting"] ?? 0;
   const freeeCount = counts["freee"] ?? 0;
   const nothingConnected = load === "loaded" && connections.length === 0 && csvCount === 0;
+
+  /**
+   * **`active` だけを購読中とみなす**（BU-1-2）。
+   *
+   * `canceled` / `past_due` は購読ボタン側に落とす。支払いが止まった会社が
+   * **自分で再開できる**必要があるからである（BU-1-4）。
+   *
+   * 枠を与える判定（`lib/billing/plan.ts` の `ENTITLED_STATUSES`）とは**別物**で、
+   * あちらは `trialing` にも枠を与える。Stripe 側の trial は使っていない
+   * （試用の期間は `09_pricing.md` で未決）ので、いまその値はここに来ない。
+   */
+  const subscribed = subscriptionStatus === "active";
 
   return (
     <main className="page">
@@ -425,6 +479,52 @@ export function ConnectClient({
 
             <div className="row-side">
               {csvCount > 0 && <span className="state">{t.csv.ingested}</span>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* プラン（契約 スライスBU・BU-D1）。**新しい画面を作らず、この画面に1節足す。**
+          連携も課金も「会社の設定」であり、経営者に見る場所を増やさない。
+          金額はここに書かない。文言も額も辞書が正本である（BU-D6） */}
+      <section className="section">
+        <p className="section-label">{t.billing.sectionTitle}</p>
+
+        <div className="rows">
+          <div className="row">
+            <div className="row-body" style={{ flex: 1 }}>
+              <p className="row-name">{t.billing.standardName}</p>
+              <p className="row-desc">{t.billing.standardDesc}</p>
+              <div className="row-meta">
+                <span>{t.billing.standardPrice}</span>
+              </div>
+
+              {billingError && (
+                <div className="failure" role="alert" style={{ marginTop: 16 }}>
+                  <p className="failure-title">{billingError}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="row-side">
+              {subscribed ? (
+                // 解約の導線は**このスライスでは作らない**（BU-D4）。
+                // カスタマーポータルの実装が要るので `07_open_items.md` に登録してある
+                <span className="state">{t.billing.subscribedState}</span>
+              ) : (
+                <>
+                  <span className="state">{t.billing.trialState}</span>
+                  <button
+                    className="btn"
+                    // 描画が追いつかない間の連打は `startCheckout` 側でも止まる。
+                    // ここは押せないことを見せるためのもので、担保はモジュール側にある
+                    disabled={billingStep === "starting"}
+                    onClick={() => void handleSubscribe()}
+                  >
+                    {billingStep === "starting" ? t.billing.starting : t.billing.subscribe}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

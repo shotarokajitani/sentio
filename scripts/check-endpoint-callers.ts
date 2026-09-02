@@ -114,6 +114,16 @@ export const ENDPOINT_SPECS: EndpointSpec[] = [
     route: "src/app/api/competitors/suggest/route.ts",
     contract: "D-4-1",
   },
+  // 2026-09-03 追加（契約 スライスBU）。**本番で疎通済みなのに呼び出し元が0件**という、
+  // この検査器が止めるはずの形そのものだった。`grep -r "billing" src/` が
+  // API の2ファイルしか返さず、**1円も課金できない**状態が本番に置かれていた。
+  // `src/lib/billing/checkout.ts` を作って到達するようになったので載せる。
+  {
+    id: "billing-checkout",
+    endpoint: "/api/billing/checkout",
+    route: "src/app/api/billing/checkout/route.ts",
+    contract: "BU-2-1",
+  },
 ];
 
 export type UnreachableReason = "missing-route" | "no-caller" | "no-importer";

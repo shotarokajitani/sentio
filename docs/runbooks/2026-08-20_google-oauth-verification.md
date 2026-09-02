@@ -114,19 +114,19 @@ Google の指摘文はこうなっている。
 
 #### なぜエージェントだけで完結しないか（4つとも実測した。推測ではない）
 
-| # | 試したこと | 結果 |
-| --- | --- | --- |
-| 1 | computer-use で Chrome を操作して録画を開始する | **不可**。ブラウザは設計上 tier `read` 固定で、クリック・キー入力が拒否される（実際に `left_click` が拒否された）。回避しない |
-| 2 | Chrome MCP で対象ウィンドウを最前面に持ってくる | **不可**。タブは操作できるがウィンドウの前面化・新規ウィンドウ作成の API が無い。Game Bar は最前面ウィンドウを録る |
-| 3 | サンドボックスで headless Chromium を動かしてフレームを作る | **不可**。`playwright install chromium` がネットワーク制限で失敗（`Download failure`）。sudo も不可 |
-| 4 | `gif_creator` で録って mp4 に起こす | **不可**。出力は人間の Downloads にしか落ちず、サンドボックスからは読めない（`/mnt/sentio` `/mnt/outputs` `/mnt/uploads` のみ） |
+| #   | 試したこと                                                  | 結果                                                                                                                            |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | computer-use で Chrome を操作して録画を開始する             | **不可**。ブラウザは設計上 tier `read` 固定で、クリック・キー入力が拒否される（実際に `left_click` が拒否された）。回避しない   |
+| 2   | Chrome MCP で対象ウィンドウを最前面に持ってくる             | **不可**。タブは操作できるがウィンドウの前面化・新規ウィンドウ作成の API が無い。Game Bar は最前面ウィンドウを録る              |
+| 3   | サンドボックスで headless Chromium を動かしてフレームを作る | **不可**。`playwright install chromium` がネットワーク制限で失敗（`Download failure`）。sudo も不可                             |
+| 4   | `gif_creator` で録って mp4 に起こす                         | **不可**。出力は人間の Downloads にしか落ちず、サンドボックスからは読めない（`/mnt/sentio` `/mnt/outputs` `/mnt/uploads` のみ） |
 
 **したがって分担はこうなる。**
 
-| 誰が | 何を |
-| --- | --- |
-| 梶谷さん | ① Sentio のタブを最前面にする ② 録画開始（Win+Alt+R）③ 終わったら停止 |
-| 検収者（Cowork） | **残り全部。**画面遷移・クリック・英語字幕の表示 |
+| 誰が             | 何を                                                                  |
+| ---------------- | --------------------------------------------------------------------- |
+| 梶谷さん         | ① Sentio のタブを最前面にする ② 録画開始（Win+Alt+R）③ 終わったら停止 |
+| 検収者（Cowork） | **残り全部。**画面遷移・クリック・英語字幕の表示                      |
 
 出力は `C:\Users\shota\Videos\Captures\*.mp4`。そのまま Google に上げられる。
 
@@ -136,13 +136,23 @@ Google の指摘文はこうなっている。
 `javascript_tool` で次を流すと、画面下部に固定の字幕帯が出る（実測: 高さ72px・可読）。
 
 ```js
-(function(){var id='sentio-demo-caption';var el=document.getElementById(id);
-if(!el){el=document.createElement('div');el.id=id;document.body.appendChild(el);}
-el.setAttribute('style','position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'
-+'background:rgba(12,18,32,0.92);color:#fff;font-family:-apple-system,Segoe UI,Roboto,sans-serif;'
-+'font-size:21px;line-height:1.5;padding:20px 40px;text-align:center;letter-spacing:.2px;'
-+'box-shadow:0 -2px 20px rgba(0,0,0,.35)');
-el.textContent='<CAPTION TEXT>';})()
+(function () {
+  var id = "sentio-demo-caption";
+  var el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = id;
+    document.body.appendChild(el);
+  }
+  el.setAttribute(
+    "style",
+    "position:fixed;left:0;right:0;bottom:0;z-index:2147483647;" +
+      "background:rgba(12,18,32,0.92);color:#fff;font-family:-apple-system,Segoe UI,Roboto,sans-serif;" +
+      "font-size:21px;line-height:1.5;padding:20px 40px;text-align:center;letter-spacing:.2px;" +
+      "box-shadow:0 -2px 20px rgba(0,0,0,.35)",
+  );
+  el.textContent = "<CAPTION TEXT>";
+})();
 ```
 
 **字幕は本番のページの上に出るだけで、DBにもコードにも何も足していない。**
@@ -150,14 +160,14 @@ el.textContent='<CAPTION TEXT>';})()
 
 #### 各シーンの字幕（英語・そのまま使う）
 
-| シーン | 画面 | 字幕 |
-| --- | --- | --- |
-| 1 | `/` | `Sentio — a business intelligence service for small and medium companies in Japan. It reads data the company already has, read-only.` |
-| 2 | `/connect` | `This screen is the only place Sentio asks for Google access. The interface is Japanese; our users are Japanese SMEs.` |
-| 3 | Google 同意画面 | `The only scope requested is calendar.events.readonly — "View events on your calendars". Sentio cannot create, edit or delete events, and cannot read your calendar list, sharing settings or calendar properties.` |
-| 4 | `/report` | `The only user-facing feature built on Calendar data. From each event Sentio reads the start time, end time, title, and HOW MANY attendees. Attendee email addresses are never displayed or stored — only the count.` |
-| 5 | `/report` | `We evaluated narrower scopes. calendar.events.owned.readonly excludes meetings the user was invited to, which is the core signal we measure. calendar.freebusy has no titles and no attendee counts. calendar.events.readonly is the narrowest scope that works.` |
-| 6 | `/connect` | `The user can disconnect at any time. Sentio asks them to type their own email address first. On disconnect the tokens are destroyed immediately and the imported Calendar events are deleted.` |
+| シーン | 画面            | 字幕                                                                                                                                                                                                                                                               |
+| ------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1      | `/`             | `Sentio — a business intelligence service for small and medium companies in Japan. It reads data the company already has, read-only.`                                                                                                                              |
+| 2      | `/connect`      | `This screen is the only place Sentio asks for Google access. The interface is Japanese; our users are Japanese SMEs.`                                                                                                                                             |
+| 3      | Google 同意画面 | `The only scope requested is calendar.events.readonly — "View events on your calendars". Sentio cannot create, edit or delete events, and cannot read your calendar list, sharing settings or calendar properties.`                                                |
+| 4      | `/report`       | `The only user-facing feature built on Calendar data. From each event Sentio reads the start time, end time, title, and HOW MANY attendees. Attendee email addresses are never displayed or stored — only the count.`                                              |
+| 5      | `/report`       | `We evaluated narrower scopes. calendar.events.owned.readonly excludes meetings the user was invited to, which is the core signal we measure. calendar.freebusy has no titles and no attendee counts. calendar.events.readonly is the narrowest scope that works.` |
+| 6      | `/connect`      | `The user can disconnect at any time. Sentio asks them to type their own email address first. On disconnect the tokens are destroyed immediately and the imported Calendar events are deleted.`                                                                    |
 
 **録る前に必ず確認すること:**
 
@@ -304,12 +314,12 @@ Google カレンダーの連携を解除します
 
 **✅ 審査用アカウントは作成・連携済み。**
 
-| 項目 | 状態 |
-| --- | --- |
-| アカウント | `shotaro.kajitani+google-review@mdc-diseno.com`（梶谷さんが作成。**エージェントはアカウント作成・パスワード入力を行わない**） |
-| Google カレンダー連携 | **済み。** 同意画面で「すべてのカレンダーの予定を表示」1件のみを許可 → **過去12ヶ月から20件取り込み** |
-| `/report` | **実データで表示。** 会議 5件 / 総会議時間 5時間 / のべ出席者 3人 ＋ 予定5件の一覧 |
-| 認証の障害物 | 電話番号確認・クレジットカード・招待コード **いずれも無し**（メール＋パスワードのみ） |
+| 項目                  | 状態                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| アカウント            | `shotaro.kajitani+google-review@mdc-diseno.com`（梶谷さんが作成。**エージェントはアカウント作成・パスワード入力を行わない**） |
+| Google カレンダー連携 | **済み。** 同意画面で「すべてのカレンダーの予定を表示」1件のみを許可 → **過去12ヶ月から20件取り込み**                         |
+| `/report`             | **実データで表示。** 会議 5件 / 総会議時間 5時間 / のべ出席者 3人 ＋ 予定5件の一覧                                            |
+| 認証の障害物          | 電話番号確認・クレジットカード・招待コード **いずれも無し**（メール＋パスワードのみ）                                         |
 
 **パスワードはこのリポジトリのどこにも書かない**（`CLAUDE.md` の絶対規則）。
 Cloud Console の "Provide test credentials" 欄に梶谷さんが直接貼ること。
@@ -400,11 +410,11 @@ WHAT SENTIO DOES WITH CALENDAR DATA
 > demonstration video to continue the review」と明示している。
 > **提出は審査担当へのメール返信で行う。**
 >
-> | 項目 | 値 |
-> | --- | --- |
-> | スレッド | `[Action Needed] OAuth Verification Request Acknowledgement` |
-> | 返信先 | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com` |
-> | 返信対象 | 2026-08-24 のスコープ不一致の指摘メール |
+> | 項目     | 値                                                            |
+> | -------- | ------------------------------------------------------------- |
+> | スレッド | `[Action Needed] OAuth Verification Request Acknowledgement`  |
+> | 返信先   | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com` |
+> | 返信対象 | 2026-08-24 のスコープ不一致の指摘メール                       |
 >
 > **動画は「公開アクセス可能な URL」で渡す。** 添付ではない。
 > 2026-08-19 に一度「video link にアクセスできない」で差し戻されているので、
@@ -500,12 +510,12 @@ Please let us know if anything else is required.
 **返信を送信済み。** スレッド `[Action Needed] OAuth Verification Request Acknowledgement` の
 2026-08-24「スコープ不一致」のメールに対する返信として送った。
 
-| 項目 | 内容 |
-| --- | --- |
-| 宛先 | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com` |
-| 動画 | **公開アクセス可能な YouTube の限定公開 URL**（本文に記載。ここには書かない） |
-| テスト資格情報 | `shotaro.kajitani+google-review@mdc-diseno.com`（パスワードはここには書かない） |
-| 構成 | 1. スコープ不一致の解消 / 2. 最小スコープの根拠 / 3. 動画 / 4. テスト資格情報＋手順1〜8 / 5. プライバシーポリシー |
+| 項目           | 内容                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 宛先           | `api-oauth-dev-verification-reply+3n9o3otkyudyp1d@google.com`                                                     |
+| 動画           | **公開アクセス可能な YouTube の限定公開 URL**（本文に記載。ここには書かない）                                     |
+| テスト資格情報 | `shotaro.kajitani+google-review@mdc-diseno.com`（パスワードはここには書かない）                                   |
+| 構成           | 1. スコープ不一致の解消 / 2. 最小スコープの根拠 / 3. 動画 / 4. テスト資格情報＋手順1〜8 / 5. プライバシーポリシー |
 
 **送信後に見つかった不具合**: Gmail が本文中の URL を `google.com/url?q=...` に
 書き換えた。1行だけ壊れている。
@@ -524,13 +534,13 @@ URL を書かない**こと。
 
 **2026-08-29 時点の消し込み。** 5件中4件が完了。残りは 3 の cron 登録のみ。
 
-| #   | 内容                                                          | 状態                              | 実施日・参照                                                                                             |
-| --- | ------------------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| #   | 内容                                                          | 状態                              | 実施日・参照                                                                                              |
+| --- | ------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | 1   | スコープを `calendar.events.readonly` に差し替え（2ファイル） | ~~完了~~                          | 2026-08-21 / PR #35（`src/app/api/auth/google/route.ts:37`・`src/app/auth/callback/google/route.ts:102`） |
 | 2   | 連携解除時に、当該コネクタ由来の `events` を削除する経路      | ~~完了~~                          | 2026-08-27 / PR #43・`docs/contracts/slice-disconnect.md`（画面からの解除は即時削除）                     |
-| 3   | 取得から24ヶ月経過した `events` を削除する定期処理            | **未完了（関数のみ・cron 無し）** | 関数は PR #35 で実装・deploy 済み。`cron.schedule` 未登録のため回っていない。**A-2 へ**                    |
-| 4   | アカウント削除の**運用手順書**（実装は次スライス）            | ~~完了~~                          | 2026-08-20 / `docs/runbooks/2026-08-20_account-deletion.md`                                                |
-| 5   | `07_open_items.md` に「アカウント削除APIの実装」を登録        | ~~完了~~                          | 2026-08-20 / `docs/spec/07_open_items.md`（未着手として登録済み）                                          |
+| 3   | 取得から24ヶ月経過した `events` を削除する定期処理            | **未完了（関数のみ・cron 無し）** | 関数は PR #35 で実装・deploy 済み。`cron.schedule` 未登録のため回っていない。**A-2 へ**                   |
+| 4   | アカウント削除の**運用手順書**（実装は次スライス）            | ~~完了~~                          | 2026-08-20 / `docs/runbooks/2026-08-20_account-deletion.md`                                               |
+| 5   | `07_open_items.md` に「アカウント削除APIの実装」を登録        | ~~完了~~                          | 2026-08-20 / `docs/spec/07_open_items.md`（未着手として登録済み）                                         |
 
 **2 と 3 は削除処理なので、CLAUDE.md の「Sentio は何も勝手に送らない・登録しない」とは
 別方向の危険がある。** 消しすぎる事故を防ぐため、次を必須とする。
@@ -573,3 +583,60 @@ $ grep -o "<h2[^>]*>[^<]*</h2>" /tmp/privacy.html
 ```
 
 **2 の 24ヶ月削除だけが残っている**（cron 未登録）。【1】に理由と参照を書いた。
+
+---
+
+# 承認（2026-09-02）
+
+**4回目の提出で承認された。**
+
+```
+We've approved your OAuth App Verification request
+for project 228589171157 (Project ID: sentio-492313)
+  .../auth/calendar.events.readonly
+```
+
+承認されたスコープは **`calendar.events.readonly` の1本**で、
+コード側（`src/app/api/auth/google/route.ts:37`）と一致している。
+
+## 4回の差し戻しと、それぞれ何を直したか
+
+| #   | 差し戻しの理由                                              | 対応                                                                                                     |
+| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | 動画URLのタイポで開けなかった                               | URL を訂正                                                                                               |
+| 2   | スコープ過大 ＋ テスト資格情報 ＋ プライバシーポリシーの3点 | `calendar.readonly` → **`calendar.events.readonly`** に絞る。他2点も対応                                 |
+| 3   | コードと Console のスコープが不一致                         | **コード側を狭い方に合わせた**                                                                           |
+| 4   | 同意画面でスコープが展開されていない                        | (i) を押した状態で撮り直し、**かつ「スコープが1本なので Show all services は存在しない」と明記して返信** |
+
+## 決め手は4回目の「**なぜ見つからないか**」の説明
+
+差し戻し文には毎回「**Show all services をクリックして展開せよ**」と書かれていた。
+しかし **Sentio の同意画面にそのボタンは存在しない。** スコープが1本しか無いためである。
+
+**動画を撮り直して出すだけでは、審査者は探して見つからず、同じ指摘が返ってくる。**
+4回目で足したのは映像ではなく、**「そのボタンが無い理由」の説明**である。
+
+要求どおりの画面を作れないとき、**作れない理由を説明する**という手が要る。
+「言われたとおりに直しました」だけでは通らない差し戻しがある。
+
+## 3回目の判断: **Console ではなくコードを動かした**
+
+不一致を直す方向は2つあった。
+
+| 方向                                                     | 結果                                                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Console を**広い方**（`calendar.readonly`）に合わせる    | **より重い審査になる。** 読み取り範囲が広がり、正当化する説明が増える                              |
+| **コードを狭い方**（`calendar.events.readonly`）に寄せる | **採用。** 実測でコードが叩く Google API は `calendars/primary/events` の1本だけで、狭い方で足りる |
+
+**逆にしていたら、4回目では終わっていなかった可能性が高い。**
+「不一致を直す」は方向が2つあり、**狭い方に寄せるのが常に安い。**
+
+## これ以降の注意
+
+承認メールにこの一文がある。
+
+> You will need to submit a new verification request for access to new scopes,
+> or if you make any changes to your OAuth consent screen configuration.
+
+**同意画面の設定を変えると、再審査に戻る。** 引き金の一覧と守れない範囲は
+`.claude/rules/oauth-consent-screen.md` に置いた。

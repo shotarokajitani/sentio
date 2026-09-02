@@ -138,6 +138,69 @@ describe("CH-1-2 クライアント: 列名の行が無ければ API を呼ば�
   });
 });
 
+/**
+ * 2026-09-02 にこのルートへ認証が入った（それまで9本中ここだけが未認証だった）。
+ *
+ * **CH 系の受入基準は「判定が閉じているか」を見るものなので、認証は模す。**
+ * 認証そのものの試験は下の「認証」の節が持つ。
+ * セッションを模す形は `tests/unit/connections-api-auth.test.ts` の先例に倣った。
+ */
+vi.mock("@/lib/auth/company", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/company")>("@/lib/auth/company");
+  return {
+    ...actual,
+    getAuthedContext: async () =>
+      authed
+        ? { companyId: "11111111-1111-4111-8111-111111111111", email: null, siteUrl: null, supabase: null }
+        : null,
+  };
+});
+
+/** モックの切り替え。既定は「認証済み」 */
+let authed = true;
+
+describe("認証（2026-09-02 追加）", () => {
+  afterEach(() => {
+    authed = true;
+    vi.unstubAllEnvs();
+  });
+
+  it("**未認証なら 401。判定にも設定チェックにも到達しない**", async () => {
+    authed = false;
+    vi.stubEnv("ANTHROPIC_API_KEY", "unit-test-placeholder");
+    vi.stubEnv("ANTHROPIC_MODEL", "unit-test-placeholder");
+    const { POST } = await import("@/app/api/csv/analyze/route");
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/csv/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ headers: ZENGIN_FIRST_ROW, row_count: 1, type_stats: {} }),
+      }),
+    );
+
+    expect(res.status).toBe(401);
+  });
+
+  it("未認証のときは、設定が欠けていても 401（500 を先に返さない）", async () => {
+    authed = false;
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_MODEL", "");
+    const { POST } = await import("@/app/api/csv/analyze/route");
+
+    const res = await POST(
+      new NextRequest("http://localhost/api/csv/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    // 未認証の相手に「鍵が無い」という内部事情を教えない
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("サーバ: /api/csv/analyze も同じ判定で閉じる", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { inspectHeaderRow } from "@shared/csv/header-guard";
+import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 
 interface TypeStat {
   type: string;
@@ -10,6 +11,22 @@ interface TypeStat {
 }
 
 export async function POST(req: NextRequest) {
+  /**
+   * **2026-09-02 追加。** それまでこのルートだけが認証を持っていなかった。
+   *
+   * `src/middleware.ts` は `/api` を matcher から外し、その理由を
+   * 「これらは `getAuthedContext()` で自前に認証しており」と書いている。
+   * **つまり「API は自前で認証する」がこのリポジトリの宣言であり、
+   * ここだけが例外だった**（9本中7本は通していた）。
+   *
+   * 列名の流出はスライスCH のサーバ側判定で閉じている。ここが塞ぐのは**費用と濫用**である。
+   * 1回あたり Anthropic の呼び出しが走るので、公開のままだと誰でもトークンを燃やせる。
+   *
+   * `docs/adr/0002` は **Edge Function** の認証境界を定めたもので、
+   * Next の API ルートには触れていない。したがって ADR の更新は要らない。
+   */
+  if (!(await getAuthedContext())) return unauthorized();
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL;
 

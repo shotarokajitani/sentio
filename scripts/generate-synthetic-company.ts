@@ -71,20 +71,33 @@ export function generateSyntheticCompany(): SyntheticCompany {
   }
 
   // ① Order interval elongation (trend scan) — 3 months
+  //
+  // **2026-09-02 修正。名前と逆の形になっていた。**
+  // 旧実装は `i` が増えるほど過去へ遠ざかる書き方で、時系列に並べると
+  // 間隔が 50 → 35 → 25 → 18 と**縮み**、売上は 30000 → 50000 と**増えていた**。
+  // すなわち「取引先が離れていく」ではなく「発注が増えて単価も上がる」という
+  // **良い兆候**のデータだった（golden の記述「発注間隔が3ヶ月かけて伸長」とも食い違う）。
+  //
+  // 時系列（古い→新しい）で間隔が 14 → 18 → 25 → 35 と伸び、
+  // 売上が 50000 → 30000 と落ちる形に組み直した。**古い順に組み立てる。**
   const signal1Ids: string[] = [];
+  // 古い順の間隔（日）。末尾ほど新しい側の間隔で、単調に伸びる
+  const orderGaps = [14, 18, 25, 35];
+  // 直近の発注からの経過日数。中央値(21.5)の3倍(64.5)を下回るので、途絶では発火しない
+  const sinceLastOrder = 20;
+  const orderSpan = orderGaps.reduce((a, b) => a + b, 0); // 92
   for (let i = 0; i < 5; i++) {
     const id = deterministicId("txn_order", i);
     signal1Ids.push(id);
-    // Intervals: 14, 18, 25, 35, 50 days (elongating)
-    const intervals = [14, 18, 25, 35, 50];
+    // i=0 が最も古い。古い順に間隔を足していく
+    const elapsed = orderGaps.slice(0, i).reduce((a, b) => a + b, 0);
     events.push({
       event_id: id,
       company_id: COMPANY_ID,
-      occurred_at: daysAgo(
-        intervals.reduce((a, b, idx) => (idx <= i ? a + b : a), 0),
-      ).toISOString(),
+      occurred_at: daysAgo(orderSpan + sinceLastOrder - elapsed).toISOString(),
       source: "csv:accounting",
       event_type: "transaction",
+      // 古いほど高く、新しいほど低い（取引が細っていく）
       metrics: { revenue: 50000 - i * 5000, order_client: "entity_customer_a" },
       sensitivity: "S1",
     });

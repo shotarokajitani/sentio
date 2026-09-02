@@ -19,13 +19,17 @@ export async function POST(req: NextRequest) {
   const companyId = ctx.companyId;
 
   const { company_name, url, industry } = (await req.json()) as {
-    company_name: string;
-    url: string;
-    industry: string;
+    company_name?: string;
+    url?: string;
+    industry?: string;
   };
 
-  if (!company_name) {
-    return NextResponse.json({ error: "company_name required" }, { status: 400 });
+  // **会社名かURLのどちらかがあればよい。**
+  // 2026-09-02 まで `company_name` 必須だったが、登録時に聞くのは
+  // **自社サイトのURL 1項目だけ**である（入力を増やさないための線引き・梶谷さん判断）。
+  // プロンプトは会社名・URL・業種のいずれも「不明」を許すので、URL だけでも成立する。
+  if (!company_name && !url) {
+    return NextResponse.json({ error: "company_name or url required" }, { status: 400 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -41,6 +45,28 @@ export async function POST(req: NextRequest) {
 
   // 自社スコープの書き込みはRLSクライアントで行う
   const supabase = ctx.supabase;
+
+  /**
+   * **既に競合を持っていれば何もしない（冪等）。**
+   *
+   * 呼び出し元は画面の読み込みごとに叩きうるので、ここが無いと
+   * **開くたびに Anthropic と gBizInfo を叩き、entities が重複して増える。**
+   * LLM に触れる前に返すので、費用も発生しない。
+   */
+  const { data: existing, error: existingErr } = await supabase
+    .from("entities")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("type", "competitor")
+    .limit(1);
+
+  if (existingErr) {
+    console.error("competitors: existing check failed:", existingErr.message);
+    return NextResponse.json({ error: "entities read failed" }, { status: 500 });
+  }
+  if (existing && existing.length > 0) {
+    return NextResponse.json({ status: "already", count: existing.length });
+  }
   // S0共有行（company_id = null）は設計上 service_role でしか書けない（00019）
   const shared = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 

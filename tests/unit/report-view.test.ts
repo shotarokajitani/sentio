@@ -193,6 +193,7 @@ describe("導線 — /connect から /report へ1本だけ（契約 実装順3�
         failureMessage: null,
         initialOverview: { connections: [], counts: {} },
         accountEmail: null,
+        siteUrl: null,
       }),
     );
     expect(html).toContain('href="/report"');
@@ -206,6 +207,7 @@ describe("導線 — /connect から /report へ1本だけ（契約 実装順3�
         failureMessage: null,
         initialOverview: { connections: [], counts: {} },
         accountEmail: null,
+        siteUrl: null,
       }),
     );
     expect(html.split('href="/report"').length - 1).toBe(1);

@@ -271,6 +271,8 @@ export function ConnectClient({
    * 枠を与える判定（`lib/billing/plan.ts` の `ENTITLED_STATUSES`）とは**別物**で、
    * あちらは `trialing` にも枠を与える。Stripe 側の trial は使っていない
    * （試用の期間は `09_pricing.md` で未決）ので、いまその値はここに来ない。
+   * **trial を使うと決めた日に、この行は二重購読の入口になる。**
+   * 判断は `docs/spec/07_open_items.md`「`trialing` を購読中と見なすか」に登録済み。
    */
   const subscribed = subscriptionStatus === "active";
 

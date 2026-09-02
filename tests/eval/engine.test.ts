@@ -63,7 +63,7 @@ describe("Engine eval suite (D1-D2)", () => {
     expect(candidates.length).toBeGreaterThan(0);
   });
 
-  it("D1: 現在地は 6/7（合格線6・達成）", () => {
+  it("D1: 現在地は 7/7（合格線6・達成）", () => {
     const candidates = runScan(company.events, baselines);
     const result = countDetectedSignals(positiveSignals, candidates);
 
@@ -79,7 +79,17 @@ describe("Engine eval suite (D1-D2)", () => {
     }
 
     /**
-     * **契約の合格線は6。現在地は6で達成した。**
+     * **契約の合格線は6。現在地は7で、仕込み7件すべてを検知している。**
+     *
+     * **2026-09-02（4）: 6 → 7。シリーズ単位の間隔を見る走査を足した。**
+     * イベントを定例の名前・取引先で束ね、その系列ごとに
+     * 「途絶（平常の間隔の3倍を超えて空いた）」と「伸長（間隔が単調に伸びる）」を見る。
+     * **両方が同じ間隔列から出る**ので、1つの仕掛けで `#1` と `#7` の両方が埋まった。
+     *
+     * あわせて仕込み `#1` を直している。**名前と逆の形になっていた**——
+     * 時系列に並べると間隔が 50 → 35 → 25 → 18 と縮み、売上は増えていた。
+     * すなわち「取引先が離れていく」ではなく「発注が増えて単価も上がる」データで、
+     * golden の記述「発注間隔が3ヶ月かけて伸長」とも食い違っていた。
      *
      * **2026-08-31（3）: 5 → 6。途絶（沈黙）を本番に実装した。**
      * 検出器（`_shared/scan.ts`）と `schedule_interval` ベースラインの生成
@@ -127,7 +137,7 @@ describe("Engine eval suite (D1-D2)", () => {
      * `tests/eval/` は `verify` の除外対象に入っていない。
      * また常設した赤は一週間で「CI は赤いもの」になり、本物の回帰がその後ろに隠れる。
      */
-    expect(result.detected).toBe(6);
+    expect(result.detected).toBe(7);
   });
 
   it("D2: 現在地は誤検知 0件（合格線2以下・達成）", () => {

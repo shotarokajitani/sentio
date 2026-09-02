@@ -47,6 +47,43 @@ export interface ScanBaseline {
 /** 平常の間隔の何倍空いたら「途絶」と見なすか。定数1つで固定する */
 const SILENCE_MULTIPLIER = 3;
 
+/** シリーズ単位の判定に必要な最低の間隔数。これ未満は「平常」が定まらないので見ない */
+const SERIES_MIN_INTERVALS = 3;
+
+/**
+ * イベントを「シリーズ」に束ねる鍵。**本番の取り込みが実際に入れている値を先に見る。**
+ *
+ * 取り込みが `metrics` に何を入れるかは経路ごとに違う。
+ *
+ *   - カレンダー（`sync-connections`）→ `title`
+ *   - 入出金CSV（`csv/ingest`）      → `description`（摘要＝取引先に相当）
+ *
+ * 合成会社は別の鍵を使っている（`meeting_type` / `order_client`）ので、
+ * **両方を候補として順に見る。** 本番の鍵を先に置いてあるのは、
+ * 本番で効かない実装にしないためである（このセッションで繰り返し踏んだ形）。
+ */
+const SERIES_KEYS: Record<string, readonly string[]> = {
+  schedule: ["title", "meeting_type"],
+  transaction: ["order_client", "description"],
+};
+
+function seriesKeyOf(event: ScanEvent): string | null {
+  const candidates = SERIES_KEYS[event.event_type];
+  if (!candidates) return null;
+  const metrics = event.metrics as Record<string, unknown> | null;
+  for (const key of candidates) {
+    const value = metrics?.[key];
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return null;
+}
+
+/** 中央値。間隔の「平常」を頑健に取るために平均は使わない */
+function median(sorted: readonly number[]): number {
+  const n = sorted.length;
+  return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+}
+
 const metricExtractors: Array<{
   eventType: string;
   metricKey: string;
@@ -241,6 +278,73 @@ export function runScan(
           score: daysSinceLast / intervalBaseline.median,
         });
       }
+    }
+  }
+
+  // 7 / 8. シリーズ単位の間隔を見る（途絶と伸長は**同じ間隔列**から出る）
+  //
+  // 走査6 は会社全体の予定間隔で、「予定が丸ごと途絶えた」しか捉えない。
+  // ここはイベントを**シリーズ**（定例の名前・取引先）に束ね、その系列ごとに見る。
+  //
+  //   7. 途絶   : 直近からの経過が、平常の間隔の SILENCE_MULTIPLIER 倍を超えた
+  //   8. 伸長   : 間隔が単調に伸びている（＝離れていく兆候）
+  //
+  // **縮む側は検知しない。** 発注が増えるのは良い兆候であり、アラートにする意味がない。
+  const bySeries = new Map<string, ScanEvent[]>();
+  for (const event of events) {
+    const key = seriesKeyOf(event);
+    if (key === null) continue;
+    const id = `${event.event_type}:${key}`;
+    const list = bySeries.get(id) ?? [];
+    list.push(event);
+    bySeries.set(id, list);
+  }
+
+  for (const [id, group] of bySeries) {
+    const ordered = [...group].sort(
+      (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
+    );
+
+    const intervals: number[] = [];
+    for (let i = 1; i < ordered.length; i++) {
+      const days =
+        (new Date(ordered[i].occurred_at).getTime() -
+          new Date(ordered[i - 1].occurred_at).getTime()) /
+        (24 * 60 * 60 * 1000);
+      intervals.push(days);
+    }
+    // 平常が定まらない系列は見ない（抑制①「ベースライン未成立は対象外」と同じ趣旨）
+    if (intervals.length < SERIES_MIN_INTERVALS) continue;
+
+    const label = id.slice(id.indexOf(":") + 1);
+    const eventType = id.slice(0, id.indexOf(":"));
+    const usual = median([...intervals].sort((a, b) => a - b));
+
+    // 7. 途絶
+    const last = ordered[ordered.length - 1];
+    const sinceLast = (now - new Date(last.occurred_at).getTime()) / (24 * 60 * 60 * 1000);
+    if (usual > 0 && sinceLast > usual * SILENCE_MULTIPLIER) {
+      candidates.push({
+        scanType: "silence",
+        source: eventType,
+        suggestedUrgency: "weekly",
+        evidence_event_ids: ordered.map((e) => e.event_id),
+        description: `${label}: no event for ${Math.round(sinceLast)} days (usual ${usual} days)`,
+        score: sinceLast / usual,
+      });
+    }
+
+    // 8. 伸長（単調に伸びている）
+    const growing = intervals.every((v, i) => i === 0 || v > intervals[i - 1]);
+    if (growing) {
+      candidates.push({
+        scanType: "trend",
+        source: eventType,
+        suggestedUrgency: "weekly",
+        evidence_event_ids: ordered.map((e) => e.event_id),
+        description: `${label}: interval elongating ${intervals[0]} → ${intervals[intervals.length - 1]} days (${intervals.length} gaps)`,
+        score: intervals[intervals.length - 1] / (intervals[0] || 1),
+      });
     }
   }
 

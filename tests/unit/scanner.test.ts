@@ -252,3 +252,116 @@ describe("Scanner (D1-D2, D4)", () => {
     expect(candidates.filter((c) => c.scanType === "deviation")).toHaveLength(0);
   });
 });
+
+/**
+ * シリーズ単位の間隔（走査7・8／2026-09-02 追加）。
+ *
+ * 会社全体の予定間隔（走査6）では「**毎週の定例が消えた**」を捉えられない。
+ * イベントを定例の名前・取引先で束ね、系列ごとに見る。
+ * **途絶と伸長は同じ間隔列から出る。**
+ */
+describe("シリーズ単位の間隔（途絶・伸長）", () => {
+  /** `daysAgo` 日前の予定イベント */
+  function scheduleAt(daysAgo: number, title: string): TimelineEvent {
+    return makeEvent({
+      event_type: "schedule",
+      occurred_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      metrics: { title },
+    });
+  }
+
+  function orderAt(daysAgo: number, client: string): TimelineEvent {
+    return makeEvent({
+      event_type: "transaction",
+      occurred_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      metrics: { order_client: client },
+    });
+  }
+
+  const baselines: Baseline[] = [makeBaseline()];
+
+  it("途絶: 週次の定例が平常の3倍を超えて空いたら検知する", () => {
+    // 7日おきに5回 → 平常7日。最後が28日前なので 28 > 21 で発火する
+    const weekly = [56, 49, 42, 35, 28].map((d) => scheduleAt(d, "週次定例"));
+    const candidates = runScan(weekly, baselines);
+    const silence = candidates.filter((c) => c.scanType === "silence");
+    expect(silence).toHaveLength(1);
+    expect(silence[0].description).toContain("週次定例");
+  });
+
+  it("陰性: 平常どおり続いている定例は検知しない", () => {
+    const weekly = [28, 21, 14, 7, 1].map((d) => scheduleAt(d, "週次定例"));
+    expect(runScan(weekly, baselines).filter((c) => c.scanType === "silence")).toEqual([]);
+  });
+
+  it("伸長: 間隔が単調に伸びていれば検知する", () => {
+    // 古い順の間隔 14 → 18 → 25 → 35
+    const orders = [112, 98, 80, 55, 20].map((d) => orderAt(d, "取引先A"));
+    const trend = runScan(orders, baselines).filter(
+      (c) => c.scanType === "trend" && c.source === "transaction",
+    );
+    expect(trend).toHaveLength(1);
+    expect(trend[0].description).toContain("取引先A");
+  });
+
+  it("**陰性: 縮む側は検知しない**（発注が増えるのは良い兆候である）", () => {
+    // 古い順の間隔 35 → 25 → 18 → 14
+    const orders = [92, 57, 32, 14, 0].map((d) => orderAt(d, "取引先A"));
+    expect(
+      runScan(orders, baselines).filter(
+        (c) => c.scanType === "trend" && c.source === "transaction",
+      ),
+    ).toEqual([]);
+  });
+
+  it("陰性: 間隔がばらついていれば伸長ではない", () => {
+    const orders = [90, 60, 50, 20, 10].map((d) => orderAt(d, "取引先A"));
+    expect(
+      runScan(orders, baselines).filter(
+        (c) => c.scanType === "trend" && c.source === "transaction",
+      ),
+    ).toEqual([]);
+  });
+
+  it("陰性: 間隔が3本未満の系列は見ない（平常が定まらない）", () => {
+    const few = [30, 20, 10].map((d) => scheduleAt(d, "たまの打合せ")); // 間隔2本
+    expect(runScan(few, baselines).filter((c) => c.scanType === "silence")).toEqual([]);
+  });
+
+  it("系列の鍵が無いイベントは束ねない（title も meeting_type も無い）", () => {
+    const noKey = [56, 49, 42, 35, 28].map((d) =>
+      makeEvent({
+        event_type: "schedule",
+        occurred_at: new Date(Date.now() - d * 86400000).toISOString(),
+        metrics: {},
+      }),
+    );
+    expect(runScan(noKey, baselines).filter((c) => c.scanType === "silence")).toEqual([]);
+  });
+
+  it("**本番の鍵**（カレンダーの title / CSV の description）で束ねる", () => {
+    const byTitle = [56, 49, 42, 35, 28].map((d) => scheduleAt(d, "経営会議"));
+    expect(runScan(byTitle, baselines).some((c) => c.description.includes("経営会議"))).toBe(true);
+
+    const byDescription = [112, 98, 80, 55, 20].map((d) =>
+      makeEvent({
+        event_type: "transaction",
+        occurred_at: new Date(Date.now() - d * 86400000).toISOString(),
+        metrics: { description: "ｶ)ﾃｽﾄ ﾌﾘｺﾐ" },
+      }),
+    );
+    expect(
+      runScan(byDescription, baselines).some((c) => c.description.includes("ｶ)ﾃｽﾄ")),
+    ).toBe(true);
+  });
+
+  it("別々の系列は混ざらない", () => {
+    const mixed = [
+      ...[56, 49, 42, 35, 28].map((d) => scheduleAt(d, "止まった定例")),
+      ...[28, 21, 14, 7, 1].map((d) => scheduleAt(d, "続いている定例")),
+    ];
+    const silence = runScan(mixed, baselines).filter((c) => c.scanType === "silence");
+    expect(silence).toHaveLength(1);
+    expect(silence[0].description).toContain("止まった定例");
+  });
+});

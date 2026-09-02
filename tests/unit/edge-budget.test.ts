@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { MAX_FULL_RUNS_PER_DAY, canRunFullHarness, budgetDateKey } from "@edge/_shared/budget";
+import {
+  MAX_FULL_RUNS_PER_DAY,
+  DEFAULT_PLAN,
+  PLANS,
+  planFor,
+  canRunFullHarness,
+  budgetDateKey,
+} from "@edge/_shared/budget";
 import { jstDateKey } from "@edge/_shared/jst";
 
 /**
@@ -69,5 +76,61 @@ describe("budgetDateKey", () => {
   it("配信の日付キーと同じ実装に寄っている（日次の意味を2つ持たない）", () => {
     const at = new Date("2026-08-19T23:30:00.000Z");
     expect(budgetDateKey(at)).toBe(jstDateKey(at));
+  });
+});
+
+/**
+ * プランごとの枠（2026-09-02 追加・課金の受け皿）。
+ *
+ * **いちばん大事なのは「挙動が変わっていない」ことである。**
+ * 受け皿を作っただけで、どの会社も既定プランを引く。
+ */
+describe("プランの受け皿", () => {
+  it("**既定プランの上限は従来と同じ 10**（挙動を変えていない）", () => {
+    expect(DEFAULT_PLAN.fullRunsPerDay).toBe(10);
+    expect(MAX_FULL_RUNS_PER_DAY).toBe(DEFAULT_PLAN.fullRunsPerDay);
+  });
+
+  it("プランを渡さなければ既定プランで判定する（従来の呼び出しが壊れない）", () => {
+    expect(canRunFullHarness(9)).toBe(true);
+    expect(canRunFullHarness(10)).toBe(false);
+    expect(canRunFullHarness(9, DEFAULT_PLAN)).toBe(canRunFullHarness(9));
+  });
+
+  it("プランごとに上限が変わる", () => {
+    const wide = { id: "wide", fullRunsPerDay: 50 };
+    expect(canRunFullHarness(30, wide)).toBe(true);
+    expect(canRunFullHarness(30)).toBe(false); // 既定では 10 が上限
+    expect(canRunFullHarness(50, wide)).toBe(false);
+  });
+
+  it("使用量が取れないときは、どのプランでも起動しない（fail-closed は据え置き）", () => {
+    const wide = { id: "wide", fullRunsPerDay: 50 };
+    for (const v of [null, undefined, NaN]) {
+      expect(canRunFullHarness(v, wide), String(v)).toBe(false);
+    }
+  });
+
+  it("**知らない plan id は既定に落とす**（上限なしにも0回にもしない）", () => {
+    expect(planFor("知らないプラン")).toBe(DEFAULT_PLAN);
+    expect(planFor(null)).toBe(DEFAULT_PLAN);
+    expect(planFor(undefined)).toBe(DEFAULT_PLAN);
+    expect(planFor("")).toBe(DEFAULT_PLAN);
+  });
+
+  it("既定プランは id で引ける", () => {
+    expect(planFor(DEFAULT_PLAN.id)).toBe(DEFAULT_PLAN);
+  });
+
+  it("**PLANS を空にしない**（0件で緑になるのは受け皿が消えたということ）", () => {
+    expect(Object.keys(PLANS).length).toBeGreaterThan(0);
+    expect(PLANS[DEFAULT_PLAN.id]).toBe(DEFAULT_PLAN);
+  });
+
+  it("プランの上限は正の整数である（0や負を置くと全社が止まる）", () => {
+    for (const [id, plan] of Object.entries(PLANS)) {
+      expect(Number.isInteger(plan.fullRunsPerDay), id).toBe(true);
+      expect(plan.fullRunsPerDay, id).toBeGreaterThan(0);
+    }
   });
 });

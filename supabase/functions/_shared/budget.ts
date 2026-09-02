@@ -13,6 +13,52 @@
 import { jstDateKey } from "./jst.ts";
 
 /**
+ * プランごとの枠（entitlement）。**課金の受け皿**。
+ *
+ * ロードマップ第5フェーズ「事業化仕上げ」は
+ * 「プラン entitlement（**調査予算×枠**）」と定めている。その受け皿だけを先に作る。
+ *
+ * **いまは会社ごとの差が無い。** どの会社も `DEFAULT_PLAN` を引くので、
+ * **この変更で本番の挙動は1ミリも変わらない**（`MAX_FULL_RUNS_PER_DAY` は
+ * 既定プランの値そのものであり、値は 10 のまま）。
+ *
+ * **プランの種類・価格・枠は未確定である**（人間の判断待ち）。
+ * ここに `free` や `pro` のような名前を先に置かないのは、
+ * **名前を置いた時点で品揃えを決めたことになる**からである。
+ * 決まったら `PLANS` に足し、会社ごとの plan id を引く経路（下記）を繋ぐ。
+ */
+export interface Plan {
+  /** プランの識別子。契約・請求と突き合わせる鍵になる */
+  id: string;
+  /** フルハーネスの日次起動上限 */
+  fullRunsPerDay: number;
+}
+
+/**
+ * 既定のプラン。**いまは全社がこれである。**
+ *
+ * 値は従来の `MAX_FULL_RUNS_PER_DAY` と同じ 10 で、暫定値であることも変わらない
+ * （`docs/spec/07_open_items.md` に登録済み）。
+ */
+export const DEFAULT_PLAN: Plan = { id: "default", fullRunsPerDay: 10 };
+
+/** 引ける全プラン。**空にしない。** 課金が決まったらここに足す */
+export const PLANS: Readonly<Record<string, Plan>> = { [DEFAULT_PLAN.id]: DEFAULT_PLAN };
+
+/**
+ * plan id からプランを引く。**知らない id は既定プランに落とす。**
+ *
+ * 「知らない id ＝ 上限なし」にも「知らない id ＝ 0回」にもしない。
+ * 前者は fail-open で金銭リスクを伴い（この module がまさにそれを直した経緯を持つ）、
+ * 後者は請求の不整合で利用者を止めてしまう。
+ * **既定に落とすのは、どちらの事故も起こさない唯一の選択である。**
+ */
+export function planFor(planId: string | null | undefined): Plan {
+  if (typeof planId !== "string") return DEFAULT_PLAN;
+  return PLANS[planId] ?? DEFAULT_PLAN;
+}
+
+/**
  * フルハーネス（Planner→Generator→Evaluator）の日次起動上限。
  *
  * **10 は暫定値**（`docs/spec/07_open_items.md` に登録済み）。
@@ -23,17 +69,22 @@ import { jstDateKey } from "./jst.ts";
  * `light_runs` に上限は置かない。`spec/03:52` が「フルハーネス起動上限・超過はライトパス降格」
  * と定めており、**ライトを絞ると降格先が無くなる**ため。記録だけ行う。
  */
-export const MAX_FULL_RUNS_PER_DAY = 10;
+export const MAX_FULL_RUNS_PER_DAY = DEFAULT_PLAN.fullRunsPerDay;
 
 /**
  * フルハーネスを起動してよいか。
  *
  * **使用量が取れなかった場合は起動しない。** `null` / `undefined` / `NaN` を
  * 「0回使用」に丸めると、それは「行が無ければ無制限」の再来になる。
+ *
+ * `plan` を省略すると既定プラン。**いまはどの会社も既定プランなので挙動は変わらない。**
  */
-export function canRunFullHarness(fullRuns: number | null | undefined): boolean {
+export function canRunFullHarness(
+  fullRuns: number | null | undefined,
+  plan: Plan = DEFAULT_PLAN,
+): boolean {
   if (typeof fullRuns !== "number" || Number.isNaN(fullRuns)) return false;
-  return fullRuns < MAX_FULL_RUNS_PER_DAY;
+  return fullRuns < plan.fullRunsPerDay;
 }
 
 /**

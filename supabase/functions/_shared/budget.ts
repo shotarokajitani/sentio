@@ -35,15 +35,39 @@ export interface Plan {
 }
 
 /**
- * 既定のプラン。**いまは全社がこれである。**
+ * 試用プラン。**0円。**
  *
- * 値は従来の `MAX_FULL_RUNS_PER_DAY` と同じ 10 で、暫定値であることも変わらない
+ * 枠を 3 にしたのは、この module の docstring が
+ * 「3 にすると S-3-2（合成会社の一気通貫）が上限に当たる」と警告しているためである。
+ * テストが素通しできる余裕は標準プラン（10）が持つので、試用は 3 で構わない。
+ */
+export const TRIAL_PLAN: Plan = { id: "trial", fullRunsPerDay: 3 };
+
+/**
+ * 標準プラン。**月3万円**（2026-09-02 梶谷さん決定）。
+ *
+ * 年36万円で、正本 `06_positioning.md` が持つ最小の代替コスト
+ * （5名×毎日15分の日報＝年90万円）の4割にあたる。
+ * 枠は従来の `MAX_FULL_RUNS_PER_DAY` と同じ 10 で、暫定値であることも変わらない
  * （`docs/spec/07_open_items.md` に登録済み）。
  */
-export const DEFAULT_PLAN: Plan = { id: "default", fullRunsPerDay: 10 };
+export const STANDARD_PLAN: Plan = { id: "standard", fullRunsPerDay: 10 };
 
-/** 引ける全プラン。**空にしない。** 課金が決まったらここに足す */
-export const PLANS: Readonly<Record<string, Plan>> = { [DEFAULT_PLAN.id]: DEFAULT_PLAN };
+/**
+ * plan id が引けないときに落とす先。**いまは標準プランである。**
+ *
+ * **課金が動き出したら、購読の無い会社は試用に落ちる。**
+ * いまそうしないのは、購読という概念がまだ存在せず、
+ * **既存の会社の枠を黙って 10 → 3 に減らすことになる**からである。
+ * Stripe を繋いで購読を引けるようになった時点で、ここを `TRIAL_PLAN` に倒す。
+ */
+export const DEFAULT_PLAN: Plan = STANDARD_PLAN;
+
+/** 引ける全プラン。**空にしない。**（2段構成・2026-09-02 決定） */
+export const PLANS: Readonly<Record<string, Plan>> = {
+  [TRIAL_PLAN.id]: TRIAL_PLAN,
+  [STANDARD_PLAN.id]: STANDARD_PLAN,
+};
 
 /**
  * plan id からプランを引く。**知らない id は既定プランに落とす。**

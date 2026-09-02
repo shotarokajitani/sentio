@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   MAX_FULL_RUNS_PER_DAY,
   DEFAULT_PLAN,
+  TRIAL_PLAN,
+  STANDARD_PLAN,
   PLANS,
   planFor,
   canRunFullHarness,
@@ -132,5 +134,36 @@ describe("プランの受け皿", () => {
       expect(Number.isInteger(plan.fullRunsPerDay), id).toBe(true);
       expect(plan.fullRunsPerDay, id).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * 2段構成（2026-09-02 決定）。試用 0円/3回、標準 月3万円/10回。
+ */
+describe("プランの品揃え", () => {
+  it("試用は 3 回。標準は 10 回", () => {
+    expect(TRIAL_PLAN.fullRunsPerDay).toBe(3);
+    expect(STANDARD_PLAN.fullRunsPerDay).toBe(10);
+  });
+
+  it("**既定は標準のまま**。既存の会社の枠を減らしていない", () => {
+    // 課金が動き出したら購読の無い会社は試用に落ちるが、購読という概念がまだ無い。
+    // ここを試用にすると、いまいる会社の枠を黙って 10 → 3 に減らすことになる
+    expect(DEFAULT_PLAN).toBe(STANDARD_PLAN);
+    expect(MAX_FULL_RUNS_PER_DAY).toBe(10);
+  });
+
+  it("両方のプランが id で引ける", () => {
+    expect(planFor("trial")).toBe(TRIAL_PLAN);
+    expect(planFor("standard")).toBe(STANDARD_PLAN);
+  });
+
+  it("試用の枠で 3 回目は止まる", () => {
+    expect(canRunFullHarness(2, TRIAL_PLAN)).toBe(true);
+    expect(canRunFullHarness(3, TRIAL_PLAN)).toBe(false);
+  });
+
+  it("段数は2つ。**増やすときは価格と枠をセットで決める**", () => {
+    expect(Object.keys(PLANS).sort()).toEqual(["standard", "trial"]);
   });
 });

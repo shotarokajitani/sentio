@@ -105,6 +105,15 @@ export const ENDPOINT_SPECS: EndpointSpec[] = [
     route: "src/app/api/auth/signout/route.ts",
     contract: "A-1",
   },
+  // 2026-09-02 追加。それまで**呼び出し元が1つも無く**、宣言にも載せられなかった
+  // （載せると no-caller で赤くなり、判断が済むまで本番へ何も出せなくなるため）。
+  // `src/lib/competitors/suggest.ts` を作って到達するようになったので載せる。
+  {
+    id: "competitors-suggest",
+    endpoint: "/api/competitors/suggest",
+    route: "src/app/api/competitors/suggest/route.ts",
+    contract: "D-4-1",
+  },
 ];
 
 export type UnreachableReason = "missing-route" | "no-caller" | "no-importer";

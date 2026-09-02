@@ -6,6 +6,15 @@ export interface AuthedContext {
   /** RLSポリシー（00019）が company_id = auth.uid() のため、company_id はユーザーIDそのもの */
   companyId: string;
   /**
+   * 登録時に受け取った自社サイトのURL。**任意項目なので null を許す。**
+   *
+   * 置き場所は `auth.users.user_metadata`。**新しいテーブルを作っていない。**
+   * `company_id` が `auth.uid()` そのものなので、会社の属性とユーザーの属性が
+   * 1対1で対応し、専用のテーブルを持つ理由が無い。
+   * 将来ほかの会社属性が増えるなら、そのとき表に出すか決める。
+   */
+  siteUrl: string | null;
+  /**
    * ログイン中のアカウントのメールアドレス。解除の二段確認の照合対象（契約 U-2 / 2026-08-27 確定）。
    *
    * `auth.users` が正本であり、**セッション以外から受け取らない**。
@@ -27,7 +36,14 @@ export async function getAuthedContext(): Promise<AuthedContext | null> {
   const supabase = await createRouteClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
-  return { companyId: data.user.id, email: data.user.email ?? null, supabase };
+  // 登録時に受け取った自社サイトのURL。**新しいテーブルを作らず**メタデータに置いてある
+  const siteUrl = data.user.user_metadata?.site_url;
+  return {
+    companyId: data.user.id,
+    email: data.user.email ?? null,
+    siteUrl: typeof siteUrl === "string" && siteUrl.trim() !== "" ? siteUrl.trim() : null,
+    supabase,
+  };
 }
 
 /** Server Component から company_id だけを見るとき用 */

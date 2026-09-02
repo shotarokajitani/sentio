@@ -18,6 +18,8 @@ export const ja = {
     lead: "メールアドレスとパスワードだけで始められます。",
     email: "メールアドレス",
     password: "パスワード",
+    siteUrl: "自社サイトのURL（任意）",
+    siteUrlHint: "入れておくと、外から見た自社の分析と競合の推定が動きます。あとからでも構いません。",
     passwordHint: "8文字以上",
     submit: "ログイン",
     signUp: "新規登録",

@@ -34,7 +34,15 @@ export async function POST(req: NextRequest) {
       return backToLogin("weak_password");
     }
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // 自社サイトのURLはユーザーのメタデータに置く。**新しいテーブルを作らない。**
+    // `company_id` は `auth.uid()` そのもの（RLS 00019）なので、会社の属性と
+    // ユーザーの属性が1対1で対応する。空欄なら何も入れない（任意項目）
+    const siteUrl = String(form.get("site_url") ?? "").trim();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      ...(siteUrl ? { options: { data: { site_url: siteUrl } } } : {}),
+    });
     if (error) {
       console.error("signUp failed:", error.message);
       return backToLogin(

@@ -56,6 +56,21 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <span className="field-hint">{t.login.passwordHint}</span>
         </label>
 
+        {/* 新規登録のときだけ意味がある任意項目。**聞くのはこの1つだけ。**
+            自社サイトが分かると、Day0 の「外から見た自社」と競合の推定が動く。
+            入力を増やさない線引きとして、会社名も業種も聞かない（URL から推定する） */}
+        <label className="field">
+          <span className="field-label">{t.login.siteUrl}</span>
+          <input
+            className="field-input"
+            type="url"
+            name="site_url"
+            autoComplete="url"
+            placeholder="https://example.co.jp"
+          />
+          <span className="field-hint">{t.login.siteUrlHint}</span>
+        </label>
+
         <div className="actions">
           <button className="btn" type="submit" name="intent" value="login">
             {t.login.submit}

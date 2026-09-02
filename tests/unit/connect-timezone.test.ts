@@ -54,6 +54,7 @@ async function renderUnderTz(tz: string, o: ConnectionOverview): Promise<string>
       failureMessage: null,
       initialOverview: o,
       accountEmail: FAKE_ACCOUNT_EMAIL,
+    siteUrl: null,
     }),
   );
 }

@@ -24,6 +24,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Sear
       // 解除の二段確認の照合対象（U-2・2026-08-27 確定）。**セッション以外から取らない**。
       // クエリやフォームから受け取ると、照合の正本を攻撃者が指定できてしまう
       accountEmail={ctx.email}
+      // 登録時に受け取った自社サイト。**有れば競合の推定を1度だけ走らせる**
+      // （エンドポイントは冪等なので、開くたびに叩いても LLM には到達しない）
+      siteUrl={ctx.siteUrl}
     />
   );
 }

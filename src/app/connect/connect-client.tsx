@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Masthead } from "@/components/Masthead";
 import { t } from "@/i18n";
 import type { ConnectionOverview, ConnectionRow } from "@/lib/connections/overview";
@@ -8,6 +8,8 @@ import { requestDisconnect, type DisconnectOutcome } from "@/lib/connections/dis
 // 列の対応推定は「1行目が列名の行か」を確かめてからでないと呼べない（契約 スライスCH）。
 // 関門ごとモジュールに移してあるので、ここからは直接 fetch しない
 import { requestColumnMapping, type ColumnMapping } from "@/lib/csv/analyze";
+// 競合の推定は自社サイトのURLがあるときだけ起こす。URL が無ければネットワークに出ない
+import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
 
 type CsvStep = "idle" | "analyzing" | "confirm" | "ingesting" | "done" | "error";
 
@@ -30,6 +32,7 @@ export function ConnectClient({
   failureMessage,
   initialOverview,
   accountEmail,
+  siteUrl,
 }: {
   failureMessage: string | null;
   // null はサーバ側で読み取りに失敗したことを表す。0件（空）とは別物
@@ -37,6 +40,8 @@ export function ConnectClient({
   // 解除の二段確認の照合対象（U-2・2026-08-27 確定）。取れなければ null で、
   // その場合は照合が必ず落ちるので解除できない（fail-closed）
   accountEmail: string | null;
+  // 登録時に受け取った自社サイト。任意項目なので null がありうる
+  siteUrl: string | null;
 }) {
   const [connections, setConnections] = useState<ConnectionRow[]>(
     initialOverview?.connections ?? [],
@@ -56,6 +61,23 @@ export function ConnectClient({
   const [csvError, setCsvError] = useState("");
   // 断った理由の本文。原因ごとに「何を直せばいいか」が違うので、題と別に持つ（CH-D7）
   const [csvErrorBody, setCsvErrorBody] = useState("");
+
+  /**
+   * 競合の推定を1度だけ起こす（`entities` を埋める唯一の経路）。
+   *
+   * **画面には何も出さない。** これは利用者が起こした操作ではないので、
+   * 成否を伝える相手がいない。失敗してもコンソールに残すだけにする。
+   *
+   * 開くたびに叩くが、**サーバ側が冪等**（既に競合があれば LLM に触れず返す）なので
+   * 費用も重複も発生しない。URL が無ければそもそもネットワークに出ない。
+   */
+  useEffect(() => {
+    void requestCompetitorSuggestion({ siteUrl }).then((outcome) => {
+      if (!outcome.ok && outcome.reason === "failed") {
+        console.error("競合の推定に失敗:", outcome.status);
+      }
+    });
+  }, [siteUrl]);
 
   // 初期表示はサーバ側で確定済み。ここを通るのは再読み込みとCSV取込後だけ
   const fetchConnections = useCallback(async () => {

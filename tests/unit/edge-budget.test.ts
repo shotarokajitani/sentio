@@ -141,9 +141,19 @@ describe("プランの受け皿", () => {
  * 2段構成（2026-09-02 決定）。試用 0円/3回、標準 月3万円/10回。
  */
 describe("プランの品揃え", () => {
-  it("試用は 3 回。標準は 10 回", () => {
-    expect(TRIAL_PLAN.fullRunsPerDay).toBe(3);
+  it("試用は 5 回。標準は 10 回", () => {
+    expect(TRIAL_PLAN.fullRunsPerDay).toBe(5);
     expect(STANDARD_PLAN.fullRunsPerDay).toBe(10);
+  });
+
+  /**
+   * **フルハーネスの起動は1日5回が上限である**（2026-09-02 実測）。
+   * `investigate` は候補を `scanType` でまとめて1調査にし、走査は5種類しか無い。
+   * 試用がこれを下回ると、**毎日取りこぼしが出る。**
+   */
+  it("試用の枠は、1日に起こりうる調査の数（5）を下回らない", () => {
+    const SCAN_TYPES_PER_DAY = 5;
+    expect(TRIAL_PLAN.fullRunsPerDay).toBeGreaterThanOrEqual(SCAN_TYPES_PER_DAY);
   });
 
   it("**既定は標準のまま**。既存の会社の枠を減らしていない", () => {
@@ -158,9 +168,9 @@ describe("プランの品揃え", () => {
     expect(planFor("standard")).toBe(STANDARD_PLAN);
   });
 
-  it("試用の枠で 3 回目は止まる", () => {
-    expect(canRunFullHarness(2, TRIAL_PLAN)).toBe(true);
-    expect(canRunFullHarness(3, TRIAL_PLAN)).toBe(false);
+  it("試用の枠で 5 回目は止まる", () => {
+    expect(canRunFullHarness(4, TRIAL_PLAN)).toBe(true);
+    expect(canRunFullHarness(5, TRIAL_PLAN)).toBe(false);
   });
 
   it("段数は2つ。**増やすときは価格と枠をセットで決める**", () => {

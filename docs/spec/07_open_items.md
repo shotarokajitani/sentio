@@ -989,3 +989,51 @@ webhook が着く前にこの画面を描くと、状態の正本はまだ空で
 
 **外部顧客に出す前に必ず潰す。** 最初の1社が購読するより前である
 （`docs/spec/07_open_items.md` の「解約の導線が無い」と同じ合図）。
+
+## Edge Function の呼び出し元を機械で守れない（未判断・2026-09-03 登録・スライスSB の SB-3-6 未充足）
+
+**`check:endpoint-callers` は Next.js 専用で、Edge Function の到達性を見ていない。**
+
+スライスSB は「`state-baselines` に呼び出し元が1つも無く、本番で一度も走っていなかった」
+という事故を直すものだった。**同じ事故を再発させない番人**として、契約は SB-3-6 で
+「`check:endpoint-callers` の宣言に `state-baselines` の呼び出し元を追加する」と定めた。
+
+**これは今回充足していない。** 検査器の構造上、宣言を足すだけでは載らない。
+
+```ts
+// scripts/check-endpoint-callers.ts
+function collectSources(root = "src"): SourceFile[]   // ← src/ しか走査しない
+```
+
+```ts
+// tests/unit/check-endpoint-callers.test.ts:222-227
+expect(s.route.startsWith("src/app/api/")).toBe(true);
+expect(s.endpoint.startsWith("/api/")).toBe(true);
+```
+
+`state-baselines` は `supabase/functions/state-baselines/index.ts` にあり、
+呼び出しは `_shared/dispatch.ts` からの**関数名の文字列**（`deps.invoke("state-baselines", …)`）である。
+`route` も `endpoint` も上の不変条件を満たさないので、**宣言に載せた瞬間に既存テストが赤くなる。**
+
+### いま守られている範囲と、守られていない範囲
+
+- **守られている**: `check:caller-guard` が「デプロイ対象の全 Function が `resolveCaller` を通るか」を見る。
+  ただしこれは**呼ばれ方**の検査であって、**呼ばれているか**の検査ではない
+- **守られていない**: Edge Function に呼び出し元が1つも無い状態。
+  **まさにこのスライスが直した形が、機械では検出できないまま残る**
+
+### 判断が要ること（**勝手に確定させない**）
+
+1. **`check:endpoint-callers` を Edge 対応に広げるか、専用の検査器を新設するか。**
+   広げるなら `EndpointSpec` に種別を持たせ、`supabase/functions/` も走査し、
+   不変条件テストを種別ごとに分ける。新設するなら `ci-coverage.yml` への宣言と
+   CI への搭載、陽性・陰性コントロールがセットで要る（`.claude/rules/ci-coverage.md`）
+2. **`state-*` のうち、呼び出し元を持つべきものはどれか。**
+   `state-narratives` / `state-summary` / `state-memory-packet` は現在も呼び出し元が無い。
+   これらは「いま決めない」として別途登録済みで、**検査器を先に作ると、
+   その未判断が機械的に赤として現れる。** 順序をどちらにするかも判断のうち
+
+### 着手の合図
+
+**次に Edge Function を1本足すとき。** そのとき呼び出し元を書き忘れても、
+いまは誰も気づかない。SB と同じ事故がもう一度起きる。

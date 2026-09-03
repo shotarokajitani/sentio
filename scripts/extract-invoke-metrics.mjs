@@ -67,6 +67,9 @@ export const METRIC_ALLOWLIST = [
   "skipped_no_email",
   "failed",
   "sense_failed",
+  // 契約SB（スライスSB）で足した。**`sense_failed` と対にする。**
+  // 載せないと、State の失敗件数だけが黙って出力から落ちる（allowlist は fail-closed）
+  "state_failed",
 ];
 
 /** 長さだけを出してよいキー。中身（ID 列）は出さない。 */

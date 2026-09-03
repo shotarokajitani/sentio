@@ -48,10 +48,12 @@ export interface DispatchSummary {
   delivered: number;
   skipped_no_connection: number;
   skipped_no_email: number;
-  /** `run-sense` と `deliver-*` を合わせた失敗件数 */
+  /** `state-baselines` と `run-sense` と `deliver-*` を合わせた失敗件数 */
   failed: number;
   /** うち `run-sense` の失敗（配信は止めない。CD-2-4） */
   sense_failed: number;
+  /** うち `state-baselines` の失敗（配信も Sense も止めない。SB-D2） */
+  state_failed: number;
 }
 
 export interface DispatchResult {
@@ -88,6 +90,7 @@ export async function runDispatch(
     skipped_no_email: 0,
     failed: 0,
     sense_failed: 0,
+    state_failed: 0,
   };
 
   for (const target of targets) {
@@ -104,6 +107,24 @@ export async function runDispatch(
     }
 
     if (kind === "daily") {
+      // **State を Sense より先に回す**（SB-D1）。
+      //
+      // `scan` の走査は `is_established` なベースラインを前提にするので、
+      // 更新が後に来ると、その日の判断は**前日の平常**で行われる。
+      // 別 cron に分けると順序が運任せになるため、ここに置いて構造的に固定する。
+      //
+      // **ここが `state-baselines` の唯一の呼び出し元である。** 2026-09-03 の実測では、
+      // 本番の `baselines` は `revenue` の1行（最終更新 08-27）だけで、
+      // 08-31 に足された `schedule_interval` の upsert は一度も走っていなかった。
+      const state = await deps.invoke("state-baselines", { company_id: target.companyId });
+      if (!state.ok) {
+        // **State の失敗で Sense も配信も止めない**（SB-D2）。
+        // 止めると、ベースラインが崩れた日に毎朝のパルスごと消える。
+        // ただし黙って進めない。失敗として数え、non-2xx に効かせる
+        summary.state_failed++;
+        summary.failed++;
+      }
+
       const sense = await deps.invoke("run-sense", { company_id: target.companyId });
       if (!sense.ok) {
         // **sense の失敗で配信を止めない**（CD-2-4）。ただし失敗として数える

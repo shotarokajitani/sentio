@@ -224,9 +224,10 @@ describe("dispatch-* の件数スカラー", () => {
     skipped_no_email: 0,
     failed: 0,
     sense_failed: 0,
+    state_failed: 0,
   };
 
-  it("陽性: 7キーのうち**6つの数値**が抽出される", () => {
+  it("陽性: 8キーのうち**7つの数値**が抽出される", () => {
     const result = extractMetrics(JSON.stringify(DISPATCH_SUMMARY));
 
     expect(result.ok).toBe(true);
@@ -237,8 +238,9 @@ describe("dispatch-* の件数スカラー", () => {
       skipped_no_email: 0,
       failed: 0,
       sense_failed: 0,
+      state_failed: 0,
     });
-    expect(result.extractedCount).toBe(6);
+    expect(result.extractedCount).toBe(7);
   });
 
   it("陰性: `kind` は**値もキー名も**出力に現れない（文字列なので載せていない）", () => {

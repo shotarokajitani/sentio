@@ -177,6 +177,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm run check:cron-jobs
 
+      # 削除の対象と手順書の DELETE 列挙の突合（発注3 の 3-1）。
+      # company_id を持つテーブルが増えたのに手順書へ追記し忘れると、
+      # 消し残しが静かに残る。ポリシー §6 は「すべてのデータを削除」と公開済み。
+      # 実DBが要るので verify には載せられない
+      - name: "check:deletion-coverage — 削除の対象を手順書と突合する"
+        if: ${{ !cancelled() }}
+        run: pnpm run check:deletion-coverage
+
       # Edge Function に実HTTPで到達できるかを、テストより先に事実として記録する（契約 S-5-2）。
       # `supabase start` が Edge Runtime を含むかはCLIのバージョンに依存するため、
       # 「動いているはず」で進めずここで実測する。

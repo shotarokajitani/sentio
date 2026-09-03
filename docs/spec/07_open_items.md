@@ -990,6 +990,76 @@ webhook が着く前にこの画面を描くと、状態の正本はまだ空で
 **外部顧客に出す前に必ず潰す。** 最初の1社が購読するより前である
 （`docs/spec/07_open_items.md` の「解約の導線が無い」と同じ合図）。
 
+## dependabot の PR #80 で `integration` が落ちている（未判断・2026-09-03 登録・**merge しない**）
+
+**merge しない。** 落ちたまま入れると、次に赤が出たときに「元から赤い」と読み流される。
+
+| 項目 | 値 |
+| --- | --- |
+| PR | [#80](https://github.com/shotarokajitani/sentio/pull/80) `chore(deps-dev): bump the dev-dependencies group across 1 directory with 7 updates` |
+| 落ちている job | **`integration`**（5m49s） |
+| run | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100150574107 |
+| 他の5チェック | `verify` / `edge-functions` / `gitleaks` / Vercel 2件 — すべて pass |
+| 最終更新 | 2026-09-02（レビュー0件・人間コメント0件） |
+
+落ちているのは**1テストだけ**である。
+
+```
+FAIL tests/integration/pipeline-db.test.ts > パイプライン一気通貫 (S-3)
+     > 陰性コントロール: anon キーからは intent を渡す以前に 401 で弾かれる
+Error: Test timed out in 5000ms.
+ ❯ tests/integration/pipeline-db.test.ts:281:3
+
+ Test Files  1 failed | 12 passed (13)
+      Tests  1 failed | 86 passed (87)
+```
+
+**アサーションの失敗ではなく、5秒のタイムアウトである。** `invoke("deliver-pulse", …)` の
+応答を待ちきれずに落ちている。
+
+**`integration` は同じスイートを3回走らせる。3回のうち落ちたのは3回目だけである。**
+
+```
+1379行  Test Files  13 passed (13)      ← run 1
+1503行  Test Files  13 passed (13)      ← run 2
+1645行  Test Files  1 failed | 12 passed (13)   ← run 3
+```
+
+3回とも `skip 0件`。**同じコード・同じ依存で、2回通って1回落ちている。**
+
+### 分かっていないこと（**推測で埋めない**）
+
+- **依存の更新が原因か、フレークか。** 上の3回のうち2回通っていることは
+  **フレークの側を示唆する**が、断定していない。依存の更新でタイミングが
+  変わって顕在化した可能性は消えていない。同じ日の dependabot PR #68
+  （production-dependencies）は**全6チェック pass** している
+- **7本の更新のうちどれが効いたか。** 切り分けていない。7本は次のとおり。
+
+  | Package | From | To |
+  | --- | --- | --- |
+  | `@types/node` | 26.2.0 | 26.4.0 |
+  | `@types/react-dom` | 19.2.4 | 19.2.5 |
+  | `@vitejs/plugin-react` | 6.0.5 | 6.1.1 |
+  | `eslint-config-next` | 16.3.1 | 16.3.3 |
+  | `supabase` | 2.114.0 | 2.116.0 |
+  | `tsx` | 4.23.12 | 4.23.13 |
+  | `vitest` | 4.1.10 | 4.1.11 |
+
+  **タイミングに触りうるのは `vitest`（4.1.10 → 4.1.11）と `supabase` CLI
+  （2.114.0 → 2.116.0。ローカルスタックの起動そのもの）の2本**だが、
+  どちらも patch/minor であり、**因果は確かめていない**
+- CI の 503 フレークは過去にも観測がある
+  （`docs/reports/2026-08-21_CI_503フレークの実測.md`）。同じ経路かは**未確認**
+
+### 判断が要ること
+
+1. **再実行して緑になるか**を先に見る。1回で決めない
+2. 再現するなら、**7本のうちどれかを外して二分する**か、
+   `pipeline-db.test.ts` のタイムアウトを延ばすかを決める。
+   **延ばす前に、なぜ5秒で足りなくなったかを確かめること。**
+   閾値を緩めるのは、原因を見ないまま赤を消す最も安易な手である
+3. dev 依存が古いまま残る期間の許容。**security advisory を含むかは未確認**
+
 ## Edge Function の呼び出し元を機械で守れない（未判断・2026-09-03 登録・スライスSB の SB-3-6 未充足）
 
 **`check:endpoint-callers` は Next.js 専用で、Edge Function の到達性を見ていない。**

@@ -39,6 +39,20 @@ checks:
       cron.schedule は同名ジョブを上書きするため、将来の migration が
       名前を再利用すると静かに置き換わる。実DB照会なので verify には載せない。
 
+  - id: check-deletion-coverage
+    script: "check:deletion-coverage"
+    file: "check-deletion-coverage.ts"
+    command: "pnpm run check:deletion-coverage"
+    contract: "発注3 3-1"
+    requires: [live-db]
+    must_run_in: ["ci.integration"]
+    note: >-
+      company_id を持つテーブルを実DBから引き、アカウント削除手順書の DELETE 列挙と
+      突き合わせる。既定は「company_id を持つものは全件削除」で、例外は
+      docs/checklists/deletion-coverage.yml の keep に**残す理由**つきで挙げる。
+      2026-09-03 に known_explanations の消し残しを実測で発見したのが発端。
+      information_schema 照会なので verify には載せない。
+
   - id: check-allowlist
     script: "check:allowlist"
     file: "check-allowlist.ts"

@@ -162,10 +162,13 @@ describe("署名が通ったとき", () => {
   });
 
   it("解約は購読を消さず status に残す（いつ止まったかを失わない）", async () => {
+    // **実物の Subscription には `client_reference_id` が無い。**
+    // 以前はここに載せた作り物で通していたが、それは本番で起きないことを
+    // 「正しい」と固定していた（:239 のコメントが「本番では到達しない」と自認していた）。
     const canceled = JSON.stringify({
       type: "customer.subscription.deleted",
       data: {
-        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "active" },
+        object: { id: "sub_ref", customer: "customer-ref", status: "canceled" },
       },
     });
     const { POST } = await import("@/app/api/billing/webhook/route");
@@ -236,12 +239,12 @@ describe("BS-1 何を status として書くか", () => {
   );
 
   it("BS-1-4 陰性コントロール: Subscription の past_due を active に潰さない", async () => {
-    // **Subscription には client_reference_id が無い**ので、この形は本番では到達しない
-    // （下の BS-2-3 が実物の形を固定している）。分岐そのものを残すための試験である
+    // **実物の Subscription の形**（`client_reference_id` は無い）。
+    // 以前は作り物で通していたが、それは本番で起きない形だった
     const updated = JSON.stringify({
       type: "customer.subscription.updated",
       data: {
-        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "past_due" },
+        object: { id: "sub_ref", customer: "customer-ref", status: "past_due" },
       },
     });
     const { POST } = await import("@/app/api/billing/webhook/route");
@@ -251,17 +254,18 @@ describe("BS-1 何を status として書くか", () => {
     expect(payload.user_metadata.subscription.status).toBe("past_due");
   });
 
-  it("BS-2-3 実物の Subscription は client_reference_id を持たないので無視される", async () => {
+  it("実物の Subscription からも会社を引けること（customer id で引く）", async () => {
+    // **これは「無視されるのが正しい」を固定していた試験の置き換えである。**
+    // 旧 BS-2-3 は `{status:"ignored", reason:"no_company"}` を期待していたが、
+    // それは**解約が本番に反映されない事故そのもの**を「正しい」と書いていた。
     const updated = JSON.stringify({
       type: "customer.subscription.updated",
-      data: { object: { customer: "customer-ref", status: "active" } },
+      data: { object: { id: "sub_ref", customer: "customer-ref", status: "active" } },
     });
     const { POST } = await import("@/app/api/billing/webhook/route");
-    const res = await POST(post(updated, sign(updated)));
+    await POST(post(updated, sign(updated)));
 
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
-    expect(updateUserById).not.toHaveBeenCalled();
+    expect(updateUserById).toHaveBeenCalled();
   });
 });
 

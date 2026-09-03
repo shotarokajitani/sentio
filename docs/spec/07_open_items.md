@@ -604,8 +604,8 @@ PERFORM cron.schedule('sync-connections', '0 0,6,12,18 * * *', v_command);
   ただし **URL が変わらないので OAuth の再審査は引かない**
   （`.claude/rules/oauth-consent-screen.md`「引き金にならないもの」の第1項
   「**ポリシー本文の更新。** URL が変わらなければ再審査に戻らない」。
-  **ただしこの規則ファイルは未merge のブランチ `docs/oauth-approved`（`ca270d4`）にしか無い。**
-  main に入っていないので、いま `.claude/rules/` を見ても存在しない）
+  **この規則は PR #83 で main に入った。** 登録時（2026-09-03 午前）は未merge の
+  ブランチにしか無く、`.claude/rules/` を見ても存在しない状態だった）
 - **(b) cron の間隔を縮める＋401 での判定を足す。** **cron だけでは足りない**（下記）。
   **API の呼び出し回数が6倍になる。** Google のクォータと、
   KING OF TIME の接続禁止時間帯（JST 8:30–10:00 / 17:30–18:30）の制約が絡む
@@ -696,7 +696,8 @@ refresh に入る状態だった。**遅延の理由は cron の間隔だけで�
 - **cron（migration `00020`）は触らない。401 を `revoked` と判定する経路 (b-2) も作らない**
 
 **OAuth の再審査は引かない。** `.claude/rules/oauth-consent-screen.md`
-（未merge のブランチ `docs/oauth-approved` / `ca270d4`）の「引き金にならないもの」第1項:
+（**PR #83 で main に入った。**判断した時点では未merge のブランチにしか無かった）の
+「引き金にならないもの」第1項:
 
 > **ポリシー本文の更新。** URL が変わらなければ再審査に戻らない
 > （§6 の文言を直す、条項を足す、などは自由）

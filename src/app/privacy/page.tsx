@@ -3,7 +3,7 @@ import { t } from "@/i18n";
 
 export const metadata = { title: `${t.legal.privacyTitle} — ${t.brand}` };
 
-const UPDATED_AT = "2026-08-20";
+const UPDATED_AT = "2026-09-03";
 
 export default function PrivacyPage() {
   return (
@@ -199,7 +199,7 @@ export default function PrivacyPage() {
       <p>
         Google との連携は、お客様の Google アカウント設定からいつでも取り消せます。
         取り消し後、Sentio は当該の会社情報からの取得を順次停止し、画面上は「要再連携」と
-        表示されます。取り消しが画面の表示に反映されるまで、最大1時間程度かかることがあります。
+        表示されます。取り消しが画面の表示に反映されるまで、最大6時間程度かかることがあります。
       </p>
 
       <h2>8. 開示・訂正・利用停止等のご請求</h2>

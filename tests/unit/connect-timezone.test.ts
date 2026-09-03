@@ -54,7 +54,10 @@ async function renderUnderTz(tz: string, o: ConnectionOverview): Promise<string>
       failureMessage: null,
       initialOverview: o,
       accountEmail: FAKE_ACCOUNT_EMAIL,
-    siteUrl: null,
+      siteUrl: null,
+      // プランの節（契約 スライスBU）。この試験が見るのは日時の描画なので、
+      // 出し分けに関わらない試用中（購読なし）に固定する
+      subscriptionStatus: null,
     }),
   );
 }

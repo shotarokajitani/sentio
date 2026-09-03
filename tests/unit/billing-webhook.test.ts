@@ -39,6 +39,14 @@ vi.mock("@supabase/supabase-js", () => ({
 
 type UpdateCall = [string, { user_metadata: { subscription: Record<string, string> } }];
 
+/**
+ * `checkout.session.completed` の本文。**実物の形に合わせてある**（2026-09-02 実測）。
+ *
+ * ここが `status: "active"` になっていたことが、本番で `"complete"` が書かれたのに
+ * テストが緑だった理由である。**Checkout Session に `"active"` は入らない。**
+ * `status` は `open` / `complete` / `expired` の3値で、**購読の状態ではない。**
+ * フィクスチャを実装に合わせて書くと、テストは実装の写しになって嘘をつく。
+ */
 const PAYLOAD = JSON.stringify({
   type: "checkout.session.completed",
   data: {
@@ -46,10 +54,24 @@ const PAYLOAD = JSON.stringify({
       client_reference_id: COMPANY,
       customer: "customer-ref",
       subscription: "subscription-ref",
-      status: "active",
+      // 決済が完了すれば必ずこれが入る。**購読が active という意味ではない**
+      status: "complete",
+      payment_status: "paid",
     },
   },
 });
+
+/** Checkout Session の本文を、payment_status だけ差し替えて作る */
+function checkoutSession(paymentStatus: string | null): string {
+  const object: Record<string, unknown> = {
+    client_reference_id: COMPANY,
+    customer: "customer-ref",
+    subscription: "subscription-ref",
+    status: "complete",
+  };
+  if (paymentStatus !== null) object.payment_status = paymentStatus;
+  return JSON.stringify({ type: "checkout.session.completed", data: { object } });
+}
 
 function stubEnv() {
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", SECRET);
@@ -142,7 +164,9 @@ describe("署名が通ったとき", () => {
   it("解約は購読を消さず status に残す（いつ止まったかを失わない）", async () => {
     const canceled = JSON.stringify({
       type: "customer.subscription.deleted",
-      data: { object: { client_reference_id: COMPANY, customer: "customer-ref", status: "active" } },
+      data: {
+        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "active" },
+      },
     });
     const { POST } = await import("@/app/api/billing/webhook/route");
     await POST(post(canceled, sign(canceled)));
@@ -155,6 +179,85 @@ describe("署名が通ったとき", () => {
     const noCompany = JSON.stringify({ type: "invoice.paid", data: { object: {} } });
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(noCompany, sign(noCompany)));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * BS-1 系（`docs/instructions/2026-09-03_cc_billing-status-fix.md`）。
+ *
+ * **経路が通ったことと、正しい値が書かれたことは別である。** 本番では webhook が
+ * 200 を返し、書き込みも成功したうえで `status: "complete"` が入っていた。
+ * `"complete"` は `connect-client.tsx` の判定も `plan.ts` の `ENTITLED_STATUSES` も
+ * 通らないので、**払っても購読ボタンが消えず、枠も増えない。待っても直らない。**
+ */
+describe("BS-1 何を status として書くか", () => {
+  beforeEach(() => {
+    updateUserById.mockClear();
+    stubEnv();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("BS-1-1 決済が済んだ Checkout Session では active を書く", async () => {
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    expect(res.status).toBe(200);
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription.status).toBe("active");
+  });
+
+  it("BS-1-2 **object.status が complete でも、書かれる値は active である**", async () => {
+    // 本番で実際に書かれてしまった値。フィクスチャの status は "complete" である
+    expect(JSON.parse(PAYLOAD).data.object.status).toBe("complete");
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription.status).not.toBe("complete");
+    expect(payload.user_metadata.subscription.status).toBe("active");
+  });
+
+  it.each(["unpaid", "no_payment_required", "processing", null])(
+    "BS-1-3 陰性コントロール: payment_status=%s では**何も書かない**（払っていない人を購読中にしない）",
+    async (paymentStatus) => {
+      const body = checkoutSession(paymentStatus);
+      const { POST } = await import("@/app/api/billing/webhook/route");
+      const res = await POST(post(body, sign(body)));
+
+      // 再送を滞留させないので 200 で受ける。ただし**書かない**
+      expect(res.status).toBe(200);
+      expect(updateUserById).not.toHaveBeenCalled();
+    },
+  );
+
+  it("BS-1-4 陰性コントロール: Subscription の past_due を active に潰さない", async () => {
+    // **Subscription には client_reference_id が無い**ので、この形は本番では到達しない
+    // （下の BS-2-3 が実物の形を固定している）。分岐そのものを残すための試験である
+    const updated = JSON.stringify({
+      type: "customer.subscription.updated",
+      data: {
+        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "past_due" },
+      },
+    });
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(updated, sign(updated)));
+
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription.status).toBe("past_due");
+  });
+
+  it("BS-2-3 実物の Subscription は client_reference_id を持たないので無視される", async () => {
+    const updated = JSON.stringify({
+      type: "customer.subscription.updated",
+      data: { object: { customer: "customer-ref", status: "active" } },
+    });
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(updated, sign(updated)));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });

@@ -21,6 +21,17 @@ export interface AuthedContext {
    * 取れないことがありうるので `null` を許す。照合側は null を fail-closed に扱う。
    */
   email: string | null;
+  /**
+   * 購読の状態（契約 スライスBU・BU-D2）。`user_metadata.subscription.status` そのもの。
+   *
+   * **`/api/billing/webhook` が書いている値がここに来る。** これ以外を見ない
+   * （画面から Stripe API を叩かない。遅く、失敗しうる）。
+   * 購読が一度も無ければ null。`site_url` と同じく**新しいテーブルを作っていない**。
+   *
+   * 枠の解決（`lib/billing/plan.ts`）はメタデータ全体から別途行う。
+   * ここに出すのは**画面が出し分けに使う1つの値**だけである。
+   */
+  subscriptionStatus: string | null;
   /** RLSが効くクライアント。越境はDB側でも止まる */
   supabase: SupabaseClient;
 }
@@ -38,10 +49,13 @@ export async function getAuthedContext(): Promise<AuthedContext | null> {
   if (!data.user) return null;
   // 登録時に受け取った自社サイトのURL。**新しいテーブルを作らず**メタデータに置いてある
   const siteUrl = data.user.user_metadata?.site_url;
+  // 購読の状態。**webhook が書いた形をそのまま読む**（契約 スライスBU・BU-D2）
+  const status = data.user.user_metadata?.subscription?.status;
   return {
     companyId: data.user.id,
     email: data.user.email ?? null,
     siteUrl: typeof siteUrl === "string" && siteUrl.trim() !== "" ? siteUrl.trim() : null,
+    subscriptionStatus: typeof status === "string" ? status : null,
     supabase,
   };
 }

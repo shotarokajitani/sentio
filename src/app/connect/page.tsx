@@ -27,6 +27,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Sear
       // 登録時に受け取った自社サイト。**有れば競合の推定を1度だけ走らせる**
       // （エンドポイントは冪等なので、開くたびに叩いても LLM には到達しない）
       siteUrl={ctx.siteUrl}
+      // 購読の状態（契約 スライスBU）。**正本は webhook が書く user_metadata だけ**で、
+      // ここでも画面でも Stripe には問い合わせない（BU-D2）
+      subscriptionStatus={ctx.subscriptionStatus}
     />
   );
 }

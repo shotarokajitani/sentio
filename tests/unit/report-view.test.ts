@@ -194,6 +194,9 @@ describe("導線 — /connect から /report へ1本だけ（契約 実装順3�
         initialOverview: { connections: [], counts: {} },
         accountEmail: null,
         siteUrl: null,
+        // プランの節（契約 スライスBU）。この試験が見るのは /report への導線なので、
+        // 出し分けに関わらない試用中（購読なし）に固定する
+        subscriptionStatus: null,
       }),
     );
     expect(html).toContain('href="/report"');
@@ -208,6 +211,9 @@ describe("導線 — /connect から /report へ1本だけ（契約 実装順3�
         initialOverview: { connections: [], counts: {} },
         accountEmail: null,
         siteUrl: null,
+        // プランの節（契約 スライスBU）。この試験が見るのは /report への導線なので、
+        // 出し分けに関わらない試用中（購読なし）に固定する
+        subscriptionStatus: null,
       }),
     );
     expect(html.split('href="/report"').length - 1).toBe(1);

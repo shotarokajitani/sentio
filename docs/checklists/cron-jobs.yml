@@ -1,0 +1,64 @@
+# cron ジョブの宣言（check:cron-jobs の正本）
+#
+# なぜ宣言ファイルが要るか。
+# migration を適用したことは CI のログで見えるが、**cron.job に何が入っているか**は
+# 誰も見ていない。将来の migration が同名ジョブを上書きしても（cron.schedule は
+# 同名を上書きする仕様である）、スケジュールが契約からずれても、気づく経路が無い。
+# `.claude/rules/ci-coverage.md` の「検査器はあるが CI で落ちない」3例と同じ形になる。
+#
+# したがって「宣言 × 実物」の突合にする。`docs/checklists/ci-coverage.yml` と同じ作法で、
+# `scripts/check-cron-jobs.ts` が live DB の `cron.job` と突き合わせる。
+#
+# ## 守れない範囲（設計上の限界。これは仕様であって不具合ではない）
+#
+# この検査器は「宣言」と「DB の cron.job」を突き合わせる。
+# **どちらにも最初から居ない関数は検出しない。**
+# 2026-09-03 に state-baselines と retention-purge の2件が
+# 「実装はあるが、どの cron からも呼ばれていない」形で見つかったが、
+# この検査器を当時の main で走らせても findings は空だった（実測）。
+# これは射程外であり、不具合ではない。
+#
+# 実測の出力（宣言3件 × 実物3件。retention-purge に cron が無い状態）:
+#
+#   宣言: sync-connections / dispatch-daily / dispatch-weekly
+#   実物: dispatch-daily / dispatch-weekly / sync-connections
+#   findings: []
+#
+# 陰性コントロールは効いている。宣言したジョブが DB から消えれば missing、
+# 宣言外のジョブが DB に居れば undeclared を吐く。**向きが違うだけである。**
+# この穴（デプロイされているのに起動経路を持たない Function）は
+# `docs/spec/07_open_items.md`「Edge Function の呼び出し元を機械で守れない」
+# に登録済み。**別の問題として扱わないこと。**
+#
+# フィールド:
+#   name       cron.job.jobname と完全一致する名前
+#   schedule   cron.job.schedule と**文字列一致**すること
+#   migration  そのジョブを登録している migration（人間向け。検査には使わない）
+#   contract   根拠となる契約
+#   note       人間向けの補足（検査には使わない）
+#
+# **過不足の両方向を見る。** 宣言に無いジョブが живой DB に居るのも異常である
+# （誰かが手で張った、あるいは消し忘れた migration がある）。
+
+jobs:
+  - name: sync-connections
+    schedule: "0 0,6,12,18 * * *"
+    migration: "00020_cron_vault_secrets.sql"
+    contract: S-4
+    note: >-
+      UTC 0/6/12/18。KING OF TIME の禁止帯（JST 8:30–10:00 / 17:30–18:30）を避けるため
+      UTC 02:00 以降という制約があり、この並びはそれを満たす。
+
+  - name: dispatch-daily
+    schedule: "0 22 * * *"
+    migration: "00028_cron_dispatch.sql"
+    contract: CD-D5
+    note: >-
+      UTC 22:00 = JST 翌 07:00。run-sense → deliver-pulse を全社に回す。
+
+  - name: dispatch-weekly
+    schedule: "0 23 * * 0"
+    migration: "00028_cron_dispatch.sql"
+    contract: CD-D5
+    note: >-
+      UTC 日曜 23:00 = JST 月曜 08:00。deliver-weekly を全社に回す。

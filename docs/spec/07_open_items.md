@@ -1062,6 +1062,10 @@ Error: Test timed out in 5000ms.
 
 ## Edge Function の呼び出し元を機械で守れない（未判断・2026-09-03 登録・スライスSB の SB-3-6 未充足）
 
+> **2026-09-03 追記。cron 側も同じ問題である。**
+> `check:cron-jobs`（PR #54）が入っても、この穴は塞がらない。**別項目を立てない。**
+> 2つの問題に見えると、片方だけ直して塞いだ気になる。
+
 **`check:endpoint-callers` は Next.js 専用で、Edge Function の到達性を見ていない。**
 
 スライスSB は「`state-baselines` に呼び出し元が1つも無く、本番で一度も走っていなかった」
@@ -1091,6 +1095,40 @@ expect(s.endpoint.startsWith("/api/")).toBe(true);
   ただしこれは**呼ばれ方**の検査であって、**呼ばれているか**の検査ではない
 - **守られていない**: Edge Function に呼び出し元が1つも無い状態。
   **まさにこのスライスが直した形が、機械では検出できないまま残る**
+
+### 同じ問題の別の向き — cron（2026-09-03 追記）
+
+**`check:cron-jobs` でも塞がらない。** 検収時に「この検査器が入っていれば今日の2件は
+機械が先に見つけた」という見立てがあったが、**実測で否定された。**
+
+この検査器が突き合わせるのは **宣言（`docs/checklists/cron-jobs.yml`）× DB の `cron.job`**
+の2つだけである。今日踏んだのは**どちらにも最初から居ない**という別の向きなので、
+突合しても何も出ない。当時の main の状態で `compareCronJobs` に実データを流した結果:
+
+```
+宣言: sync-connections / dispatch-daily / dispatch-weekly
+実物: dispatch-daily / dispatch-weekly / sync-connections
+findings: []
+```
+
+CI（run 33733352340・`ci.integration`）でも同じで、
+`check:cron-jobs — cron.job 3件が宣言と一致` と出て緑になった。
+
+陰性コントロールは効いている（宣言したジョブが DB から消えれば `missing`、
+宣言外のジョブが DB に居れば `undeclared`）。**射程が違うだけで、検査器は間違っていない。**
+
+| 今日踏んだ形 | `check:cron-jobs` | `check:endpoint-callers` | `check:caller-guard` |
+| --- | --- | --- | --- |
+| `state-baselines` — 実装はあるが呼び出し元が無い | 射程外（cron の話ではない） | 射程外（`src/` しか走査しない） | 射程外（呼ばれ方の検査） |
+| `retention-purge` — 実装はあるが cron が張られていない | **射程外**（両側に居ないので一致） | 射程外 | 射程外 |
+
+**つまり「デプロイされているのに起動経路を持たない Function」を見る検査器は、
+いまリポジトリに1本も無い。** 上の「判断が要ること」は、cron 経路も対象に含めて決める。
+
+**`check:cron-jobs` が果たす役割は別にある。** これから張る cron の**宣言漏れ**は止まる。
+`retention-purge` の cron を張ったとき `cron-jobs.yml` への追記を忘れれば、
+実DB側にだけ現れて `undeclared` で赤くなる（陰性コントロールで実測済み）。
+**今ある穴は塞がないが、これから開ける穴は塞ぐ。**
 
 ### 判断が要ること（**勝手に確定させない**）
 

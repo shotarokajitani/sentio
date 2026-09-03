@@ -14,6 +14,7 @@
     "eval:engine": "vitest run tests/eval/ --reporter=verbose",
     "check:allowlist": "tsx scripts/check-allowlist.ts",
     "check:db-errors": "tsx scripts/check-db-error-handling.ts",
+    "check:cron-jobs": "tsx scripts/check-cron-jobs.ts",
     "check:caller-guard": "tsx scripts/check-caller-guard.ts",
     "check:schema": "tsx scripts/check-schema-contract.ts",
     "check:edge-types": "tsx scripts/check-edge-types.ts",

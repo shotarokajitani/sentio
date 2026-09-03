@@ -26,6 +26,19 @@
 #   note         人間向けの補足（検査には使わない）
 
 checks:
+  - id: check-cron-jobs
+    script: "check:cron-jobs"
+    file: "check-cron-jobs.ts"
+    command: "pnpm run check:cron-jobs"
+    contract: CD-D5
+    requires: [live-db]
+    must_run_in: ["ci.integration"]
+    note: >-
+      cron.job の実物を docs/checklists/cron-jobs.yml と突合する。
+      migration の適用は CI ログで見えるが cron.job の中身は誰も見ていなかった。
+      cron.schedule は同名ジョブを上書きするため、将来の migration が
+      名前を再利用すると静かに置き換わる。実DB照会なので verify には載せない。
+
   - id: check-allowlist
     script: "check:allowlist"
     file: "check-allowlist.ts"

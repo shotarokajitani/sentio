@@ -33,7 +33,25 @@ export interface KeepEntry {
   reason: string;
 }
 
-export type DeletionFindingKind = "uncovered" | "stale-delete" | "keep-without-column";
+/**
+ * `company_id` を持たない経路で会社に紐づくテーブルと、**何で紐づくのか**。
+ *
+ * 例: `billing_webhook_unresolved` は `stripe_customer_id` でしか会社に辿れない。
+ * **手順書はこれを消すが、この検査器の既定の突合では `stale-delete` に見える。**
+ * 宣言しておくことで「消しているのは意図」だと分かる形にする。
+ */
+export interface BeyondEntry {
+  table: string;
+  /** 紐づけに使う列（会社を引く手掛かり） */
+  via: string;
+  reason: string;
+}
+
+export type DeletionFindingKind =
+  | "uncovered"
+  | "stale-delete"
+  | "keep-without-column"
+  | "beyond-with-column";
 
 export interface DeletionFinding {
   kind: DeletionFindingKind;
@@ -48,25 +66,44 @@ export interface DeletionFinding {
  *   （改名・削除に手順書が追随していない）
  * - `keep-without-column`: `keep` に挙がっているのに `company_id` を持たない
  *   （例外の宣言が古い。放置すると例外が積み上がって意味を失う）
+ * - `beyond-with-column`: `beyond_company_id` に挙がっているのに `company_id` を**持つ**
+ *   （既定の突合で見られるので、例外にしておく理由が無い）
  *
- * **最初の1件で止めない。** 3種を同時に出す。
+ * **最初の1件で止めない。** 4種を同時に出す。
+ *
+ * ## この検査器が見ないもの（**射程の限界**）
+ *
+ * **見るのは `company_id` を持つテーブルの列挙だけである。**
+ * `company_id` を持たない紐づけ（`stripe_customer_id` など）は見ない。
+ * それらは `beyond_company_id` に**宣言として**書くが、
+ * **宣言と実物の突合はしていない**——「消す SQL が本当にその会社の行だけを消すか」は
+ * この検査器の外にある。射程を広げるかどうかは未判断
+ * （`docs/spec/07_open_items.md`）。
  */
 export function compareDeletionCoverage(
   withCompanyId: Set<string>,
   deleted: Set<string>,
   keep: KeepEntry[],
+  beyond: BeyondEntry[] = [],
 ): DeletionFinding[] {
   const kept = new Set(keep.map((k) => k.table));
+  const beyondTables = new Set(beyond.map((b) => b.table));
   const findings: DeletionFinding[] = [];
 
   for (const t of [...withCompanyId].sort()) {
     if (!deleted.has(t) && !kept.has(t)) findings.push({ kind: "uncovered", table: t });
   }
   for (const t of [...deleted].sort()) {
-    if (!withCompanyId.has(t)) findings.push({ kind: "stale-delete", table: t });
+    // **宣言してある表は `stale-delete` にしない。** 消しているのは意図である
+    if (!withCompanyId.has(t) && !beyondTables.has(t)) {
+      findings.push({ kind: "stale-delete", table: t });
+    }
   }
   for (const t of [...kept].sort()) {
     if (!withCompanyId.has(t)) findings.push({ kind: "keep-without-column", table: t });
+  }
+  for (const t of [...beyondTables].sort()) {
+    if (withCompanyId.has(t)) findings.push({ kind: "beyond-with-column", table: t });
   }
 
   return findings;
@@ -84,14 +121,21 @@ export function parseRunbookDeletes(markdown: string): Set<string> {
 export interface Declaration {
   runbook: string;
   keep: KeepEntry[];
+  beyond: BeyondEntry[];
 }
 
 export function loadDeclaration(path = "docs/checklists/deletion-coverage.yml"): Declaration {
-  const doc = parse(readFileSync(path, "utf8")) as Partial<Declaration>;
+  // YAML 側のキーは `beyond_company_id`（何の話かが読んで分かる名前にしてある）。
+  // **型の名前と YAML のキーがずれていることを、ここで1箇所だけ吸収する**
+  const doc = parse(readFileSync(path, "utf8")) as {
+    runbook?: string;
+    keep?: KeepEntry[];
+    beyond_company_id?: BeyondEntry[];
+  };
   if (!doc?.runbook) {
     throw new Error(`${path} に runbook が無い。参照先が空だと突合が空振りして緑になる`);
   }
-  return { runbook: doc.runbook, keep: doc.keep ?? [] };
+  return { runbook: doc.runbook, keep: doc.keep ?? [], beyond: doc.beyond_company_id ?? [] };
 }
 
 /** 実DBから `company_id` を持つテーブルを引く。**手順書でもコードでもなく実物を見る。** */
@@ -118,6 +162,9 @@ const DETAIL: Record<DeletionFindingKind, string> = {
     "手順書が消しているが、このテーブルは company_id を持たない。改名・削除に手順書が追随していない",
   "keep-without-column":
     "keep に挙がっているが company_id を持たない。例外の宣言が実物より古い",
+  "beyond-with-column":
+    "beyond_company_id に挙がっているが company_id を**持つ**。" +
+    "既定の突合で見られるので、例外にしておく理由が無い",
 };
 
 function main(): never {
@@ -132,12 +179,13 @@ function main(): never {
   }
 
   const withCompanyId = tablesWithCompanyId();
-  const findings = compareDeletionCoverage(withCompanyId, deleted, decl.keep);
+  const findings = compareDeletionCoverage(withCompanyId, deleted, decl.keep, decl.beyond);
 
   if (findings.length === 0) {
     console.log(
       `check:deletion-coverage — company_id を持つ ${withCompanyId.size}件がすべて` +
-        `手順書の DELETE 列挙（${deleted.size}件）か keep（${decl.keep.length}件）に載っている`,
+        `手順書の DELETE 列挙（${deleted.size}件）か keep（${decl.keep.length}件）に載っている` +
+        `（うち company_id を持たない経路の宣言 ${decl.beyond.length}件）`,
     );
     process.exit(0);
   }

@@ -44,6 +44,19 @@ type Db = ReturnType<typeof getSupabaseAdmin>;
 
 type PurgeKind = "retention_months" | "revoked_grace";
 
+/**
+ * 記録に残す判断。`planPurge` の結果に、**Edge 側にしか無い理由**を1つ足したもの。
+ *
+ * `unknown-provider`（知らない provider だったので消さずに飛ばした）は
+ * 削除の門（`evaluateDeletion`）の判定ではないので、**方針モジュールには置かない。**
+ * 00030 の `reason` の CHECK はこの集合と同じである。片方を変えたら両方変える。
+ */
+interface PurgeOutcome {
+  decision: PurgePlan["decision"];
+  reason?: PurgePlan["reason"] | "unknown-provider";
+  count: number;
+}
+
 interface CompanyPurge {
   company_id: string;
   kind: PurgeKind;
@@ -232,7 +245,7 @@ async function record(
     companyId: string;
     kind: PurgeKind;
     provider?: string;
-    plan: PurgePlan;
+    plan: PurgeOutcome;
     dryRun: boolean;
   },
 ): Promise<CompanyPurge> {

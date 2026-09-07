@@ -31,7 +31,16 @@ import {
   sourcesForProvider,
   type PurgePlan,
 } from "../_shared/retention.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/**
+ * `getSupabaseAdmin()` が返すクライアントの型。
+ *
+ * **`https://esm.sh/@supabase/supabase-js` から型を import しない。**
+ * `deno check` は同じバージョンでも npm 解決と esm.sh 解決を別の型として扱い、
+ * `SupabaseClient` を受け取る引数で TS2345 になる（2026-09-08 CI で実測）。
+ * 生成元から `ReturnType` で引けば、経路が1つに揃う。
+ */
+type Db = ReturnType<typeof getSupabaseAdmin>;
 
 type PurgeKind = "retention_months" | "revoked_grace";
 
@@ -218,7 +227,7 @@ async function resolveDryRun(req: Request): Promise<boolean> {
  * **記録に失敗しても削除は巻き戻さない**（もう消えている）。失敗はログに残す。
  */
 async function record(
-  supabase: SupabaseClient,
+  supabase: Db,
   input: {
     companyId: string;
     kind: PurgeKind;

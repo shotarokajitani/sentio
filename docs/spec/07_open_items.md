@@ -1522,12 +1522,126 @@ run: https://github.com/shotarokajitani/sentio/actions/runs/34090554382/job/1016
 この項目の上に自分で書いた「実物だけを入力にすると、全部緑のとき検査器の故障が見えない」
 と同じ形を、**実験の側で踏んだ。**
 
-**再現率の実測。** 2026-09-03〜09-07 の基準ステップの実行はおよそ**15回中3回**が落ちている
-（**約20%**）。この率なら、調査1回が全部緑になるのは普通に起きる。
+**再現率（2026-09-07 に数え直した。前に書いた「約20%」は誤り）。**
+
+数える単位を先に決める。**`integration` ジョブ1回 = 基準の「3回セット」1回**である。
+2026-09-02 以降の `ci.yml` の全 run・全 attempt について、API で結論を数えた。
+
+```
+integration ジョブの実行回数: 46
+  success 41 / failure 5
+```
+
+**failure 5件のうち、この症状は3件だけ**である。残り2件は別原因だった。
+
+| run | 分類 |
+| --- | --- |
+| [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378)（#92） | **401 タイムアウト** |
+| [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) att.1（#54） | **401 タイムアウト** |
+| [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト** |
+| [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634) | 別原因（`SUPABASE_DB_URL` 未設定） |
+| [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1 | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
+
+**したがって 3 / 46 ≒ 6.5%**（3回セット単位）。
+**前の「約15回中3回 ≒ 20%」は分母の数え違いであり、この実測で置き換える。**
+
+**「20回すべて緑」の20回は、3回セットではなく個々の vitest 実行である。**
+内訳は 基準3 + C3 + B5 + A3 + 1-5が3 + 1-6が3 = 20。
+**調査全体は `integration` ジョブ1回**にすぎない。6.5% の症状が1ジョブで出ないのは
+**93.5% の確率で起きる**ことであって、珍しくない。
+**「20セットが全部緑なら約1%」という見積りは、単位が違うので成り立たない。**
 
 **所要時間に単調な悪化は無い。** 全20回が **2.89〜3.57 秒**に収まった
 （基準 3.17 / 3.00 / 3.42、B は 2.93 / 3.33 / 2.89 / 3.57 / 3.13）。
 落ちるときは5秒でタイムアウトしており、通常時の3秒台とは不連続である。
+
+### 実験の中身（**再現したくなったときに作り直せる形で残す**）
+
+調査ブランチ `chore/investigate-integration-timeout`（draft PR #93）は閉じたので、
+`.github/workflows/ci.yml` の `integration` ジョブに足したステップをここへ写す。
+1-5（単独ファイル3回）と 1-6（逆順3回）も同じ形で並べてあった。
+
+```yaml
+      - name: "調査C — testTimeout 30s で3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== C run $i/3 (testTimeout=30000) ====="
+            pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
+            echo "----- C run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # ------------------------------------------------------------
+      # 実験B: リセットなしで5回。単調に悪化しているかを見る。
+      #   3回目だけ落ちる      → 3回目に固有の何かがある
+      #   4回目・5回目も落ちる → 蓄積で単調に悪化している
+      # **各回を継続させ、全回の結果を採る**（set -e を使わない）。
+      # ------------------------------------------------------------
+      - name: "調査B — リセットなしで5回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5; do
+            echo "===== B run $i/5 ====="
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+            echo "----- B run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # ------------------------------------------------------------
+      # 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
+      #   落ちなければ、蓄積が効いている強い証拠になる。
+      # リセット経路は「Apply all migrations from scratch」で実在が確認できている。
+      # ------------------------------------------------------------
+      - name: "調査A — 各回の前に db reset して3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== A run $i/3 (db reset 済み) ====="
+            supabase db reset
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+            echo "----- A run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # 1-5: 当該ファイルだけを3回走らせる。
+      # 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
+      # 積み上がった状態の問題である。
+      - name: "調査 1-5 — delivery-idempotency だけを3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== 1-5 run $i/3 (single file) ====="
+            pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
+            echo "----- run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # 1-6: ファイルの並びを逆にして3回走らせる。
+      # 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
+      # 動かないなら「3回目」という位置そのものに原因がある。
+      - name: "調査 1-6 — ファイル順を逆にして3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
+          FILES=$(ls tests/integration/*.test.ts | sort -r)
+          echo "順序: $FILES"
+          for i in 1 2 3; do
+            echo "===== 1-6 run $i/3 (reversed order) ====="
+            pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
+            echo "----- run $i exit=${PIPESTATUS[0]} -----"
+          done
+```
+
+**実験どうしが汚染していたことも書いておく。** 実験Aは各回の前に `supabase db reset`
+するので、**Aより後ろに置いた 1-5 / 1-6 は蓄積の少ない DB の上で走っている。**
+次に組むときは、蓄積を見る実験を先に置くか、実験ごとにジョブを分けること。
 
 ### この調査の制約（**残す価値がある**）
 

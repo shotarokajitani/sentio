@@ -37,7 +37,8 @@
 -- 列の意味:
 --   stripe_event_id     Stripe のイベントID。**これが冪等キーである**（同じ通知は再送されうる）
 --   event_type          イベント種別（checkout.session.completed など）
---   reason              なぜ適用できなかったか。2値に固定する（下の CHECK が唯一の台帳）
+--   reason              なぜ適用できなかったか。4値に固定する（下の CHECK が唯一の台帳）。
+--                       **0件と2件以上を同じ行に見せない**——後で原因を切り分けられなくなる
 --   stripe_customer_id  生の識別子。逆引きに失敗した値そのもの。**追跡の手掛かりはこれだけ**
 --   created_at          受信時刻
 --   resolved_at         人が対処し終えたら埋める。**集計は resolved_at IS NULL だけを数える**
@@ -55,13 +56,19 @@ CREATE TABLE IF NOT EXISTS billing_webhook_unresolved (
   resolved_at         TIMESTAMPTZ
 );
 
--- reason は自由文字列にしない。取りうる値は2つだけである。
---   company_unresolved   customer id から会社を引けなかった（0件 or 2件以上）
---   stripe_fetch_failed  会社は引けたが、Stripe から Subscription を取り直せなかった
+-- reason は自由文字列にしない。取りうる値は4つだけである。
+--   not_found        customer id に**一致する会社が無い**（0件）
+--   ambiguous        **2社以上が同じ customer id を持っている**（どちらにも書かない）
+--   lookup_failed    逆引きそのものが失敗した（権限・DB障害）。「引けなかった」とは別である
+--   retrieve_failed  会社は引けたが、Stripe から Subscription を取り直せなかった
+--
+-- **`not_found` と `ambiguous` を分けるのが要点である。** 前者は
+-- 「checkout を経ずに Stripe 側で作られた購読」を疑う話で、後者は
+-- 「同じ customer id が2社に付いている」というデータの壊れである。**対処が違う。**
 -- 想定外の値を弾く（00024 の delivery_log_status_check と同じ作法）。
 ALTER TABLE billing_webhook_unresolved DROP CONSTRAINT IF EXISTS billing_webhook_unresolved_reason_check;
 ALTER TABLE billing_webhook_unresolved ADD CONSTRAINT billing_webhook_unresolved_reason_check
-  CHECK (reason IN ('company_unresolved', 'stripe_fetch_failed'));
+  CHECK (reason IN ('not_found', 'ambiguous', 'lookup_failed', 'retrieve_failed'));
 
 -- 索引は張らない。**この表に行が入るのは異常時だけ**で、全件走査で足りる。
 -- 行が増え続ける状態そのものが異常なので、性能で隠さない。
@@ -90,13 +97,19 @@ REVOKE ALL ON public.billing_webhook_unresolved FROM anon, authenticated;
 --
 -- `auth.users` は PostgREST から直接は引けないので、SECURITY DEFINER の関数を1本だけ置く。
 --
--- **0件でも2件以上でも NULL を返す。** 当てずっぽうで1社に書くと、
+-- **0件でも2件以上でも会社を返さない。** 当てずっぽうで1社に書くと、
 -- 他社の購読状態を書き換える経路になる。曖昧なら書かず、上の表に残して人に渡す。
+--
+-- **戻り値を `jsonb` にしてあるのは、0件と2件以上を呼び出し側で区別するためである。**
+-- UUID だけを返すと、どちらも NULL になって上の表の `reason` を埋め分けられない。
+--   { "company_id": <uuid|null>, "matches": <int> }
+-- **一致数以上は返さない。** 2社以上あったときに会社IDの一覧を返すと、
+-- 「引けなかった」経路が会社IDの照会経路に変わってしまう。
 --
 -- `search_path = ''` は SECURITY DEFINER の定石。参照は全て schema 修飾する。
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.company_id_by_stripe_customer(p_customer_id TEXT)
-RETURNS UUID
+RETURNS JSONB
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
@@ -104,21 +117,24 @@ SET search_path = ''
 AS $$
 DECLARE
   v_ids UUID[];
+  v_matches INT;
 BEGIN
   -- 空文字を渡すと「metadata に customer id が無いユーザー」と一致しうる。手前で切る
   IF p_customer_id IS NULL OR p_customer_id = '' THEN
-    RETURN NULL;
+    RETURN jsonb_build_object('company_id', NULL, 'matches', 0);
   END IF;
 
   SELECT array_agg(u.id) INTO v_ids
     FROM auth.users u
    WHERE u.raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id' = p_customer_id;
 
-  IF v_ids IS NULL OR array_length(v_ids, 1) <> 1 THEN
-    RETURN NULL;
+  v_matches := COALESCE(array_length(v_ids, 1), 0);
+
+  IF v_matches <> 1 THEN
+    RETURN jsonb_build_object('company_id', NULL, 'matches', v_matches);
   END IF;
 
-  RETURN v_ids[1];
+  RETURN jsonb_build_object('company_id', v_ids[1], 'matches', 1);
 END;
 $$;
 
@@ -131,15 +147,24 @@ GRANT EXECUTE ON FUNCTION public.company_id_by_stripe_customer(TEXT) TO service_
 -- ---------------------------------------------------------------------------
 -- 4. 検証（黙って適用されるのを許さない。00024 と同じ作法）
 -- ---------------------------------------------------------------------------
+--
+-- **ポリシー0本と RLS 有効は別の設定である。** ポリシーが0本でも、RLS 自体が
+-- 有効でなければ anon から読める（GRANT を剥がしてあるので現状は落ちるが、
+-- 権限の付け替え1つで開く）。**両方を測って、値をログに出す。**
 DO $$
 DECLARE
   v_policies INT;
+  v_rls BOOLEAN;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_class c
+  SELECT c.relrowsecurity INTO v_rls
+    FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relname = 'billing_webhook_unresolved' AND c.relrowsecurity
-  ) THEN
+   WHERE n.nspname = 'public' AND c.relname = 'billing_webhook_unresolved';
+
+  -- 適用のたびに実測値を残す（`supabase db reset` / `db push` のログに出る）
+  RAISE NOTICE '00029: billing_webhook_unresolved.relrowsecurity = %', v_rls;
+
+  IF v_rls IS DISTINCT FROM TRUE THEN
     RAISE EXCEPTION '00029: RLS not enabled on table: billing_webhook_unresolved';
   END IF;
 
@@ -147,6 +172,8 @@ BEGIN
   SELECT count(*) INTO v_policies
     FROM pg_policies
    WHERE schemaname = 'public' AND tablename = 'billing_webhook_unresolved';
+
+  RAISE NOTICE '00029: billing_webhook_unresolved のポリシー数 = %（0本が正）', v_policies;
 
   IF v_policies <> 0 THEN
     RAISE EXCEPTION '00029: billing_webhook_unresolved にポリシーが % 本ある（0本が正）', v_policies;

@@ -4,14 +4,16 @@
 入った行は `dispatch-daily` が毎日数え、1件以上あれば運用宛にメールが1通出る。
 **対処して `resolved_at` を埋めるまで、毎日出続ける。**
 
-## この表に入る条件は2つだけ
+## この表に入る条件は4つだけ
 
-| `reason`              | 何が起きたか                                                                  |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `company_unresolved`  | `customer` から会社を引けなかった（一致0件、または**2件以上**）               |
-| `stripe_fetch_failed` | 会社は引けたが、Stripe から Subscription を取り直せなかった（解約通知を除く） |
+| `reason` | 何が起きたか | まず疑うもの |
+| --- | --- | --- |
+| `not_found` | `customer` に**一致する会社が無い**（0件） | checkout を経ずに Stripe 側で作られた購読 |
+| `ambiguous` | **2社以上が同じ customer id を持っている**（どちらにも書かない） | データの壊れ。片方が誤り |
+| `lookup_failed` | 逆引きそのものが失敗した（権限・DB障害）。**「引けなかった」とは別である** | RPC の GRANT、DB の障害 |
+| `retrieve_failed` | 会社は引けたが、Stripe から Subscription を取り直せなかった（解約通知を除く） | Stripe 側の一時的な不調 |
 
-どちらも webhook は Stripe に **200 を返している**（4xx にすると再送が滞留する）。
+**いずれの場合も** webhook は Stripe に **200 を返している**（4xx にすると再送が滞留する）。
 **つまり Stripe 側から見れば成功しており、Stripe のダッシュボードには何も出ない。**
 気づく経路はこの表と毎日のメールだけである。
 
@@ -31,7 +33,7 @@ select stripe_event_id, event_type, reason, stripe_customer_id, created_at
 
 ### 2. `reason` ごとに切り分ける
 
-#### `company_unresolved` の場合
+#### `not_found` / `ambiguous` の場合
 
 その `stripe_customer_id` を持つ会社が居るかを確かめる。
 
@@ -51,9 +53,10 @@ select id,
   逆引きは意図的に NULL を返す（当てずっぽうで1社に書かない）。
   どちらが正しいかを Stripe 側の記録で確かめ、誤っているほうを消す
 
-#### `stripe_fetch_failed` の場合
+#### `retrieve_failed` / `lookup_failed` の場合
 
-Stripe の一時的な不調であることが多い。**購読の状態が更新されていないだけ**なので、
+`retrieve_failed` は Stripe 側の一時的な不調であることが多い。`lookup_failed` は**こちら側の障害**（RPC の権限が剥がれた・DB が落ちた）なので、同じ日に大量に入る。**1件ずつ追う前に、逆引きが動くことを先に確かめること。**
+どちらも**購読の状態が更新されていないだけ**なので、
 Stripe の現在値を見て、必要なら手で合わせる（3へ）。
 
 ### 3. 状態を合わせる（必要な場合のみ）

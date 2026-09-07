@@ -1215,7 +1215,7 @@ from auth.users;
 | 何を                                      | どこに                                                                                                                                  |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | 会社の逆引き（`customer` → `company_id`） | `00029` の SECURITY DEFINER RPC `company_id_by_stripe_customer`。**新しいテーブルは作らない**（正本は `auth.users.raw_user_meta_data`） |
-| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない）                                                      |
+| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない・**なぜ引けなかったかを4値で持つ**: `not_found` / `ambiguous` / `lookup_failed` / `retrieve_failed`）                                                      |
 | 気づく経路                                | `dispatch-daily` が毎日数え、1件以上なら運用宛に1通。**0件でも summary に0件と書く**                                                    |
 | 状態の正本                                | **Stripe から取り直した Subscription**（下記のとおり BS-D4 を撤回した）                                                                 |
 
@@ -1225,6 +1225,20 @@ from auth.users;
 
 **バックフィルは設計から外した。** 2026-09-07 の実測で `missing_customer_id = 0`。
 **「既存の購読は識別子が保存されていないはずだ」という当初の想定が外れていた。**
+
+### 2026-09-07 登録 — ④-a に残る未確認（**判断は書かない**）
+
+1. **`customer.subscription.deleted` の後に Subscription を retrieve できるか、
+   そのとき `status` が `canceled` で返るかは未確認である。**
+   Stripe の文献には「`canceled` は terminal state」「取り消し後も Subscription は残る」と
+   あるが、**実測していない。** 実測には Stripe の認証が要る（MCP 未認証・`.env` は読み取り禁止）。
+   実装には取り直せなかった場合の退避（**種別が `deleted` なら `canceled` を書く**）が
+   あるため、**文献が外れていても解約は反映される見込み**である。
+   **「問題ない」ではなく「未確認」である。**
+2. **Preview 側に `STRIPE_SECRET_KEY` があるかは未確認である。**
+   ④-a で webhook にもこの鍵が要るようになった。**欠けていれば webhook は 500 を返す。**
+   本番には在る（2026-09-02 に本番の checkout が 200 を返した実測）。
+   **Preview で通しの検証をするときに詰まる。** どちらも「未確認」と書く。
 
 **残る限界を3つ、ここに顕在化させる。**
 

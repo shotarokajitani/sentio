@@ -6,13 +6,17 @@
  * 関数が実在するか・service_role 以外から実行できないか・
  * 表が本当に閉じているかは、ここでしか分からない。
  *
- * 見るのは4つ。
- *   1. 逆引きが**当たる**（陽性）
- *   2. 0件・2件以上では NULL を返す（**当てずっぽうで1社に書かない**）
- *   3. 逆引きも表も、anon / ログイン済みユーザーからは触れない（陰性）
- *   4. 同じイベントIDで2回入らない（冪等・受入 5-4）
+ * 見るのは5つ。
+ *   1. **`relrowsecurity` が実際に true であること。**
+ *      ポリシー0本と RLS 有効は別の設定で、後者が抜けると anon から読める
+ *   2. 逆引きが**当たる**（陽性）
+ *   3. 0件・2件以上では会社を返さないが、**一致数は返す**
+ *      （呼び出し側が not_found と ambiguous を書き分けるため）
+ *   4. 逆引きも表も、anon / ログイン済みユーザーからは触れない（陰性）
+ *   5. 同じイベントIDで2回入らない（冪等・受入 5-4）
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { execFileSync } from "node:child_process";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveRlsRunMode } from "../helpers/rls-run-mode";
 
@@ -101,6 +105,39 @@ if (mode === "run") {
       for (const id of createdUserIds) await admin.auth.admin.deleteUser(id);
     });
 
+    // ---------- RLS そのもの（**ポリシー0本と RLS 有効は別の設定である**） ----------
+
+    it("**relrowsecurity = true を実物で測る**（0本だから読めない、で済ませない）", () => {
+      // PostgREST から `pg_class` は引けない（`scripts/live-schema.ts` と同じ理由）。
+      // 検査のために本番のAPI表面を広げないので、psql で直接測る。
+      const dbUrl = process.env.SUPABASE_DB_URL;
+      if (!dbUrl) {
+        // **skip にしない。** 測っていないことを緑で通すと、RLS が外れても気づかない
+        throw new Error(
+          "SUPABASE_DB_URL が未設定のため relrowsecurity を実測できない。" +
+            "ローカルでは `supabase status -o env` の DB_URL を渡すこと",
+        );
+      }
+
+      const sql =
+        "SELECT c.relrowsecurity, " +
+        "(SELECT count(*) FROM pg_policies WHERE schemaname = 'public' " +
+        "AND tablename = 'billing_webhook_unresolved') AS policies " +
+        "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "WHERE n.nspname = 'public' AND c.relname = 'billing_webhook_unresolved'";
+
+      const out = execFileSync("psql", [dbUrl, "-A", "-t", "-F", "\t", "-c", sql], {
+        encoding: "utf8",
+      }).trim();
+
+      // 行そのものを残す。**値を引用できる形でログに出す**
+      process.stderr.write(`\n[00029] relrowsecurity / policies = ${out}\n`);
+
+      const [rls, policies] = out.split("\t");
+      expect(rls).toBe("t");
+      expect(policies).toBe("0");
+    });
+
     // ---------- 逆引き ----------
 
     it("陽性: customer id から会社を引ける", async () => {
@@ -109,7 +146,7 @@ if (mode === "run") {
       });
 
       expect(error).toBeNull();
-      expect(data).toBe(ownerId);
+      expect(data).toMatchObject({ company_id: ownerId, matches: 1 });
     });
 
     it("陰性: 一致が無ければ NULL（推測しない）", async () => {
@@ -118,7 +155,8 @@ if (mode === "run") {
       });
 
       expect(error).toBeNull();
-      expect(data).toBeNull();
+      // **0件であることまで返す。** 呼び出し側が not_found と ambiguous を書き分ける
+      expect(data).toMatchObject({ company_id: null, matches: 0 });
     });
 
     it("陰性: **2人が同じ customer id を持つときは NULL**（どちらかに書かない）", async () => {
@@ -127,12 +165,12 @@ if (mode === "run") {
       });
 
       expect(error).toBeNull();
-      expect(data).toBeNull();
+      expect(data).toMatchObject({ company_id: null, matches: 2 });
     });
 
     it("陰性: 空文字では引けない（購読を持たないユーザーに当たらない）", async () => {
       const { data } = await admin.rpc("company_id_by_stripe_customer", { p_customer_id: "" });
-      expect(data).toBeNull();
+      expect(data).toMatchObject({ company_id: null, matches: 0 });
     });
 
     it("陰性: anon からは逆引きを実行できない（EXECUTE を剥がしてある）", async () => {
@@ -150,7 +188,7 @@ if (mode === "run") {
       const { error } = await admin.from("billing_webhook_unresolved").insert({
         stripe_event_id: `${RUN_ID}_first`,
         event_type: "customer.subscription.updated",
-        reason: "company_unresolved",
+        reason: "not_found",
         stripe_customer_id: CUSTOMER,
       });
 
@@ -161,7 +199,7 @@ if (mode === "run") {
       const row = {
         stripe_event_id: `${RUN_ID}_same`,
         event_type: "customer.subscription.updated",
-        reason: "company_unresolved",
+        reason: "not_found",
         stripe_customer_id: CUSTOMER,
       };
       const opts = { onConflict: "stripe_event_id", ignoreDuplicates: true };
@@ -205,7 +243,7 @@ if (mode === "run") {
       const { error } = await anon.from("billing_webhook_unresolved").insert({
         stripe_event_id: `${RUN_ID}_anon`,
         event_type: "customer.subscription.updated",
-        reason: "company_unresolved",
+        reason: "not_found",
         stripe_customer_id: CUSTOMER,
       });
 
@@ -217,7 +255,7 @@ if (mode === "run") {
       await admin.from("billing_webhook_unresolved").insert({
         stripe_event_id: done,
         event_type: "customer.subscription.deleted",
-        reason: "stripe_fetch_failed",
+        reason: "retrieve_failed",
         stripe_customer_id: CUSTOMER,
       });
       await admin

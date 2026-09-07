@@ -92,31 +92,20 @@ export async function POST(req: NextRequest) {
   const admin = createClient(supabaseUrl, serviceKey);
   const customerId = typeof object.customer === "string" ? object.customer : null;
 
-  const companyId = await resolveCompanyFromStripe(admin, object, customerId);
-  if (!companyId) {
-    const recorded = await recordUnresolved(
-      admin,
-      event,
-      eventType,
-      customerId,
-      "company_unresolved",
-    );
+  const lookup = await resolveCompanyFromStripe(admin, object, customerId);
+  if (lookup.reason !== undefined) {
+    const recorded = await recordUnresolved(admin, event, eventType, customerId, lookup.reason);
     // **記録すらできなければ 200 で流さない。** 再送が来れば次の機会がある
     if (!recorded) return NextResponse.json({ error: "record failed" }, { status: 500 });
     return NextResponse.json({ status: "ignored", reason: "no_company" });
   }
+  const companyId = lookup.companyId;
 
   const stripe = new Stripe(stripeKey);
   const resolved = await resolveSubscription(stripe, eventType, object);
 
   if (!resolved) {
-    const recorded = await recordUnresolved(
-      admin,
-      event,
-      eventType,
-      customerId,
-      "stripe_fetch_failed",
-    );
+    const recorded = await recordUnresolved(admin, event, eventType, customerId, "retrieve_failed");
     if (!recorded) return NextResponse.json({ error: "record failed" }, { status: 500 });
     // **推測で status を書かない。** 書かなかった事実は上の表に残っている
     return NextResponse.json({ status: "ignored", reason: "stripe_unavailable" });
@@ -169,23 +158,44 @@ async function resolveCompanyFromStripe(
   admin: SupabaseClient,
   object: Record<string, unknown>,
   customerId: string | null,
-): Promise<string | null> {
+): Promise<CompanyLookup> {
   if (typeof object.client_reference_id === "string" && object.client_reference_id) {
-    return object.client_reference_id;
+    return { companyId: object.client_reference_id };
   }
-  if (!customerId) return null;
+  if (!customerId) return { reason: "not_found" };
 
   const { data, error } = await admin.rpc("company_id_by_stripe_customer", {
     p_customer_id: customerId,
   });
 
   if (error) {
-    // **引けなかったのか、引く経路が壊れたのかを区別できる形でログに出す**
+    // **「引けなかった」と「引く経路が壊れた」を混ぜない。** 対処が違う
     console.error("company_id_by_stripe_customer failed:", error.message);
-    return null;
+    return { reason: "lookup_failed" };
   }
-  return typeof data === "string" && data ? data : null;
+
+  const result = (data ?? {}) as { company_id?: unknown; matches?: unknown };
+  if (typeof result.company_id === "string" && result.company_id) {
+    return { companyId: result.company_id };
+  }
+
+  // **0件と2件以上を同じ行に見せない。** 前者は「checkout を経ずに作られた購読」を疑う話、
+  // 後者は「同じ customer id が2社に付いている」というデータの壊れである
+  const matches = typeof result.matches === "number" ? result.matches : 0;
+  return { reason: matches > 1 ? "ambiguous" : "not_found" };
 }
+
+/**
+ * `billing_webhook_unresolved.reason` の取りうる値。
+ * **`00029` の CHECK 制約と同じ集合である。片方を変えたらもう片方も変える**
+ * （`DELIVERY_STATUSES` と `00024` の関係と同じ作法）。
+ */
+type UnresolvedReason = "not_found" | "ambiguous" | "lookup_failed" | "retrieve_failed";
+
+/** 会社を引いた結果。**引けなかったときは「なぜ」を必ず持って返る** */
+type CompanyLookup =
+  | { companyId: string; reason?: undefined }
+  | { companyId?: undefined; reason: Exclude<UnresolvedReason, "retrieve_failed"> };
 
 interface ResolvedSubscription {
   status: string;
@@ -258,7 +268,7 @@ async function recordUnresolved(
   event: { id?: string },
   eventType: string,
   customerId: string | null,
-  reason: "company_unresolved" | "stripe_fetch_failed",
+  reason: UnresolvedReason,
 ): Promise<boolean> {
   const eventId =
     typeof event.id === "string" && event.id

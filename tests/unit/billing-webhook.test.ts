@@ -125,7 +125,7 @@ function stubEnv() {
 /** 既定は「会社が引けて、Stripe から取り直せる」状態。各試験が必要な分だけ壊す */
 function resetMocks() {
   updateUserById.mockReset().mockResolvedValue({ data: {}, error: null });
-  rpc.mockReset().mockResolvedValue({ data: COMPANY, error: null });
+  rpc.mockReset().mockResolvedValue({ data: { company_id: COMPANY, matches: 1 }, error: null });
   upsert.mockReset().mockResolvedValue({ error: null });
   from.mockClear();
   retrieve
@@ -240,7 +240,7 @@ describe("署名が通ったとき", () => {
   });
 
   it("会社を引けない通知は 200 で受け取り、購読を書かない（再送を滞留させない）", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
     const body = subscriptionEvent("customer.subscription.updated", "active");
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(body, sign(body)));
@@ -388,7 +388,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
   });
 
   it("5-3 会社を引けなかったら、**捨てずに残す**（種別・イベントID・生の識別子）", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
     const body = subscriptionEvent("customer.subscription.deleted", "canceled", "evt_lost");
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(body, sign(body)));
@@ -399,13 +399,25 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     expect(row).toEqual({
       stripe_event_id: "evt_lost",
       event_type: "customer.subscription.deleted",
-      reason: "company_unresolved",
+      reason: "not_found",
       stripe_customer_id: "customer-ref",
     });
   });
 
+  it("5-3 **2社が同じ customer id を持つときは ambiguous として残す**（not_found と混ぜない）", async () => {
+    // 逆引きは会社を返さないが、**一致数は返す。** 0件と2件以上は原因も対処も違う
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 2 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active", "evt_ambiguous");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(body, sign(body)));
+
+    expect(updateUserById).not.toHaveBeenCalled();
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toMatchObject({ reason: "ambiguous", stripe_event_id: "evt_ambiguous" });
+  });
+
   it("5-3 陰性コントロール: **ペイロード全体は保存しない**", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
     const body = subscriptionEvent("customer.subscription.updated", "active");
     const { POST } = await import("@/app/api/billing/webhook/route");
     await POST(post(body, sign(body)));
@@ -420,7 +432,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
   });
 
   it("5-4 冪等: 同じイベントIDで2回入らない（イベントIDで衝突させる）", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
     const body = subscriptionEvent("customer.subscription.updated", "active", "evt_same");
     const { POST } = await import("@/app/api/billing/webhook/route");
     await POST(post(body, sign(body)));
@@ -454,7 +466,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     expect(await res.json()).toEqual({ status: "ignored", reason: "stripe_unavailable" });
     expect(updateUserById).not.toHaveBeenCalled();
     const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
-    expect(row).toMatchObject({ reason: "stripe_fetch_failed", stripe_event_id: "evt_fetchfail" });
+    expect(row).toMatchObject({ reason: "retrieve_failed", stripe_event_id: "evt_fetchfail" });
   });
 
   it("**解約だけは例外**: 取り直せなくても canceled を書く（種別そのものが事実である）", async () => {
@@ -471,7 +483,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
   });
 
   it("陰性コントロール: **記録すらできなければ 200 で流さない**（再送に賭ける）", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
     upsert.mockResolvedValue({ error: { message: "insert failed" } });
     const body = subscriptionEvent("customer.subscription.updated", "active");
     const { POST } = await import("@/app/api/billing/webhook/route");
@@ -490,7 +502,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
     expect(updateUserById).not.toHaveBeenCalled();
     const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
-    expect(row).toMatchObject({ reason: "company_unresolved" });
+    expect(row).toMatchObject({ reason: "lookup_failed" });
   });
 });
 

@@ -380,6 +380,57 @@ jobs:
       # continue-on-error なので、赤でも後続を走らせて両方の結果を採る。
       # ============================================================
 
+      # ------------------------------------------------------------
+      # 実験C（最優先）: タイムアウトを 5s → 30s に延ばして3回。
+      #   通る   → 「遅い」。待てば返っている（遅延）
+      #   通らない → 「返ってこない」（停止）
+      # **本番コードは触らない。テスト側のタイムアウト値だけ。**
+      # ------------------------------------------------------------
+      - name: "調査C — testTimeout 30s で3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== C run $i/3 (testTimeout=30000) ====="
+            pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
+            echo "----- C run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # ------------------------------------------------------------
+      # 実験B: リセットなしで5回。単調に悪化しているかを見る。
+      #   3回目だけ落ちる      → 3回目に固有の何かがある
+      #   4回目・5回目も落ちる → 蓄積で単調に悪化している
+      # **各回を継続させ、全回の結果を採る**（set -e を使わない）。
+      # ------------------------------------------------------------
+      - name: "調査B — リセットなしで5回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3 4 5; do
+            echo "===== B run $i/5 ====="
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+            echo "----- B run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # ------------------------------------------------------------
+      # 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
+      #   落ちなければ、蓄積が効いている強い証拠になる。
+      # リセット経路は「Apply all migrations from scratch」で実在が確認できている。
+      # ------------------------------------------------------------
+      - name: "調査A — 各回の前に db reset して3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== A run $i/3 (db reset 済み) ====="
+            supabase db reset
+            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+            echo "----- A run $i exit=${PIPESTATUS[0]} -----"
+          done
+
       # 1-5: 当該ファイルだけを3回走らせる。
       # 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
       # 積み上がった状態の問題である。

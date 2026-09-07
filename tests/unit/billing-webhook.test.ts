@@ -1,11 +1,16 @@
 /**
- * 課金の webhook（2026-09-02）。
+ * 課金の webhook（2026-09-02 / 2026-09-07 に ④-a で拡張）。
  *
  * **陰性コントロールが主役である。** この経路の認証は署名検証だけで、
  * 通してしまえば「**誰でも他社を有料プランにできる**」エンドポイントになる。
  *
  * 署名検証そのものの試験は `tests/unit/webhook-signature.test.ts` にある。
  * ここが見るのは「**検証を通らなかったときに、本文を解釈していないか**」である。
+ *
+ * **フィクスチャは Stripe の実物の形に合わせる。実装に合わせない**（受入 5-6）。
+ * 実装に合わせて書けば、実装が間違っていてもテストは同じ間違いをする。
+ * 実際、`checkout.session.completed` に `status: "active"` を入れたフィクスチャが
+ * 本番の `status: "complete"` バグを緑のまま通していた（2026-09-02）。
  *
  * 秘密の実値に似た文字列は置かない（hooks の `check-secrets-patterns` が拒否する）。
  */
@@ -32,12 +37,33 @@ function post(body: string, signature: string): NextRequest {
 }
 
 /** updateUserById を呼んだかどうかを見るためのスパイ */
-const updateUserById = vi.fn(async () => ({ data: {}, error: null }));
+const updateUserById = vi.fn();
+/** 会社の逆引き（`00029` の SECURITY DEFINER RPC）。**新しいテーブルは作らない** */
+const rpc = vi.fn();
+/** 引けなかったイベントを残す表への書き込み */
+const upsert = vi.fn();
+const from = vi.fn(() => ({ upsert }));
+
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({ auth: { admin: { updateUserById } } }),
+  createClient: () => ({ auth: { admin: { updateUserById } }, rpc, from }),
+}));
+
+/**
+ * Stripe から Subscription を取り直す経路（受入 5-5 / 4-6）。
+ * **ペイロードの status を信じず、ここが返す値を正本にする。**
+ */
+const retrieve = vi.fn();
+vi.mock("stripe", () => ({
+  default: class {
+    subscriptions = { retrieve };
+  },
 }));
 
 type UpdateCall = [string, { user_metadata: { subscription: Record<string, string> } }];
+type UpsertCall = [
+  Record<string, string | null>,
+  { onConflict: string; ignoreDuplicates: boolean },
+];
 
 /**
  * `checkout.session.completed` の本文。**実物の形に合わせてある**（2026-09-02 実測）。
@@ -45,9 +71,9 @@ type UpdateCall = [string, { user_metadata: { subscription: Record<string, strin
  * ここが `status: "active"` になっていたことが、本番で `"complete"` が書かれたのに
  * テストが緑だった理由である。**Checkout Session に `"active"` は入らない。**
  * `status` は `open` / `complete` / `expired` の3値で、**購読の状態ではない。**
- * フィクスチャを実装に合わせて書くと、テストは実装の写しになって嘘をつく。
  */
 const PAYLOAD = JSON.stringify({
+  id: "evt_checkout",
   type: "checkout.session.completed",
   data: {
     object: {
@@ -70,18 +96,46 @@ function checkoutSession(paymentStatus: string | null): string {
     status: "complete",
   };
   if (paymentStatus !== null) object.payment_status = paymentStatus;
-  return JSON.stringify({ type: "checkout.session.completed", data: { object } });
+  return JSON.stringify({
+    id: "evt_checkout",
+    type: "checkout.session.completed",
+    data: { object },
+  });
+}
+
+/**
+ * `customer.subscription.*` の本文。**実物には `client_reference_id` が無い。**
+ * 以前はここに載せた作り物で通していたが、それは本番で起きない形だった。
+ */
+function subscriptionEvent(type: string, status: string, id = "evt_sub"): string {
+  return JSON.stringify({
+    id,
+    type,
+    data: { object: { id: "sub_ref", customer: "customer-ref", status } },
+  });
 }
 
 function stubEnv() {
   vi.stubEnv("STRIPE_WEBHOOK_SECRET", SECRET);
+  vi.stubEnv("STRIPE_SECRET_KEY", "unit-test-stripe-placeholder");
   vi.stubEnv("SUPABASE_URL", "http://127.0.0.1:54321");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "unit-test-placeholder");
 }
 
+/** 既定は「会社が引けて、Stripe から取り直せる」状態。各試験が必要な分だけ壊す */
+function resetMocks() {
+  updateUserById.mockReset().mockResolvedValue({ data: {}, error: null });
+  rpc.mockReset().mockResolvedValue({ data: { company_id: COMPANY, matches: 1 }, error: null });
+  upsert.mockReset().mockResolvedValue({ error: null });
+  from.mockClear();
+  retrieve
+    .mockReset()
+    .mockResolvedValue({ id: "sub_ref", customer: "customer-ref", status: "active" });
+}
+
 describe("署名検証（陰性コントロール）", () => {
   beforeEach(() => {
-    updateUserById.mockClear();
+    resetMocks();
     stubEnv();
   });
   afterEach(() => vi.unstubAllEnvs());
@@ -125,11 +179,20 @@ describe("署名検証（陰性コントロール）", () => {
     expect((await POST(post(PAYLOAD, sign(PAYLOAD)))).status).toBe(500);
     expect(updateUserById).not.toHaveBeenCalled();
   });
+
+  it("**STRIPE_SECRET_KEY が無ければ 500**（取り直せないまま推測で書かない）", async () => {
+    // ④-a で状態の正本を Stripe に移したので、この鍵が無いと status を決められない
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+
+    expect((await POST(post(PAYLOAD, sign(PAYLOAD)))).status).toBe(500);
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
 });
 
 describe("署名が通ったとき", () => {
   beforeEach(() => {
-    updateUserById.mockClear();
+    resetMocks();
     stubEnv();
   });
   afterEach(() => vi.unstubAllEnvs());
@@ -146,6 +209,8 @@ describe("署名が通ったとき", () => {
       plan_id: STANDARD_PLAN.id,
       status: "active",
     });
+    // client_reference_id で引けたなら**逆引きは呼ばない**（こちらが入れた値のほうが強い）
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("**カード情報も金額も保存しない**（識別子と status だけ）", async () => {
@@ -162,12 +227,11 @@ describe("署名が通ったとき", () => {
   });
 
   it("解約は購読を消さず status に残す（いつ止まったかを失わない）", async () => {
-    const canceled = JSON.stringify({
-      type: "customer.subscription.deleted",
-      data: {
-        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "active" },
-      },
-    });
+    // **実物の Subscription には `client_reference_id` が無い。**
+    // 以前はここに載せた作り物で通していたが、それは本番で起きないことを
+    // 「正しい」と固定していた（:239 のコメントが「本番では到達しない」と自認していた）。
+    retrieve.mockResolvedValue({ id: "sub_ref", customer: "customer-ref", status: "canceled" });
+    const canceled = subscriptionEvent("customer.subscription.deleted", "canceled");
     const { POST } = await import("@/app/api/billing/webhook/route");
     await POST(post(canceled, sign(canceled)));
 
@@ -175,10 +239,11 @@ describe("署名が通ったとき", () => {
     expect(payload.user_metadata.subscription.status).toBe("canceled");
   });
 
-  it("会社を引けない通知は 200 で受け取り、何も書かない（再送を滞留させない）", async () => {
-    const noCompany = JSON.stringify({ type: "invoice.paid", data: { object: {} } });
+  it("会社を引けない通知は 200 で受け取り、購読を書かない（再送を滞留させない）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
     const { POST } = await import("@/app/api/billing/webhook/route");
-    const res = await POST(post(noCompany, sign(noCompany)));
+    const res = await POST(post(body, sign(body)));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
@@ -196,7 +261,7 @@ describe("署名が通ったとき", () => {
  */
 describe("BS-1 何を status として書くか", () => {
   beforeEach(() => {
-    updateUserById.mockClear();
+    resetMocks();
     stubEnv();
   });
   afterEach(() => vi.unstubAllEnvs());
@@ -232,18 +297,15 @@ describe("BS-1 何を status として書くか", () => {
       // 再送を滞留させないので 200 で受ける。ただし**書かない**
       expect(res.status).toBe(200);
       expect(updateUserById).not.toHaveBeenCalled();
+      // 異常ではないので、引けなかった表にも入れない
+      expect(upsert).not.toHaveBeenCalled();
     },
   );
 
   it("BS-1-4 陰性コントロール: Subscription の past_due を active に潰さない", async () => {
-    // **Subscription には client_reference_id が無い**ので、この形は本番では到達しない
-    // （下の BS-2-3 が実物の形を固定している）。分岐そのものを残すための試験である
-    const updated = JSON.stringify({
-      type: "customer.subscription.updated",
-      data: {
-        object: { client_reference_id: COMPANY, customer: "customer-ref", status: "past_due" },
-      },
-    });
+    // **実物の Subscription の形**（`client_reference_id` は無い）
+    retrieve.mockResolvedValue({ id: "sub_ref", customer: "customer-ref", status: "past_due" });
+    const updated = subscriptionEvent("customer.subscription.updated", "past_due");
     const { POST } = await import("@/app/api/billing/webhook/route");
     await POST(post(updated, sign(updated)));
 
@@ -251,17 +313,196 @@ describe("BS-1 何を status として書くか", () => {
     expect(payload.user_metadata.subscription.status).toBe("past_due");
   });
 
-  it("BS-2-3 実物の Subscription は client_reference_id を持たないので無視される", async () => {
-    const updated = JSON.stringify({
-      type: "customer.subscription.updated",
-      data: { object: { customer: "customer-ref", status: "active" } },
+  it("実物の Subscription からも会社を引けること（customer id で引く）", async () => {
+    // **これは「無視されるのが正しい」を固定していた試験の置き換えである。**
+    // 旧 BS-2-3 は `{status:"ignored", reason:"no_company"}` を期待していたが、
+    // それは**解約が本番に反映されない事故そのもの**を「正しい」と書いていた。
+    const updated = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(updated, sign(updated)));
+
+    expect(rpc).toHaveBeenCalledWith("company_id_by_stripe_customer", {
+      p_customer_id: "customer-ref",
     });
+    expect(updateUserById).toHaveBeenCalled();
+    const [id] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(id).toBe(COMPANY);
+  });
+});
+
+/**
+ * ④-a（受入 5-1 / 5-3 / 5-4 / 5-5 / 5-7）。
+ *
+ * **逆引きを足した副作用が主題である。** customer id で引けるようになったということは、
+ * `invoice.*` のような別の種別からも会社が引けるようになったということでもある。
+ * 種別を絞らなければ、Invoice の `status`（`paid`）を購読の status として書いてしまう。
+ */
+describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
+  beforeEach(() => {
+    resetMocks();
+    stubEnv();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("5-5 ペイロードの status と Stripe の status が食い違ったら、**Stripe を正とする**", async () => {
+    // ペイロードは past_due だが、取り直した Subscription は active
+    retrieve.mockResolvedValue({ id: "sub_ref", customer: "customer-ref", status: "active" });
+    const updated = subscriptionEvent("customer.subscription.updated", "past_due");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(updated, sign(updated)));
+
+    expect(retrieve).toHaveBeenCalledWith("sub_ref");
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription.status).toBe("active");
+  });
+
+  it("5-1 識別子は**取り直した Subscription の値**を書く", async () => {
+    retrieve.mockResolvedValue({ id: "sub_true", customer: "cus_true", status: "active" });
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription).toMatchObject({
+      stripe_customer_id: "cus_true",
+      stripe_subscription_id: "sub_true",
+    });
+  });
+
+  it("5-7 陰性コントロール: **扱わない種別では会社が引けても何も書かない**", async () => {
+    // invoice.paid の `status` は購読の状態ではない。逆引きが効く以上、
+    // 種別を絞らないと `paid` が購読の status として書かれる
+    const invoice = JSON.stringify({
+      id: "evt_invoice",
+      type: "invoice.paid",
+      data: { object: { id: "in_ref", customer: "customer-ref", status: "paid" } },
+    });
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(invoice, sign(invoice)));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ignored", reason: "unhandled_type" });
+    expect(updateUserById).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    // 異常ではないので、引けなかった表にも入れない（溜めるべきでないものを溜めない）
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("5-3 会社を引けなかったら、**捨てずに残す**（種別・イベントID・生の識別子）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    const body = subscriptionEvent("customer.subscription.deleted", "canceled", "evt_lost");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(from).toHaveBeenCalledWith("billing_webhook_unresolved");
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toEqual({
+      stripe_event_id: "evt_lost",
+      event_type: "customer.subscription.deleted",
+      reason: "not_found",
+      stripe_customer_id: "customer-ref",
+    });
+  });
+
+  it("5-3 **2社が同じ customer id を持つときは ambiguous として残す**（not_found と混ぜない）", async () => {
+    // 逆引きは会社を返さないが、**一致数は返す。** 0件と2件以上は原因も対処も違う
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 2 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active", "evt_ambiguous");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(body, sign(body)));
+
+    expect(updateUserById).not.toHaveBeenCalled();
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toMatchObject({ reason: "ambiguous", stripe_event_id: "evt_ambiguous" });
+  });
+
+  it("5-3 陰性コントロール: **ペイロード全体は保存しない**", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(body, sign(body)));
+
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(Object.keys(row).sort()).toEqual([
+      "event_type",
+      "reason",
+      "stripe_customer_id",
+      "stripe_event_id",
+    ]);
+  });
+
+  it("5-4 冪等: 同じイベントIDで2回入らない（イベントIDで衝突させる）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active", "evt_same");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(body, sign(body)));
+    await POST(post(body, sign(body)));
+
+    const [, options] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(options).toEqual({ onConflict: "stripe_event_id", ignoreDuplicates: true });
+    // 2回とも同じ行を書きに行く（**行が増えないことはDB側の PRIMARY KEY が担保する**）
+    const [second] = upsert.mock.calls[1] as unknown as UpsertCall;
+    expect(second.stripe_event_id).toBe("evt_same");
+  });
+
+  it("5-4 冪等: 会社が引けるなら、同じ通知を2回処理しても書かれる値は変わらない", async () => {
+    const updated = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(updated, sign(updated)));
+    await POST(post(updated, sign(updated)));
+
+    const [, first] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    const [, second] = updateUserById.mock.calls[1] as unknown as UpdateCall;
+    expect(second).toEqual(first);
+  });
+
+  it("Stripe から取り直せなければ**書かない**。事実は残す", async () => {
+    retrieve.mockRejectedValue(new Error("stripe unavailable"));
+    const updated = subscriptionEvent("customer.subscription.updated", "active", "evt_fetchfail");
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(updated, sign(updated)));
 
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ignored", reason: "stripe_unavailable" });
+    expect(updateUserById).not.toHaveBeenCalled();
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toMatchObject({ reason: "retrieve_failed", stripe_event_id: "evt_fetchfail" });
+  });
+
+  it("**解約だけは例外**: 取り直せなくても canceled を書く（種別そのものが事実である）", async () => {
+    retrieve.mockRejectedValue(new Error("stripe unavailable"));
+    const canceled = subscriptionEvent("customer.subscription.deleted", "canceled");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(canceled, sign(canceled)));
+
+    expect(res.status).toBe(200);
+    const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
+    expect(payload.user_metadata.subscription.status).toBe("canceled");
+    // 書けているので、引けなかった表には入れない
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("陰性コントロール: **記録すらできなければ 200 で流さない**（再送に賭ける）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    upsert.mockResolvedValue({ error: { message: "insert failed" } });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(500);
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
+
+  it("陰性コントロール: 逆引きが**エラーで落ちたとき**に、会社を推測しない", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "permission denied" } });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
     expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
     expect(updateUserById).not.toHaveBeenCalled();
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toMatchObject({ reason: "lookup_failed" });
   });
 });
 

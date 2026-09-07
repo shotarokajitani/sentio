@@ -1138,6 +1138,75 @@ Stripe カスタマーポータルのセッションを作るエンドポイン�
 
 **方式は未判断のままである。** 下の1がそれである。
 
+### 2026-09-07 実測 — 会社を引けない原因と、バックフィルの要否
+
+**`stripe_customer_id` は初回から保存されている。足りないのは逆引きだけである。**
+
+`checkout/route.ts:42` が `client_reference_id: ctx.companyId` を渡し、
+`webhook/route.ts:88-95` が受け取った時点で `stripe_customer_id` を書いている。
+本番の実測（読み取り照会のみ）:
+
+```sql
+select count(*) as users_total,
+       count(*) filter (where raw_user_meta_data -> 'subscription' is not null) as subscription_rows,
+       count(*) filter (where raw_user_meta_data -> 'subscription' is not null
+         and coalesce(raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id','') = '') as missing_customer_id
+from auth.users;
+```
+
+```
+[{"users_total":3,"subscription_rows":1,"missing_customer_id":0}]
+```
+
+**欠落は0件。** 形も確認した（値そのものは取っていない）。
+
+```
+[{"status":"active","plan_id":"standard","customer_id_prefix":"cus_",
+  "subscription_id_prefix":"sub_","key_count":4}]
+```
+
+**当初「既存の購読は識別子が保存されていないはずだ」という想定があったが、実測と違った。**
+**バックフィルは不要であり、設計から外す。**
+
+### 2026-09-07 決定 — 引けなかった事実は専用テーブルに残す
+
+**Sentry で鳴らす案は、実測により採れなくなった。** SDK も DSN も無く、
+サービス側のプロジェクトも90日間でイベント0件である
+（上の「本番の可観測性が実質ゼロ」を参照）。**SDK の導入は ④-a の範囲に入れない。**
+
+したがって**会社を引けなかった webhook イベントだけを受ける最小のテーブル**を置く。
+
+- 列は最低限（イベント種別 / Stripe のイベントID / 受信時刻 / 生の識別子）。
+  **ペイロード全体は保存しない**
+- **冪等**（同じイベントIDで2回入らない）
+- **行が入ったことに誰かが気づく経路を同じ PR で1つ用意する。**
+  溜めるだけにしない。溜めて誰も見ないなら、Sentry が鳴らないのと同じである
+- Stripe への応答は **200 のまま**（4xx だと再送が滞留する）。
+  **捨てたことを黙らせないだけが目的である**
+
+### 2026-09-07 追記 — 方式に効く事実を1つ
+
+**`customer.subscription.updated` は `cancel_at_period_end` を `true` にしたときにも飛ぶ。**
+期末解約の導線にした場合、**`deleted` は期末まで届かない。**
+「解約したのに画面が購読中のまま」を期末まで抱えることになるので、
+方式の選択はこの点と一緒に決める。
+
+### Stripe 側の実測が未了（2026-09-07）
+
+`customer.subscription.deleted` の後に Subscription を retrieve できるか、
+そのとき `status` が `canceled` で返るかは、**文献では読めるが実測していない。**
+
+- Stripe のドキュメントには「`canceled` は terminal state で更新できない」
+  「取り消し後も Subscription は残り、`metadata` と `cancellation_details` 以外は
+  更新できない」とある。**retrieve は可能で、返るのは `canceled` と読める**
+- **これは文献であって実測ではない。** 設計は進めてよいが、
+  「実測で確かめた」と書かないこと
+- 実測には Stripe の認証が要る（MCP サーバーが未認証、`.env` は読み取り禁止）。
+  **梶谷さんの判断待ち**
+
+**順序保証についても、Stripe のドキュメントに保証する記述は無い。**
+保証が無い以上、「受信時に Stripe から取り直して、それを正とする」方式は変えない。
+
 ### 判断が要ること（**勝手に確定させない**）
 
 1. **カスタマーポータルを使うか、自前で作るか。** ポータルなら Stripe 側の
@@ -1233,7 +1302,11 @@ webhook が着く前にこの画面を描くと、状態の正本はまだ空で
 **外部顧客に出す前に必ず潰す。** 最初の1社が購読するより前である
 （`docs/spec/07_open_items.md` の「解約の導線が無い」と同じ合図）。
 
-## dependabot の PR #80 で `integration` が落ちている（未判断・2026-09-03 登録・**merge しない**）
+## dependabot の PR #80 / #92 で `integration` が落ちている（未判断・2026-09-03 登録 → 2026-09-07 後継を追記・**merge しない**）
+
+> **2026-09-07 追記。#80 は CLOSED になった**（`2026-09-07T01:58:16Z`・merged ではない）。
+> dependabot が後継の **#92** に差し替えたためである。**#92 でも同じ場所が落ちた。**
+> **#92 も merge しない。** 落ち方そのものは下の集約項目を見ること。
 
 **merge しない。** 落ちたまま入れると、次に赤が出たときに「元から赤い」と読み流される。
 
@@ -1294,15 +1367,30 @@ Error: Test timed out in 5000ms.
   | `vitest` | 4.1.10 | 4.1.11 |
 
   登録時（2026-09-03 午前）は「タイミングに触りうるのは `vitest` と `supabase` CLI
-  の2本」と書いたが、**同日中に実測で否定された。**
+  の2本」と書いたが、**実測で否定された。**
+
+  **これは撤回ではなく反証である。** 撤回は「根拠が足りなかった」、
+  反証は「実測で否定された」であって、別物である。決め手は #92 の lockfile:
+
+  ```
+  #80 の vitest:  - vitest@4.1.10:
+                  + vitest@4.1.11:                        ← 版が上がっている
+
+  #92 の vitest:  - vitest@4.1.10(@types/node@26.2.0)(…)
+                  + vitest@4.1.10(@types/node@26.4.1)(…)  ← 4.1.10 のまま
+  ```
+
+  **#92 は `vitest` を上げていない**（peer 依存のキーが動いただけ）。それでも
+  **#54 と同一ファイル・同一行**で再現した。
 
   **PR #54 は依存の更新を含まない**（`feat(ci): check:cron-jobs` を `origin/main` へ
   rebase したもの。#80 は未 merge なので deps 更新は入っていない。`package.json` /
   `pnpm-lock.yaml` への差分は0）。**そこで同じ形が出た。**
 
   したがって言えるのは **「依存の更新は、この症状の必要条件ではない」** までである。
-  **#80 側で寄与した可能性は否定していない。** 詳細は下記
-  「integration の 401 陰性コントロールが〜」に集約した
+  **2026-09-07 に一段強まった。** 根拠は2件 —— **#54（依存差分0）** と
+  **#92（`vitest` 据え置き）** である。**#80 側で寄与した可能性は否定していない。**
+  詳細は下記「integration の 401 陰性コントロールが〜」に集約した
 - CI の 503 フレークは過去にも観測がある
   （`docs/reports/2026-08-21_CI_503フレークの実測.md`）。同じ経路かは**未確認**
 
@@ -1330,6 +1418,33 @@ Error: Test timed out in 5000ms.
    閾値を緩めるのは、原因を見ないまま赤を消す最も安易な手である
 3. dev 依存が古いまま残る期間の許容。**security advisory を含むかは未確認**
 
+## 本番の可観測性が実質ゼロ（**ローンチ前**・2026-09-07 登録）
+
+**2026-04 の技術構成の記述と実物が違う。**
+
+`docs/adr/0001-tech-stack.md:11` は「監視: Sentry（スクラビング必須）」と書き、
+`docs/spec/05_security.md:21` も `docs/incident.md:3` も Sentry を検知の起点に置いている。
+`07_open_items.md:50` は「Stripe本番・認証・ドメイン・Resend・**Sentry**・登録済みSecretsは流用」
+と書いている。**実物はこうである（2026-09-07 実測）。**
+
+```
+$ grep -rin "sentry" --include=*.ts --include=*.tsx --include=*.json . | grep -v node_modules
+（ヒットは docs/ と .claude/skills/ の文書のみ。コードは0件）
+
+$ grep -n "@sentry" package.json     → 該当なし
+$ grep -c "@sentry" pnpm-lock.yaml   → 0
+$ ls node_modules/@sentry            → No such file or directory
+```
+
+**SDK も初期化コードも DSN も無い。** サービス側にはプロジェクトが在る
+（組織 `diseno-la` / `https://de.sentry.io` / プロジェクト `sentio`）が、
+**エラーイベントは90日間で0件**である（`dataset=errors` / `period=90d` → `No results found.`）。
+
+**したがって、本番で例外が起きても誰にも届かない。** 現状の通知経路は
+`console.error` が Vercel のログに出るだけで、**誰かが見に行かない限り何も起きない。**
+
+これは ④-a の範囲ではない。**ローンチ前の項目である。** 判断は書かない。
+
 ## integration の 401 陰性コントロールが、3回のうち3回目だけ5秒でタイムアウトする（未判断・2026-09-03 登録）
 
 **事実をここ1か所に集める。散らさない。** 上の「dependabot の PR #80 で `integration` が
@@ -1341,12 +1456,95 @@ Error: Test timed out in 5000ms.
 | --- | --- | --- | --- | --- | --- | --- |
 | #80 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2 | `tests/integration/pipeline-db.test.ts:281` | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed） |
 | #54 | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2 | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑** |
+| #92 | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | — |
 
 **「赤 → 再実行 → 緑」にした回数は、この表に1行ずつ残す。**
 数えないと「たまに落ちる」が「問題ない」に変わる。2026-09-03 に踏んだ形と同じである。
 
 **3件目が同じ形で出たら、その時点で作業を止めて報告する。**
 2件は偶然でありうるが、3件は形である。
+
+**2026-09-07 に3件目（#92）が出た。止めて調査した。以下はその記録である。**
+
+### 「3回」の正体（**リトライではない**）
+
+次に読む人が「3回目」をリトライと読み違えないために書く。
+
+```yaml
+# .github/workflows/ci.yml
+# 3回連続で同じ結果になることを確認する（RLSは状態依存の誤検知が出やすい）
+- name: Run integration suite 3 times
+  run: |
+    set -euo pipefail
+    for i in 1 2 3; do
+      echo "===== integration run $i/3 — 接続先 $SUPABASE_URL ====="
+      pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tee "/tmp/it-$i.log"
+    done
+```
+
+**同一ジョブ・同一 Supabase スタックの上で、13ファイルを連続3回。各回の間にリセットは無い。**
+**3回目は2回分のデータが積み上がった DB の上で走っている。**
+
+### なぜ3回なのか（**書かれていた**）
+
+導入は **PR #9**「chore: リポジトリ衛生・hook迂回の再発防止・RLS監査3指摘の修正」
+（`791e32b` / merged 2026-08-14）。出所は
+`docs/instructions/CC指示書_03_リポジトリ衛生_RLS修正_migration修復準備_20260813.md:81`。
+
+> 2社分のダミーユーザー（company A / company B）を作成し、陽性（自社データ操作が成功）・
+> 陰性（他社データ操作が拒否）の両方向を検証。**3回連続で再現**することを確認し、実行ログを引用
+
+**特定の事故の後追いではなく、RLS 監査の指摘に対する構造的な担保として入った。**
+同 PR の狙いは「③ CIのRLSスイートskip解消」——**RLS のテストが env 欠落で
+skip され、黙って緑になっていた**のを止めることだった。
+
+**この仕掛けは、いま意図どおり鳴っている。** 状態依存の差を実際に検出している。
+
+### 2026-09-07 の調査（**弁別できなかった**）
+
+draft PR **#93**（`chore/investigate-integration-timeout`・**merge しない**）で5実験を回した。
+run: https://github.com/shotarokajitani/sentio/actions/runs/34090554382/job/101643011074
+
+| 実験 | 内容 | 回数 | 結果 |
+| --- | --- | --- | --- |
+| 基準 | `Run integration suite 3 times` そのまま | 3 | **3回とも 13 passed** |
+| C | `--testTimeout=30000` | 3 | 3回とも 13 passed / exit=0 |
+| B | リセットなしで5回 | 5 | 5回とも 13 passed / exit=0 |
+| A | 各回の前に `supabase db reset` | 3 | 3回とも 13 passed / exit=0 |
+| 1-5 | `delivery-idempotency.test.ts` だけ | 3 | 3回とも 1 passed / exit=0 |
+| 1-6 | ファイル順を逆に | 3 | 3回とも 13 passed / exit=0 |
+
+**20回すべて緑。症状が再現しなかった。**
+
+**したがってどの実験も弁別していない。** C も B も A も「基準が落ちる」ことを前提に
+組んであり、基準が緑なら「30秒で通った」も「リセットして緑」も何の証拠にもならない。
+**陰性コントロールが効いていない状態である。**
+この項目の上に自分で書いた「実物だけを入力にすると、全部緑のとき検査器の故障が見えない」
+と同じ形を、**実験の側で踏んだ。**
+
+**再現率の実測。** 2026-09-03〜09-07 の基準ステップの実行はおよそ**15回中3回**が落ちている
+（**約20%**）。この率なら、調査1回が全部緑になるのは普通に起きる。
+
+**所要時間に単調な悪化は無い。** 全20回が **2.89〜3.57 秒**に収まった
+（基準 3.17 / 3.00 / 3.42、B は 2.93 / 3.33 / 2.89 / 3.57 / 3.13）。
+落ちるときは5秒でタイムアウトしており、通常時の3秒台とは不連続である。
+
+### この調査の制約（**残す価値がある**）
+
+- **ローカルに Docker が無く実DBを起こせない。** この調査は **CI 経由でしか回せない。**
+  調査の速度が CI の待ち時間に律速される
+- **`ci.yml` は `on: [pull_request]` のみ**なので、ブランチを push しただけでは走らない
+  （`.claude/rules/ci-coverage.md` の残存制約4）。調査には draft PR が要る
+
+### 取ってはいけない対処（**先に固定しておく**）
+
+- **CI のタイムアウト値を5秒から上げて済ませない**
+- **3回を2回に減らして済ませない**
+
+**どちらも、鳴っている検査を鳴らなくするだけである。** 3回連続は RLS の状態依存の
+誤検知を捕まえるために置かれた仕掛けで、いまそれが鳴っている。
+**鳴り方を消すのは、仕掛けを外すのと同じである。**
+実験Cの30秒は機構を切り分けるための一時的な値であって、**CI に持ち込む値ではない。**
 
 ### 一致している点（**これだけ**）
 

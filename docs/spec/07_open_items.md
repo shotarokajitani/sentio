@@ -1315,7 +1315,16 @@ from auth.users;
 プライバシーポリシー §6 は「Sentio の画面から解除した場合」を書いており、
 freee を繋いだ利用者から見ると、画面から解除できる連携とできない連携が混在する。
 
-### 3. `connections.status = 'pending'` の意味が確定していない
+### 3. `connections.status` に CHECK 制約が無い
+
+`00029` では `billing_webhook_unresolved.reason` を **CHECK で4値に固定**した
+（想定外の値が入らないことを実DBで確かめている）。
+一方 `connections.status` は `TEXT NOT NULL DEFAULT 'pending'` のままで、
+**同じ扱いをしていない列がここにある**（`00007:10`）。
+実際に書かれている値は `active` / `revoked` / `reauth_required` の3つ＋既定値 `pending` で、
+画面はそのうち2つを「要再連携」に畳んでいる。**直すかどうかは判断しない。**
+
+### 4. `pending` の意味が確定していない（**コメントと実態が食い違っている**）
 
 `status` は `TEXT NOT NULL DEFAULT 'pending'` で **CHECK 制約が無い**（`00007:10`）。
 2026-09-07 の実測では、**`pending` を書くコードは1つも無い。**
@@ -1329,7 +1338,12 @@ OAuth のコールバックは `status: "active"` を入れて upsert し
 `disconnect/route.ts:87` のコメントは「`status='pending'` のまま認可が完了しなかった行には
 秘密が無い」と**その状態の存在を前提にしている**が、そこへ至る経路は現行コードには無い。
 
-**独立した状態として出すかどうかは未判断。** 状態が正しく分かれていなければ、
+**コメントと実態が食い違っている。** `disconnect/route.ts:87` は
+「`status='pending'` のまま認可が完了しなかった行には秘密が無い」と書いており、
+**その状態が起こりうることを前提にしている。** 実際にはその状態へ至る経路が現行コードに無い。
+**コメントを消すかどうかは判断しない。** 事実として残す。
+
+**独立した状態として出すかどうかも未判断。** 状態が正しく分かれていなければ、
 「状態ごとに主操作は1つ」という原則を**正しくない状態の上に適用する**ことになる。
 
 ## `trialing` を購読中と見なすか（未判断・2026-09-03 登録・スライスBU）
@@ -1756,7 +1770,14 @@ integration ジョブの実行回数: 46
 ### この調査の制約（**残す価値がある**）
 
 - **ローカルに Docker が無く実DBを起こせない。** この調査は **CI 経由でしか回せない。**
-  調査の速度が CI の待ち時間に律速される
+  調査の速度が CI の待ち時間に律速される。
+  **いつから無いのかが 2026-09-07 に判明した: 2026-08-21 02:27 JST にアンインストールされている**
+  （`C:\ProgramData\DockerDesktop\install-log-admin.txt` に
+  `Docker Desktop Installer.exe "uninstall"` / `Existing installation found: version=4.82.0` /
+  `[2026-08-20T17:27:16Z][UninstallWorkflow][I] Uninstalled finished`。
+  `C:\Program Files\Docker` は空のディレクトリだけが残り、`com.docker.service` も存在しない）。
+  2026-08-17 の PC移行チェックリストには導入が項目として入っていたので、
+  **入れたあとに外された**ことになる。入れ直すかどうかは**梶谷さんの判断**（勝手に入れない）
 - **`ci.yml` は `on: [pull_request]` のみ**なので、ブランチを push しただけでは走らない
   （`.claude/rules/ci-coverage.md` の残存制約4）。調査には draft PR が要る
 

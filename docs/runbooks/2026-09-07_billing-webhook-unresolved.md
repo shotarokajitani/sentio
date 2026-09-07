@@ -1,0 +1,99 @@
+# 会社を引けなかった課金 webhook が出たとき（`billing_webhook_unresolved`）
+
+**この表に行が入ったら、購読の状態が本番と食い違っている可能性がある。**
+入った行は `dispatch-daily` が毎日数え、1件以上あれば運用宛にメールが1通出る。
+**対処して `resolved_at` を埋めるまで、毎日出続ける。**
+
+## この表に入る条件は2つだけ
+
+| `reason`              | 何が起きたか                                                                  |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `company_unresolved`  | `customer` から会社を引けなかった（一致0件、または**2件以上**）               |
+| `stripe_fetch_failed` | 会社は引けたが、Stripe から Subscription を取り直せなかった（解約通知を除く） |
+
+どちらも webhook は Stripe に **200 を返している**（4xx にすると再送が滞留する）。
+**つまり Stripe 側から見れば成功しており、Stripe のダッシュボードには何も出ない。**
+気づく経路はこの表と毎日のメールだけである。
+
+## 手順
+
+### 1. 何が入っているかを見る
+
+```sql
+select stripe_event_id, event_type, reason, stripe_customer_id, created_at
+  from billing_webhook_unresolved
+ where resolved_at is null
+ order by created_at;
+```
+
+**ペイロード本体は保存していない。** 中身が要るときは Stripe のダッシュボードで
+`stripe_event_id` を引く（Developers → Events）。
+
+### 2. `reason` ごとに切り分ける
+
+#### `company_unresolved` の場合
+
+その `stripe_customer_id` を持つ会社が居るかを確かめる。
+
+```sql
+select id,
+       raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id' as customer_id,
+       raw_user_meta_data -> 'subscription' ->> 'status'             as status
+  from auth.users
+ where raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id' = '<customer_id>';
+```
+
+- **0件** — checkout を経ずに Stripe 側だけで購読が作られた可能性が高い。
+  Stripe 側で `client_reference_id` に会社IDが入っているかを確かめる。
+  結び付けるべき会社が特定できたら、その会社の
+  `user_metadata.subscription.stripe_customer_id` を埋める（3へ）
+- **2件以上** — **同じ customer id が複数の会社に付いている。**
+  逆引きは意図的に NULL を返す（当てずっぽうで1社に書かない）。
+  どちらが正しいかを Stripe 側の記録で確かめ、誤っているほうを消す
+
+#### `stripe_fetch_failed` の場合
+
+Stripe の一時的な不調であることが多い。**購読の状態が更新されていないだけ**なので、
+Stripe の現在値を見て、必要なら手で合わせる（3へ）。
+
+### 3. 状態を合わせる（必要な場合のみ）
+
+**Sentio は何も勝手に送らない・登録しない。** ここは人が確かめてから実行する。
+
+```sql
+-- 例: 解約が反映されていなかった場合
+update auth.users
+   set raw_user_meta_data = jsonb_set(
+         raw_user_meta_data, '{subscription,status}', '"canceled"'
+       )
+ where id = '<company_id>';
+```
+
+### 4. 対処済みにする（**これを忘れると毎日鳴り続ける**）
+
+```sql
+update billing_webhook_unresolved
+   set resolved_at = now()
+ where stripe_event_id = '<event_id>';
+```
+
+### 5. 消えたことを確認する
+
+```sql
+select count(*) from billing_webhook_unresolved where resolved_at is null;
+```
+
+翌日の `dispatch-daily` の応答が `"billing_alert":"not_needed"` に戻ることも確かめる。
+
+## 守れない範囲（設計上の限界）
+
+1. **この表は `company_id` を持たない。** 会社が引けなかった事実を記録する表なので、
+   持ちようがない。その帰結として **`check:deletion-coverage` の射程外**であり、
+   **アカウント削除でこの表の行は消えない。** 残るのは Stripe の customer id と
+   event id だけで、氏名・メール・金額・ペイロード本体は入らない
+2. **メールが出るのは1日1回である。** 即時ではない。
+   即時に鳴らす経路（Sentry 等）は本番に存在しない
+   （`docs/spec/07_open_items.md`「本番の可観測性が実質ゼロ」）
+3. **`SENTIO_OPS_EMAIL` が未設定なら、メールは出ない。**
+   ただしその場合も `dispatch-daily` は `"billing_alert":"not_configured"` を返して
+   non-2xx になる。**黙って0件に見せることはしない**

@@ -7,8 +7,9 @@
  */
 
 import { getSupabaseAdmin } from "./supabase-client.ts";
-import { mustData } from "./db.ts";
-import type { CompanyTarget, DispatchDeps, InvokeResult } from "./dispatch.ts";
+import { mustCount, mustData } from "./db.ts";
+import { resolveMailConfig, sendEmail } from "./mailer.ts";
+import type { CompanyTarget, DispatchDeps, InvokeResult, OpsNotifyResult } from "./dispatch.ts";
 
 /**
  * 宛先の正本は `auth.users.email`（CD-D1）。**新しいテーブルを作らない。**
@@ -57,6 +58,71 @@ export function buildDeps(): DispatchDeps {
 
       // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
       return { ok: res.ok, status: res.status };
+    },
+
+    /**
+     * 未対処の行だけを数える（④-a）。`resolved_at` が埋まった行は数えない
+     * ——数え続けると、1件入った日から毎日同じ通知が永久に出続ける。
+     *
+     * **例外を投げずに null を返す。** ここで throw すると、集計の失敗が
+     * ディスパッチ全体を落として「配信が失敗した」ように見える。
+     * 見分けがつかなくなるくらいなら、失敗を値にして summary に出す。
+     */
+    countBillingUnresolved: async (): Promise<number | null> => {
+      try {
+        return await mustCount(
+          supabase
+            .from("billing_webhook_unresolved")
+            .select("stripe_event_id", { count: "exact", head: true })
+            .is("resolved_at", null),
+          "dispatch: billing_webhook_unresolved",
+        );
+      } catch (e) {
+        console.error(
+          "dispatch: 未解決の課金 webhook を数えられなかった:",
+          e instanceof Error ? e.message : "unknown",
+        );
+        return null;
+      }
+    },
+
+    /**
+     * 運用宛に1通出す。**件数だけを書く。**
+     *
+     * customer id もイベントIDも載せない。宛先の外に識別子を出す必要が無く、
+     * 中身は `billing_webhook_unresolved` を引けば分かる（CD-2-3 と同じ考え方）。
+     *
+     * **`delivery_log` には記録しない。** あれは company_id が必須で、
+     * 会社に紐づかない運用通知は入れられない。二重送信の心配も無い
+     * （1日1回の cron からしか呼ばれない）。
+     */
+    notifyOpsBillingUnresolved: async (count: number): Promise<OpsNotifyResult> => {
+      const to = (Deno.env.get("SENTIO_OPS_EMAIL") ?? "").trim();
+      if (!to) return { ok: false, reason: "not_configured", error: "SENTIO_OPS_EMAIL 未設定" };
+
+      const mail = resolveMailConfig();
+      if (!mail.ok) {
+        return { ok: false, reason: "not_configured", error: `未設定: ${mail.missing.join(", ")}` };
+      }
+
+      const subject = `[Sentio] 会社を引けなかった課金通知が ${count} 件`;
+      const text = [
+        `会社を引けなかった、または Stripe から取り直せなかった課金 webhook が ${count} 件あります。`,
+        "",
+        "該当行: public.billing_webhook_unresolved（resolved_at IS NULL）",
+        "対処手順: docs/runbooks/2026-09-07_billing-webhook-unresolved.md",
+        "",
+        "対処が済んだら resolved_at を埋めてください。埋めるまで毎日この通知が出ます。",
+      ].join("\n");
+
+      const outcome = await sendEmail(mail.config, {
+        to,
+        subject,
+        html: text.replace(/\n/g, "<br>"),
+        text,
+      });
+
+      return outcome.ok ? { ok: true } : { ok: false, reason: "send_failed", error: outcome.error };
     },
   };
 }

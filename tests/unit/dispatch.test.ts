@@ -19,6 +19,7 @@ import {
   type CompanyTarget,
   type DispatchDeps,
   type InvokeResult,
+  type OpsNotifyResult,
 } from "@edge/_shared/dispatch";
 
 /** 実在しないアドレスを使う（契約 CD-4-4） */
@@ -36,17 +37,31 @@ interface Call {
   body: Record<string, unknown>;
 }
 
+interface BillingStub {
+  /** `null` は集計そのものの失敗を表す */
+  count?: number | null;
+  notify?: OpsNotifyResult;
+}
+
 function deps(
   targets: CompanyTarget[],
   results: Record<string, InvokeResult> = {},
-): DispatchDeps & { calls: Call[] } {
+  billing: BillingStub = {},
+): DispatchDeps & { calls: Call[]; notified: number[] } {
   const calls: Call[] = [];
+  const notified: number[] = [];
   return {
     calls,
+    notified,
     listTargets: async () => targets,
     invoke: async (fn, body) => {
       calls.push({ fn, body });
       return results[fn] ?? { ok: true, status: 200 };
+    },
+    countBillingUnresolved: async () => (billing.count === undefined ? 0 : billing.count),
+    notifyOpsBillingUnresolved: async (count) => {
+      notified.push(count);
+      return billing.notify ?? { ok: true };
     },
   };
 }
@@ -260,5 +275,80 @@ describe("SB-2: State の失敗の扱い", () => {
     expect(body).not.toContain("@");
     expect(body).not.toContain("example.invalid");
     expect(body).not.toContain("owner");
+  });
+});
+
+/**
+ * ④-a: 会社を引けなかった課金 webhook に気づく経路（受入 5-3・改訂後）。
+ *
+ * **この節は「鳴らない監視をもう1つ作らない」ための陰性コントロールである。**
+ * 0件でも項目を出すこと・集計の失敗を0件と読ませないこと・
+ * 通知の送信失敗そのものを黙らせないこと。3つとも、今日までに実際に踏んだ形である。
+ */
+describe("④-a: 未解決の課金 webhook に気づく経路", () => {
+  it("0件でも summary に0件と書く（項目ごと消さない）", async () => {
+    const d = deps([target()], {}, { count: 0 });
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.body).toMatchObject({ billing_unresolved: 0, billing_alert: "not_needed" });
+    // 0件は異常ではない。**non-2xx にしない**
+    expect(result.status).toBe(200);
+    expect(d.notified).toEqual([]);
+  });
+
+  it("1件以上なら運用宛に1通出し、non-2xx にする", async () => {
+    const d = deps([target()], {}, { count: 2 });
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(d.notified).toEqual([2]);
+    expect(result.body).toMatchObject({ billing_unresolved: 2, billing_alert: "sent" });
+    expect(result.status).toBe(502);
+  });
+
+  it("（陰性コントロール）通知の送信に失敗したら黙らず non-2xx に出す", async () => {
+    const d = deps(
+      [target()],
+      {},
+      { count: 1, notify: { ok: false, reason: "send_failed", error: "Resend 500" } },
+    );
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.body).toMatchObject({ billing_unresolved: 1, billing_alert: "failed" });
+    expect(result.status).toBe(502);
+  });
+
+  it("（陰性コントロール）宛先が未設定なら not_configured として出す（送ったことにしない）", async () => {
+    const d = deps([target()], {}, { count: 1, notify: { ok: false, reason: "not_configured" } });
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.body).toMatchObject({ billing_alert: "not_configured" });
+    expect(result.status).toBe(502);
+  });
+
+  it("（陰性コントロール）集計に失敗したら0件と書かない。null と count_failed で出す", async () => {
+    const d = deps([target()], {}, { count: null });
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    // **ここが 0 になっていると「0件が続いている」と読めてしまう**
+    expect(result.body).toMatchObject({ billing_unresolved: null, billing_alert: "count_failed" });
+    expect(result.status).toBe(502);
+    expect(d.notified).toEqual([]);
+  });
+
+  it("weekly では課金の集計をしない（同じ通知を週2回出さない）", async () => {
+    const d = deps([target()], {}, { count: 3 });
+    const result = await runDispatch("weekly", INTERNAL, d);
+
+    expect(d.notified).toEqual([]);
+    expect(result.body).not.toHaveProperty("billing_unresolved");
+    expect(result.status).toBe(200);
+  });
+
+  it("集計にも通知にも宛先や識別子を載せない", async () => {
+    const d = deps([target()], {}, { count: 1 });
+    const body = JSON.stringify((await runDispatch("daily", INTERNAL, d)).body);
+
+    expect(body).not.toContain("@");
+    expect(body).not.toContain("cus_");
   });
 });

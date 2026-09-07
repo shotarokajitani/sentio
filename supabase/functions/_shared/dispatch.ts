@@ -33,9 +33,26 @@ export interface InvokeResult {
   status: number;
 }
 
+/** 運用宛の通知の結果。**送ったつもりを作らない**ので、失敗も値で返す */
+export interface OpsNotifyResult {
+  ok: boolean;
+  /** `not_configured` は宛先（SENTIO_OPS_EMAIL）や Resend の設定が無い場合 */
+  reason?: "not_configured" | "send_failed";
+  error?: string;
+}
+
 export interface DispatchDeps {
   listTargets(): Promise<CompanyTarget[]>;
   invoke(fn: string, body: Record<string, unknown>): Promise<InvokeResult>;
+  /**
+   * 会社を引けなかった課金 webhook のうち、**まだ対処していない**行数（④-a）。
+   *
+   * **集計に失敗したら null を返す。** 0件と区別できなくなると
+   * 「0件が続いている」と「集計の経路が壊れている」が同じ顔になる。
+   */
+  countBillingUnresolved(): Promise<number | null>;
+  /** 1件以上あるときだけ呼ぶ。運用宛に1通出す */
+  notifyOpsBillingUnresolved(count: number): Promise<OpsNotifyResult>;
 }
 
 /**
@@ -54,6 +71,21 @@ export interface DispatchSummary {
   sense_failed: number;
   /** うち `state-baselines` の失敗（配信も Sense も止めない。SB-D2） */
   state_failed: number;
+  /**
+   * 会社を引けなかった課金 webhook の未対処件数（daily のみ・④-a）。
+   *
+   * **0件でも必ず出す。項目ごと消さない。** 出さないと
+   * 「0件が続いている」と「集計の経路が壊れている」が区別できなくなる（PS-2 と同じ形）。
+   * `null` は**集計そのものに失敗した**ことを表す。
+   */
+  billing_unresolved?: number | null;
+  /**
+   * 運用宛の通知をどうしたか（daily のみ）。
+   *
+   * `not_needed` は0件で送る必要が無かった場合。**送信の失敗を黙らせない**ため、
+   * `failed` / `not_configured` / `count_failed` はそのまま non-2xx に効かせる。
+   */
+  billing_alert?: "not_needed" | "sent" | "failed" | "not_configured" | "count_failed";
 }
 
 export interface DispatchResult {
@@ -143,6 +175,37 @@ export async function runDispatch(
     else summary.failed++;
   }
 
+  // ④-a: 会社を引けなかった課金 webhook に**気づく経路**はここ1本だけである。
+  // webhook 側は Stripe に 200 を返して行を残すことしかできない（4xx にすると再送が滞留する）。
+  // 溜めるだけにすると、Sentry が鳴らないのと同じ状態を新しく作ることになる。
+  //
+  // **daily だけで見る。** weekly でも見ると同じ通知が週2回出て、早く読まれなくなる。
+  let billingProblem = false;
+  if (kind === "daily") {
+    const count = await deps.countBillingUnresolved();
+    summary.billing_unresolved = count;
+
+    if (count === null) {
+      // 集計が壊れているのを「0件」と読ませない
+      summary.billing_alert = "count_failed";
+      billingProblem = true;
+    } else if (count === 0) {
+      summary.billing_alert = "not_needed";
+    } else {
+      billingProblem = true;
+      const notified = await deps.notifyOpsBillingUnresolved(count);
+      summary.billing_alert = notified.ok
+        ? "sent"
+        : notified.reason === "not_configured"
+          ? "not_configured"
+          : "failed";
+    }
+  }
+
   // 失敗があれば non-2xx。**呼び出し元（cron）は読まないが、手動実行と CI からは読める**
-  return { status: summary.failed > 0 ? 502 : 200, body: { ...summary } };
+  //
+  // 課金の未解決は `failed` に足さない（あちらは配信・Sense・State の失敗数である）。
+  // **数え方を混ぜずに、non-2xx にだけ効かせる。**
+  const failed = summary.failed > 0 || billingProblem;
+  return { status: failed ? 502 : 200, body: { ...summary } };
 }

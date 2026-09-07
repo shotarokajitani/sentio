@@ -22,8 +22,13 @@ export async function POST(req: NextRequest) {
   const next = safeNext(form.get("next"));
 
   const { supabase, pending } = createAuthClient(req);
+
+  // **失敗して戻すとき、入口（mode）を保つ。**
+  // 登録で失敗したのに mode が外れると、**ログインの画面にエラーだけが出る**形になり、
+  // 何を押して失敗したのかが分からなくなる（2026-09-08）
+  const modeParam = intent === "signup" ? "&mode=signup" : "";
   const backToLogin = (key: string) =>
-    redirect(req, `/login?e=${key}&next=${encodeURIComponent(next)}`, pending);
+    redirect(req, `/login?e=${key}&next=${encodeURIComponent(next)}${modeParam}`, pending);
 
   if (!email || !password) {
     return backToLogin("missing_fields");

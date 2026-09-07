@@ -30,8 +30,12 @@ import { STANDARD_PLAN } from "@edge/_shared/budget.ts";
  *
  * ## 引けなかった通知を黙って捨てない（受入 5-3）
  *
- * Stripe への応答は **200 のまま**である（4xx を返すと再送が滞留する）。
- * ただし**捨てた事実は `billing_webhook_unresolved` に残す**（イベントIDで冪等）。
+ * **捨てた事実は `billing_webhook_unresolved` に残す**（イベントIDで冪等）。
+ * 応答は理由で分ける（2026-09-07 追加）。**再送で直る芽があるものだけ 503 を返す**
+ * （`retrieve_failed` / `lookup_failed`。ただし `customer.subscription.*` に限る）。
+ * `not_found` / `ambiguous` は再送しても直らないので 200 で受ける
+ * ——**4xx/5xx を返し続けると再送が滞留するだけで、誰の役にも立たない。**
+ * 再送で直ったときは、残した行を `resolved_at` で閉じる（`markResolved`）。
  * `delivery_log` は company_id が必須なので、会社を引けなかった行は入れられない。
  * 行が入ったことに気づく経路は `dispatch-daily`（毎日の集計＋運用宛メール）に置いてある。
  *
@@ -97,7 +101,7 @@ export async function POST(req: NextRequest) {
     const recorded = await recordUnresolved(admin, event, eventType, customerId, lookup.reason);
     // **記録すらできなければ 200 で流さない。** 再送が来れば次の機会がある
     if (!recorded) return NextResponse.json({ error: "record failed" }, { status: 500 });
-    return NextResponse.json({ status: "ignored", reason: "no_company" });
+    return unresolvedResponse(eventType, lookup.reason, "no_company");
   }
   const companyId = lookup.companyId;
 
@@ -108,7 +112,7 @@ export async function POST(req: NextRequest) {
     const recorded = await recordUnresolved(admin, event, eventType, customerId, "retrieve_failed");
     if (!recorded) return NextResponse.json({ error: "record failed" }, { status: 500 });
     // **推測で status を書かない。** 書かなかった事実は上の表に残っている
-    return NextResponse.json({ status: "ignored", reason: "stripe_unavailable" });
+    return unresolvedResponse(eventType, "retrieve_failed", "stripe_unavailable");
   }
 
   const { error } = await admin.auth.admin.updateUserById(companyId, {
@@ -126,6 +130,11 @@ export async function POST(req: NextRequest) {
     console.error("subscription update failed:", error.message);
     return NextResponse.json({ error: "update failed" }, { status: 500 });
   }
+
+  // **再送で直ったら、残した行を解決済みにする。**
+  // ここが無いと、再送で直っても行が残り続け、毎朝のメールが鳴りっぱなしになる。
+  // **鳴りっぱなしの警報は、その日から無視される対象になる。**
+  await markResolved(admin, event, eventType, customerId);
 
   return NextResponse.json({ status: "ok", type: eventType });
 }
@@ -254,6 +263,83 @@ async function resolveSubscription(
 }
 
 /**
+ * 引けなかった通知への応答を決める。**再送で直る芽があるものだけ 5xx を返す。**
+ *
+ * | reason | 応答 | なぜ |
+ * | --- | --- | --- |
+ * | `retrieve_failed` / `lookup_failed` | **503** | 一時的な失敗。**Stripe の再送で直りうる** |
+ * | `not_found` / `ambiguous` | 200 | 再送しても直らない。**人が対処するまで変わらない** |
+ *
+ * **`invoice.*` では、どの理由でも 5xx を返さない**（下の `shouldRetry`）。
+ * Stripe の文献に「`invoice.created` へ成功応答が返らないと、自動収納の請求ファイナライズが
+ * 最大72時間遅れる」とある。**別イベントの 5xx が invoice 系に波及するかは未確認**だが、
+ * 対象を絞れば危険そのものが消える（`docs/spec/07_open_items.md` に未確認として登録）。
+ *
+ * 5xx を返すことには副次的な利点がある。**失敗が続けば Stripe から
+ * 「webhook が失敗している」という通知が届く。気づく経路がもう1つ増える。**
+ */
+function unresolvedResponse(
+  eventType: string,
+  reason: UnresolvedReason,
+  bodyReason: string,
+): NextResponse {
+  if (shouldRetry(eventType, reason)) {
+    // 本文は Stripe に読まれない。**状態コードだけが再送の合図である**
+    return NextResponse.json({ status: "retry", reason: bodyReason }, { status: 503 });
+  }
+  return NextResponse.json({ status: "ignored", reason: bodyReason });
+}
+
+/**
+ * 再送させるか。**`customer.subscription.*` 以外は必ず false。**
+ *
+ * `customer.subscription.deleted` がここに来ることは無い
+ * （取り直せなくても `canceled` を書いて解決するため）。したがって
+ * **解約通知に 5xx を返す経路は構造的に存在しない。**
+ */
+function shouldRetry(eventType: string, reason: UnresolvedReason): boolean {
+  if (!eventType.startsWith("customer.subscription.")) return false;
+  return reason === "retrieve_failed" || reason === "lookup_failed";
+}
+
+/**
+ * 冪等キー。**`recordUnresolved` と `markResolved` が同じ鍵を使う**ことが要件である。
+ * 片方だけ変えると、残した行を解決済みにできなくなる。
+ */
+function unresolvedKey(event: { id?: string }, eventType: string, customerId: string | null) {
+  return typeof event.id === "string" && event.id
+    ? event.id
+    : `no-event-id:${eventType}:${customerId ?? "unknown"}`;
+}
+
+/**
+ * 再送で直ったイベントの行を解決済みにする。
+ *
+ * **同じイベントIDの行だけを閉じる。** 同じ会社の別イベントで残った行は閉じない
+ * ——直った証拠があるのはこのイベントについてだけだからである
+ * （残った行は手順書 `docs/runbooks/2026-09-07_billing-webhook-unresolved.md` で人が閉じる）。
+ *
+ * **失敗しても書き込み済みの購読は巻き戻さない。** ここで 5xx を返すと、
+ * 既に反映が済んでいるのに Stripe が再送し続けることになる。失敗はログに残す。
+ */
+async function markResolved(
+  admin: SupabaseClient,
+  event: { id?: string },
+  eventType: string,
+  customerId: string | null,
+): Promise<void> {
+  const { error } = await admin
+    .from("billing_webhook_unresolved")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("stripe_event_id", unresolvedKey(event, eventType, customerId))
+    .is("resolved_at", null);
+
+  if (error) {
+    console.error("billing_webhook_unresolved resolve failed:", error.message);
+  }
+}
+
+/**
  * 引けなかった／取り直せなかったイベントを残す（受入 5-3・5-4）。
  *
  * **冪等キーは Stripe のイベントID。** `customer.subscription.updated` は繰り返し届くので、
@@ -270,14 +356,9 @@ async function recordUnresolved(
   customerId: string | null,
   reason: UnresolvedReason,
 ): Promise<boolean> {
-  const eventId =
-    typeof event.id === "string" && event.id
-      ? event.id
-      : `no-event-id:${eventType}:${customerId ?? "unknown"}`;
-
   const { error } = await admin.from("billing_webhook_unresolved").upsert(
     {
-      stripe_event_id: eventId,
+      stripe_event_id: unresolvedKey(event, eventType, customerId),
       event_type: eventType,
       reason,
       stripe_customer_id: customerId,

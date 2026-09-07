@@ -1286,6 +1286,35 @@ from auth.users;
 **最初の1社が購読したとき。** 購読者が居ない間は、止める導線が無くても誰も困らない。
 逆に1社でも入ったら、**止められないことは約束の問題になる。**
 
+## Preview では OAuth が通らない（未判断・2026-09-08 登録）
+
+**実測（2026-09-08 00:40 JST）。** Preview の `/connect` で「再接続」を押したところ、
+Google が **`redirect_uri_mismatch`（エラー 400）** で弾いた。
+リダイレクト先は
+`https://sentio-9e2b-63vl5htd7-diseno1.vercel.app/auth/callback/google` で、
+**Preview のドメインが承認済みリダイレクト URI に登録されていない。**
+
+- Preview で確かめられるのは**画面の見た目と、OAuth に入る手前まで**である
+- **OAuth を通る経路（連携する / 再接続の成立）は本番でしか試せない**
+- Preview のドメインは deployment ごとに変わるため、
+  1つ登録しても次の PR の Preview では合わない（ワイルドカードは Google が受け付けない）
+
+**直すかどうかは判断しない。** 承認済み URI を触ることは
+`.claude/rules/oauth-consent-screen.md` の引き金（同意画面の設定変更）に当たりうるので、
+**変えるなら再審査の要否を先に確かめる。**
+
+## 再連携の現況（2026-09-07 夜に完了）
+
+| 会社 | status | revoked_at | last_refresh |
+| --- | --- | --- | --- |
+| `197f2c0e…`（+sentio） | `active` | NULL | 2026-09-07 15:35:43 UTC |
+| `ab73e516…`（+google-review） | `active` | NULL | 2026-09-07 14:09:40 UTC |
+
+**2社とも接続済みである。** これにより契約D の停止点
+（`revoked` の実例を人間が確認するまで D-3 を有効にしない）の前提が変わった。
+**ただし本番の実削除は、DRY-RUN の結果を人間が見てから可否を出す**（発注2 の 1-5）。
+**停止していた理由が変わっただけで、無条件の解禁ではない。**
+
 ## /connect の連携カードに残した3点（未判断・2026-09-07 登録）
 
 カードの見せ方を整えた（状態ごとに主操作は1つ／取り消しのきかない操作は畳む）。
@@ -1665,6 +1694,13 @@ integration ジョブの実行回数: 46
 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト** |
 | [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634) | 別原因（`SUPABASE_DB_URL` 未設定） |
 | [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1 | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
+
+**2026-09-08 追記（1件増えた）。** PR #99 の
+[run 34140416123](https://github.com/shotarokajitani/sentio/actions/runs/34140416123) で
+同じ形が出た（`pipeline-db.test.ts` の
+`陰性コントロール: anon キーからは intent を渡す以前に 401 で弾かれる` が **5005ms でタイムアウト**）。
+**アサーション失敗ではない。** 次の run では同じ箇所が緑になっている。
+**分母は数え直していない**ので、下の 3/46 は 2026-09-07 時点の値のままである。
 
 **したがって 3 / 46 ≒ 6.5%**（3回セット単位）。
 **前の「約15回中3回 ≒ 20%」は分母の数え違いであり、この実測で置き換える。**

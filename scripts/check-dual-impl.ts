@@ -76,6 +76,27 @@ export const DUAL_IMPL_SPECS: DualImplSpec[] = [
     reason: "保持期間の方針。privacy §6 の正本。二重実装の**あるべき形**の実例",
   },
   {
+    fn: "revokedCutoff",
+    src: "src/lib/retention/policy.ts",
+    edge: "supabase/functions/_shared/retention.ts",
+    pinnedBy: "tests/unit/retention-policy.test.ts",
+    reason: "取り消しから削除までの30日（契約D の D-3）。ずれると誤削除の時期がずれる",
+  },
+  {
+    fn: "planPurge",
+    src: "src/lib/retention/policy.ts",
+    edge: "supabase/functions/_shared/retention.ts",
+    pinnedBy: "tests/unit/retention-policy.test.ts",
+    reason: "削除するか・数えるだけかの判定。**両側で同じ判断になること**が要件",
+  },
+  {
+    fn: "sourcesForProvider",
+    src: "src/lib/retention/policy.ts",
+    edge: "supabase/functions/_shared/retention.ts",
+    pinnedBy: "tests/unit/retention-policy.test.ts",
+    reason: "provider → events.source の対応。片側だけ増えると、消える範囲が画面と定期処理でずれる",
+  },
+  {
     fn: "evaluateDeletion",
     src: "src/lib/retention/policy.ts",
     edge: "supabase/functions/_shared/retention.ts",

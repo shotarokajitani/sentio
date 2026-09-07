@@ -1,34 +1,70 @@
-// retention-purge — 保持期間を過ぎたイベントを削除する定期処理
+// retention-purge — 保持期間を過ぎたイベントと、取り消しから30日経った連携のデータを削除する
 //
 // プライバシーポリシー §6（src/app/privacy/page.tsx）で
 // 「Google ユーザーデータは、取得した日から24ヶ月経過した時点で削除します」と公開した。
 // **書いた以上、実際に消す経路が要る。** これがその実体。
 //
+// 2026-09-08 に契約D の D-3（取り消しから30日で削除）を足した。**削除は2種類ある。**
+//   retention_months … `ingested_at` が24ヶ月より古い行（会社ごと）
+//   revoked_grace    … `revoked_at` から30日経った連携の、その provider 由来の行
+//
 // 危険の向きが他の Function と違う。deliver 系の事故は「勝手に送る」だが、
 // ここの事故は「消しすぎる」で、取り返しがつかない。したがって:
 //   - **会社ごとに**数えてから消す（company_id 無しでは1行も消さない）
 //   - 想定を超えた件数なら**その会社をスキップして続ける**（黙って消さない）
-//   - 何社・何件消したかを必ず応答とログの両方に出す
+//   - 何社・何件消したかを応答とログと**レコード**の3つに残す（`retention_purge_runs`）
+//   - **既定は数えるだけ**（`dry_run` を省略したら true）。消すのは明示したときだけ
 //
-// 起動は internal のみ。cron 登録は A-2（本スライスの後）。
-// それまでは Actions の invoke-function ワークフローから手動で回す。
+// 起動は internal のみ。cron は `00031`（**本文は `{"dry_run": true}`**）。
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller } from "../_shared/caller.ts";
-import { mustData, mustCount, mustOk, errorResponse } from "../_shared/db.ts";
+import { mustData, mustCount, mustOk, takeError, errorResponse } from "../_shared/db.ts";
 import {
   MAX_DELETE_ROWS,
   RETENTION_MONTHS,
-  evaluateDeletion,
+  REVOKED_GRACE_DAYS,
+  planPurge,
   retentionCutoff,
+  revokedCutoff,
+  sourcesForProvider,
+  type PurgePlan,
 } from "../_shared/retention.ts";
 
+/**
+ * `getSupabaseAdmin()` が返すクライアントの型。
+ *
+ * **`https://esm.sh/@supabase/supabase-js` から型を import しない。**
+ * `deno check` は同じバージョンでも npm 解決と esm.sh 解決を別の型として扱い、
+ * `SupabaseClient` を受け取る引数で TS2345 になる（2026-09-08 CI で実測）。
+ * 生成元から `ReturnType` で引けば、経路が1つに揃う。
+ */
+type Db = ReturnType<typeof getSupabaseAdmin>;
+
+type PurgeKind = "run" | "retention_months" | "revoked_grace";
+
+/**
+ * 記録に残す判断。`planPurge` の結果に、**Edge 側にしか無い理由**を1つ足したもの。
+ *
+ * `unknown-provider`（知らない provider だったので消さずに飛ばした）は
+ * 削除の門（`evaluateDeletion`）の判定ではないので、**方針モジュールには置かない。**
+ * 00030 の `reason` の CHECK はこの集合と同じである。片方を変えたら両方変える。
+ */
+interface PurgeOutcome {
+  decision: PurgePlan["decision"];
+  reason?: PurgePlan["reason"] | "unknown-provider";
+  count: number;
+}
+
 interface CompanyPurge {
-  company_id: string;
+  company_id: string | null;
+  kind: PurgeKind;
+  provider?: string;
   counted: number;
   deleted: number;
-  skipped_reason?: string;
+  decision: PurgePlan["decision"];
+  reason?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -48,22 +84,29 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // **既定は数えるだけ。** 本文が無い・壊れている・`dry_run` を書いていない、
+  // のいずれでも消さない側に倒れる。**消すのは `{"dry_run": false}` と明示したときだけ**
+  const dryRun = await resolveDryRun(req);
+
   try {
     const supabase = getSupabaseAdmin();
-    const cutoff = retentionCutoff(new Date()).toISOString();
+    const now = new Date();
+    const cutoff = retentionCutoff(now).toISOString();
+    const revokedBefore = revokedCutoff(now).toISOString();
 
+    const results: CompanyPurge[] = [];
+
+    // ------------------------------------------------------------------
+    // 1. 保持期限（24ヶ月）
+    //
     // **会社テーブルは存在しない。** 会社の同一性は auth.users.id が担っており、
     // auth スキーマは PostgREST から引けない。`events` を直に舐めると PostgREST の
-    // 行数上限で黙って打ち切られるため、DISTINCT は DB 側の関数に持たせてある（00026）。
-    // 戻るのは「期限切れの行を持つ会社」だけなので、これがそのまま作業リストになる
+    // 行数上限で黙って打ち切られるため、DISTINCT は DB 側の関数に持たせてある（00026）
+    // ------------------------------------------------------------------
     const expired = await mustData<{ company_id: string }[]>(
       supabase.rpc("retention_expired_companies", { p_cutoff: cutoff }),
       "retention-purge: expired companies",
     );
-
-    const results: CompanyPurge[] = [];
-    let totalDeleted = 0;
-    let blocked = 0;
 
     for (const { company_id: companyId } of expired) {
       const counted = await mustCount(
@@ -75,57 +118,108 @@ Deno.serve(async (req: Request) => {
         "retention-purge: count",
       );
 
-      const guard = evaluateDeletion({
-        companyId,
-        counted,
-        max: MAX_DELETE_ROWS,
-      });
+      const plan = planPurge({ companyId, counted, max: MAX_DELETE_ROWS, dryRun });
 
-      if (!guard.ok) {
-        // この会社は飛ばす。他社の削除まで止める理由は無いが、黙って消しもしない
-        blocked += 1;
-        console.warn(
-          `[sentio:retention] purge を中止した company_id=${companyId} ` +
-            `reason=${guard.reason} count=${guard.count} max=${MAX_DELETE_ROWS}`,
+      if (plan.decision === "deleted") {
+        await mustOk(
+          supabase.from("events").delete().eq("company_id", companyId).lt("ingested_at", cutoff),
+          "retention-purge: delete",
         );
-        results.push({
-          company_id: companyId,
-          counted: guard.count,
-          deleted: 0,
-          skipped_reason: guard.reason,
-        });
-        continue;
       }
 
-      // 00026 は期限切れの行を持つ会社しか返さないので、ここは通常通らない。
-      // 通ったなら列挙と計数の間に他の経路が消したということ。異常ではないので続ける
-      if (guard.count === 0) {
-        results.push({ company_id: companyId, counted: 0, deleted: 0 });
-        continue;
-      }
-
-      await mustOk(
-        supabase.from("events").delete().eq("company_id", companyId).lt("ingested_at", cutoff),
-        "retention-purge: delete",
-      );
-
-      totalDeleted += guard.count;
-      results.push({ company_id: companyId, counted: guard.count, deleted: guard.count });
+      results.push(await record(supabase, { companyId, kind: "retention_months", plan, dryRun }));
     }
 
+    // ------------------------------------------------------------------
+    // 2. 取り消しから30日（契約D の D-3）
+    //
+    // `revoked_at` が NULL の行は `lt` に一致しないので、**繋がっている連携は
+    // 構造的に対象外**である（再連携すると 00027 / D-2-6 が NULL に戻す）。
+    // ------------------------------------------------------------------
+    const revoked = await mustData<{ company_id: string; provider: string }[]>(
+      supabase.from("connections").select("company_id, provider").lt("revoked_at", revokedBefore),
+      "retention-purge: revoked connections",
+    );
+
+    for (const { company_id: companyId, provider } of revoked) {
+      const sources = sourcesForProvider(provider) as string[];
+
+      // 知らない provider を「全部消す」に丸めない。**消さずに記録して次へ**
+      if (sources.length === 0) {
+        console.warn(`[sentio:retention] 未知の provider を飛ばした provider=${provider}`);
+        results.push(
+          await record(supabase, {
+            companyId,
+            kind: "revoked_grace",
+            provider,
+            plan: { decision: "blocked", reason: "unknown-provider", count: 0 },
+            dryRun,
+          }),
+        );
+        continue;
+      }
+
+      const counted = await mustCount(
+        supabase
+          .from("events")
+          .select("event_id", { count: "exact", head: true })
+          .eq("company_id", companyId)
+          .in("source", sources),
+        "retention-purge: revoked count",
+      );
+
+      const plan = planPurge({ companyId, counted, max: MAX_DELETE_ROWS, dryRun });
+
+      if (plan.decision === "deleted") {
+        await mustOk(
+          supabase.from("events").delete().eq("company_id", companyId).in("source", sources),
+          "retention-purge: revoked delete",
+        );
+      }
+
+      results.push(
+        await record(supabase, { companyId, kind: "revoked_grace", provider, plan, dryRun }),
+      );
+    }
+
+    const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
+    const counted = results.reduce((sum, r) => sum + r.counted, 0);
+    const blocked = results.filter((r) => r.decision === "blocked").length;
+
+    // **対象が0件でも、実行そのものを1行残す。**
+    // これが無いと「0件だったから記録が無い」と「cron が発火していないから記録が無い」が
+    // 同じ顔になる。`retention-purge` は**cron が無くて一度も動いていなかった**関数である。
+    // 動いた証跡そのものを残す。
+    //
+    // **例外で落ちた実行はここに来ない**（その痕跡は `net._http_response` の 5xx 側にある）
+    await record(supabase, {
+      kind: "run",
+      plan: {
+        decision: dryRun ? "dry_run" : deleted > 0 ? "deleted" : "nothing",
+        count: counted,
+      },
+      dryRun,
+      always: true,
+    });
+
     console.log(
-      `[sentio:retention] purge 完了 cutoff=${cutoff} months=${RETENTION_MONTHS} ` +
-        `companies=${expired.length} deleted=${totalDeleted} blocked=${blocked}`,
+      `[sentio:retention] purge 完了 dry_run=${dryRun} cutoff=${cutoff} ` +
+        `revoked_before=${revokedBefore} months=${RETENTION_MONTHS} days=${REVOKED_GRACE_DAYS} ` +
+        `targets=${results.length} deleted=${deleted} blocked=${blocked}`,
     );
 
     return new Response(
       JSON.stringify({
         status: "ok",
+        // **数えるだけだったのか、消したのかを応答から区別できるようにする**
+        dry_run: dryRun,
         cutoff,
+        revoked_before: revokedBefore,
         retention_months: RETENTION_MONTHS,
-        // 全社数ではなく「期限切れの行を持っていた会社の数」。0 は正常（消すものが無い）
-        companies: expired.length,
-        deleted: totalDeleted,
+        revoked_grace_days: REVOKED_GRACE_DAYS,
+        // 全社数ではなく「対象になった（会社×種別）の数」。0 は正常（消すものが無い）
+        targets: results.length,
+        deleted,
         // 0件で終わった理由を応答から区別できるようにする（S-2-3 と同じ考え方）
         blocked,
         results,
@@ -136,3 +230,89 @@ Deno.serve(async (req: Request) => {
     return errorResponse(e, corsHeaders);
   }
 });
+
+/**
+ * 本文から `dry_run` を読む。**読めなければ true**（＝消さない）。
+ *
+ * 本番コードに `if (testMode)` を作らないための形である。
+ * 分岐の材料は**引数だけ**で、環境変数もビルド時の定数も見ない。
+ */
+async function resolveDryRun(req: Request): Promise<boolean> {
+  try {
+    const body = await req.json();
+    return body?.dry_run === false ? false : true;
+  } catch {
+    // 本文が無い cron 呼び出し（`'{}'::jsonb`）もここに来る。安全側に倒す
+    return true;
+  }
+}
+
+/**
+ * 実行の記録を1行残し、応答用の値を返す。
+ *
+ * **0件（`nothing`）は記録しない。** 取り消し済みの連携は消し終わったあとも
+ * `revoked_at` を持ったまま残るので、記録すると**毎日0件の行が積み上がる。**
+ * 溜まったノイズの中の1件は、誰にも見つけられない。
+ *
+ * **記録に失敗しても削除は巻き戻さない**（もう消えている）。失敗はログに残す。
+ */
+async function record(
+  supabase: Db,
+  input: {
+    /** `kind: "run"` のときだけ省く。会社に紐づかない行である */
+    companyId?: string;
+    kind: PurgeKind;
+    provider?: string;
+    plan: PurgeOutcome;
+    dryRun: boolean;
+    /** `nothing` でも必ず記録する（実行そのものの行） */
+    always?: boolean;
+  },
+): Promise<CompanyPurge> {
+  const { companyId, kind, provider, plan, dryRun, always } = input;
+  const deleted = plan.decision === "deleted" ? plan.count : 0;
+
+  const row: CompanyPurge = {
+    company_id: companyId ?? null,
+    kind,
+    ...(provider ? { provider } : {}),
+    counted: plan.count,
+    deleted,
+    decision: plan.decision,
+    ...(plan.reason ? { reason: plan.reason } : {}),
+  };
+
+  if (plan.decision === "blocked") {
+    // 止めた事実は**ログとレコードの両方**に残す（片方だけだと気づく経路が1本になる）
+    console.warn(
+      `[sentio:retention] purge を中止した company_id=${companyId ?? "-"} kind=${kind} ` +
+        `reason=${plan.reason} count=${plan.count} max=${MAX_DELETE_ROWS}`,
+    );
+  }
+
+  // 0件は記録しない（取り消し済みの連携は消したあとも残るので、毎日0件の行が積み上がる）。
+  // **ただし実行そのものの行は例外で、必ず残す**
+  if (plan.decision === "nothing" && !always) return row;
+
+  // `takeError` を使うのは、**ここで throw すると削除済みの実行が 5xx として返る**ため。
+  // 記録の失敗は削除の失敗ではない。理由を値で受けてログに残す（S-2-4 の正規形）
+  const insertError = await takeError(
+    supabase.from("retention_purge_runs").insert({
+      company_id: companyId ?? null,
+      kind,
+      provider: provider ?? null,
+      counted: plan.count,
+      deleted,
+      decision: plan.decision,
+      reason: plan.reason ?? null,
+      dry_run: dryRun,
+    }),
+    "retention-purge: 実行記録",
+  );
+
+  if (insertError) {
+    console.error("retention-purge: 実行記録の書き込みに失敗:", insertError.message);
+  }
+
+  return row;
+}

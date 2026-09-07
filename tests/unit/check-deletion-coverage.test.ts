@@ -13,7 +13,14 @@ import {
   loadDeclaration,
 } from "../../scripts/check-deletion-coverage";
 
-/** 2026-09-03 時点の実物。`company_id` を持つテーブル11件。 */
+/**
+ * `company_id` を持つテーブル。**2026-09-08 時点で12件**
+ * （2026-09-03 の11件 ＋ `retention_purge_runs`）。
+ *
+ * **実DBを引く検査器のほうが正本で、これはその写しである。**
+ * 新しい表を足したらここも足す——足し忘れると、実物では
+ * `uncovered`（消し残し）なのにこの試験だけ緑になる。
+ */
 const WITH_COMPANY_ID = new Set([
   "baselines",
   "budget_usage",
@@ -26,6 +33,8 @@ const WITH_COMPANY_ID = new Set([
   "known_explanations",
   "misjudgments",
   "narratives",
+  // 削除の実行記録（00030）。**削除の証跡そのものも、アカウント削除では消す**
+  "retention_purge_runs",
 ]);
 
 describe("parseRunbookDeletes", () => {
@@ -88,11 +97,11 @@ describe("compareDeletionCoverage", () => {
     const actual = new Set([...WITH_COMPANY_ID, "added"]);
     actual.delete("misjudgments");
     const keep = [{ table: "gone_table", reason: "（例）古い宣言" }];
-    expect(compareDeletionCoverage(actual, deleted, keep).map((f) => f.kind).sort()).toEqual([
-      "keep-without-column",
-      "stale-delete",
-      "uncovered",
-    ]);
+    expect(
+      compareDeletionCoverage(actual, deleted, keep)
+        .map((f) => f.kind)
+        .sort(),
+    ).toEqual(["keep-without-column", "stale-delete", "uncovered"]);
   });
 });
 
@@ -105,7 +114,7 @@ describe("実物との突合（宣言と手順書は実ファイルを読む）"
     expect(deleted.has("known_explanations")).toBe(true);
   });
 
-  it("実物の手順書が、company_id を持つ11件をすべて消している", () => {
+  it("実物の手順書が、company_id を持つ12件をすべて消している", () => {
     const decl = loadDeclaration("docs/checklists/deletion-coverage.yml");
     const deleted = parseRunbookDeletes(readFileSync(decl.runbook, "utf8"));
     expect(compareDeletionCoverage(WITH_COMPANY_ID, deleted, decl.keep)).toEqual([]);

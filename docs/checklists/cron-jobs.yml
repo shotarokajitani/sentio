@@ -56,6 +56,16 @@ jobs:
     note: >-
       UTC 22:00 = JST 翌 07:00。run-sense → deliver-pulse を全社に回す。
 
+  - name: retention-purge
+    schedule: "0 20 * * *"
+    migration: "00031_cron_retention_purge.sql"
+    contract: "契約D A-2 / D-3"
+    note: >-
+      UTC 20:00 = JST 翌 05:00。毎朝のパルス（UTC 22:00）より前に置く。
+      **ディスパッチャに相乗りさせない**——retention-purge は会社ごとの引数を取らないので
+      CD-D2 の理由が当てはまらない。相乗りは配信と削除を無関係に結合させる。
+      **本文は {"dry_run": true}**（既定は数えるだけ）。実削除への切り替えは別 migration。
+
   - name: dispatch-weekly
     schedule: "0 23 * * 0"
     migration: "00028_cron_dispatch.sql"

@@ -15,6 +15,7 @@ description: 実際に踏んだ失敗の蓄積。原因調査・実装判断で�
 - 週次「問い」の詰め込み: Findingは0〜2件。3件以上は読了率が落ちる前提で設計（統制ルール）
 - GBP API: 有効化と承認は別物。クォータ0 QPM=未承認、300=承認済み。申請はapi_defaultフォーム（Basic API Access）、
   60日以上アクティブな自社GBP＋オーナー権限メールが要件（Lauda実地・2026-07）
+- deno check: 同じバージョンでも **npm 解決と esm.sh 解決は別の型**として扱われる。Edge Function で `https://esm.sh/@supabase/supabase-js` から `SupabaseClient` を import すると、`getSupabaseAdmin()` の戻り値を渡す引数で TS2345 になる（2026-09-08 CI で実測・3件）。型は生成元から `ReturnType<typeof ...>` で引く。**deno は手元に入っており `pnpm run check:edge-types` は44ファイルをローカルで検査できる。push 前に回す**（回さずに2回 CI を赤くした）
 - Vault実装（security definer関数・トークン暗号化・180日削除）はLaudaに本番稼働コードあり。新規発明せず移植する
 - AIクローラ（GPTBot/ClaudeBot/PerplexityBot等）はJSを実行しない。公開ページを作る場合は初期HTML/SSGが必須（Lauda調査・2026-06時点）
 - Resend: onboarding@resend.devフォールバックはサンドボックス扱い。アカウントオーナー以外に届かない。RESEND_FROM未設定時はfail-closedにすること。また外部APIのfetch()レスポンスは必ずステータスコードを確認し、未確認のまま"ok"を返さないこと（Day0未着事故・2026-07-28）

@@ -191,6 +191,38 @@ if (mode === "run") {
       expect(error).toBeNull();
     });
 
+    it("**実行そのものの行**は company_id が NULL でも入る（0件でも記録が残る）", async () => {
+      // これが無いと「0件だったから記録が無い」と「cron が発火していない」が同じ顔になる
+      const { data, error } = await admin
+        .from("retention_purge_runs")
+        .insert({
+          company_id: null,
+          kind: "run",
+          counted: 0,
+          deleted: 0,
+          decision: "dry_run",
+          dry_run: true,
+        })
+        .select("id");
+
+      expect(error).toBeNull();
+      if (data?.[0]?.id) await admin.from("retention_purge_runs").delete().eq("id", data[0].id);
+    });
+
+    it("陰性コントロール: **会社ごとの行に company_id が無い**のは弾く", async () => {
+      const { error } = await admin.from("retention_purge_runs").insert({
+        company_id: null,
+        kind: "revoked_grace",
+        counted: 0,
+        deleted: 0,
+        decision: "dry_run",
+        dry_run: true,
+      });
+
+      // NULL でよいのは kind='run' だけ。ここが緩むと、会社の分からない削除記録が残る
+      expect(error).not.toBeNull();
+    });
+
     it("想定外の decision は CHECK で弾く（自由文字列にしない）", async () => {
       const { error } = await admin.from("retention_purge_runs").insert({
         company_id: oldCompany,

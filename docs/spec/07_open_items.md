@@ -1695,6 +1695,13 @@ integration ジョブの実行回数: 46
 | [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634) | 別原因（`SUPABASE_DB_URL` 未設定） |
 | [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1 | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
 
+**2026-09-08 追記（1件増えた）。** PR #99 の
+[run 34140416123](https://github.com/shotarokajitani/sentio/actions/runs/34140416123) で
+同じ形が出た（`pipeline-db.test.ts` の
+`陰性コントロール: anon キーからは intent を渡す以前に 401 で弾かれる` が **5005ms でタイムアウト**）。
+**アサーション失敗ではない。** 次の run では同じ箇所が緑になっている。
+**分母は数え直していない**ので、下の 3/46 は 2026-09-07 時点の値のままである。
+
 **したがって 3 / 46 ≒ 6.5%**（3回セット単位）。
 **前の「約15回中3回 ≒ 20%」は分母の数え違いであり、この実測で置き換える。**
 

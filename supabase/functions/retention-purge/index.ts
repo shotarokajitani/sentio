@@ -42,7 +42,7 @@ import {
  */
 type Db = ReturnType<typeof getSupabaseAdmin>;
 
-type PurgeKind = "retention_months" | "revoked_grace";
+type PurgeKind = "run" | "retention_months" | "revoked_grace";
 
 /**
  * 記録に残す判断。`planPurge` の結果に、**Edge 側にしか無い理由**を1つ足したもの。
@@ -58,7 +58,7 @@ interface PurgeOutcome {
 }
 
 interface CompanyPurge {
-  company_id: string;
+  company_id: string | null;
   kind: PurgeKind;
   provider?: string;
   counted: number;
@@ -183,7 +183,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
+    const counted = results.reduce((sum, r) => sum + r.counted, 0);
     const blocked = results.filter((r) => r.decision === "blocked").length;
+
+    // **対象が0件でも、実行そのものを1行残す。**
+    // これが無いと「0件だったから記録が無い」と「cron が発火していないから記録が無い」が
+    // 同じ顔になる。`retention-purge` は**cron が無くて一度も動いていなかった**関数である。
+    // 動いた証跡そのものを残す。
+    //
+    // **例外で落ちた実行はここに来ない**（その痕跡は `net._http_response` の 5xx 側にある）
+    await record(supabase, {
+      kind: "run",
+      plan: {
+        decision: dryRun ? "dry_run" : deleted > 0 ? "deleted" : "nothing",
+        count: counted,
+      },
+      dryRun,
+      always: true,
+    });
 
     console.log(
       `[sentio:retention] purge 完了 dry_run=${dryRun} cutoff=${cutoff} ` +
@@ -242,18 +259,21 @@ async function resolveDryRun(req: Request): Promise<boolean> {
 async function record(
   supabase: Db,
   input: {
-    companyId: string;
+    /** `kind: "run"` のときだけ省く。会社に紐づかない行である */
+    companyId?: string;
     kind: PurgeKind;
     provider?: string;
     plan: PurgeOutcome;
     dryRun: boolean;
+    /** `nothing` でも必ず記録する（実行そのものの行） */
+    always?: boolean;
   },
 ): Promise<CompanyPurge> {
-  const { companyId, kind, provider, plan, dryRun } = input;
+  const { companyId, kind, provider, plan, dryRun, always } = input;
   const deleted = plan.decision === "deleted" ? plan.count : 0;
 
   const row: CompanyPurge = {
-    company_id: companyId,
+    company_id: companyId ?? null,
     kind,
     ...(provider ? { provider } : {}),
     counted: plan.count,
@@ -265,18 +285,20 @@ async function record(
   if (plan.decision === "blocked") {
     // 止めた事実は**ログとレコードの両方**に残す（片方だけだと気づく経路が1本になる）
     console.warn(
-      `[sentio:retention] purge を中止した company_id=${companyId} kind=${kind} ` +
+      `[sentio:retention] purge を中止した company_id=${companyId ?? "-"} kind=${kind} ` +
         `reason=${plan.reason} count=${plan.count} max=${MAX_DELETE_ROWS}`,
     );
   }
 
-  if (plan.decision === "nothing") return row;
+  // 0件は記録しない（取り消し済みの連携は消したあとも残るので、毎日0件の行が積み上がる）。
+  // **ただし実行そのものの行は例外で、必ず残す**
+  if (plan.decision === "nothing" && !always) return row;
 
   // `takeError` を使うのは、**ここで throw すると削除済みの実行が 5xx として返る**ため。
   // 記録の失敗は削除の失敗ではない。理由を値で受けてログに残す（S-2-4 の正規形）
   const insertError = await takeError(
     supabase.from("retention_purge_runs").insert({
-      company_id: companyId,
+      company_id: companyId ?? null,
       kind,
       provider: provider ?? null,
       counted: plan.count,

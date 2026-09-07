@@ -8,6 +8,13 @@
 -- 上限に当たって止めた事実も**同じ表に残す**（`decision = 'blocked'`）。
 -- 止めたことがログにしか無いと、翌日には誰も気づけない。
 --
+-- ## **実行のたびに必ず1行入る**（`kind = 'run'`）
+--
+-- 対象が0件でも、実行そのものの記録を1行残す。**これが無いと
+-- 「0件だったから記録が無い」と「cron が発火していないから記録が無い」が同じ顔になる。**
+-- 今日ふさいだ「実装はあるが動いていない」4件のうち、`retention-purge` はまさに
+-- 「cron が無くて一度も動いていなかった」件である。**動いた証跡そのものを残す。**
+--
 -- ## company_id を持つ
 --
 -- `billing_webhook_unresolved`（00029）と違い、**この表は会社に紐づく。**
@@ -20,8 +27,10 @@
 
 CREATE TABLE IF NOT EXISTS retention_purge_runs (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id  UUID NOT NULL,
-  -- どちらの削除か。24ヶ月の保持期限と、取り消しから30日は**別の削除**である
+  -- **`kind = 'run'` の行だけ NULL。** 実行そのものの記録は会社に紐づかない
+  company_id  UUID,
+  -- どの削除か。24ヶ月の保持期限と、取り消しから30日は**別の削除**である。
+  -- `run` は**実行そのもの**の記録で、対象が0件でも必ず1行入る（下記）
   kind        TEXT NOT NULL,
   -- revoked_grace のときだけ入る。どの連携由来の source を消したかの手掛かり
   provider    TEXT,
@@ -41,7 +50,12 @@ CREATE TABLE IF NOT EXISTS retention_purge_runs (
 -- decision と PurgePlan（_shared/retention.ts）の集合は**同じもの**である。片方を変えたら両方変える。
 ALTER TABLE retention_purge_runs DROP CONSTRAINT IF EXISTS retention_purge_runs_kind_check;
 ALTER TABLE retention_purge_runs ADD CONSTRAINT retention_purge_runs_kind_check
-  CHECK (kind IN ('retention_months', 'revoked_grace'));
+  CHECK (kind IN ('run', 'retention_months', 'revoked_grace'));
+
+-- **会社ごとの行に company_id が無い、を許さない。** NULL でよいのは実行の記録だけである
+ALTER TABLE retention_purge_runs DROP CONSTRAINT IF EXISTS retention_purge_runs_company_check;
+ALTER TABLE retention_purge_runs ADD CONSTRAINT retention_purge_runs_company_check
+  CHECK ((kind = 'run' AND company_id IS NULL) OR (kind <> 'run' AND company_id IS NOT NULL));
 
 ALTER TABLE retention_purge_runs DROP CONSTRAINT IF EXISTS retention_purge_runs_decision_check;
 ALTER TABLE retention_purge_runs ADD CONSTRAINT retention_purge_runs_decision_check

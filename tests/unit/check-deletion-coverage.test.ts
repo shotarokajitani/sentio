@@ -105,6 +105,47 @@ describe("compareDeletionCoverage", () => {
   });
 });
 
+describe("beyond_company_id — company_id を持たない経路の宣言", () => {
+  const withCompanyId = new Set(["events"]);
+
+  it("宣言してあれば stale-delete にしない（消しているのは意図である）", () => {
+    const deleted = new Set(["events", "billing_webhook_unresolved"]);
+    const beyond = [
+      { table: "billing_webhook_unresolved", via: "stripe_customer_id", reason: "（例）" },
+    ];
+
+    expect(compareDeletionCoverage(withCompanyId, deleted, [], beyond)).toEqual([]);
+  });
+
+  it("**陰性コントロール**: 宣言が無ければ従来どおり stale-delete で出る", () => {
+    const deleted = new Set(["events", "billing_webhook_unresolved"]);
+
+    expect(compareDeletionCoverage(withCompanyId, deleted, [], [])).toEqual([
+      { kind: "stale-delete", table: "billing_webhook_unresolved" },
+    ]);
+  });
+
+  it("**陰性コントロール**: company_id を持つ表を beyond に書いたら出す（例外にする理由が無い）", () => {
+    const deleted = new Set(["events"]);
+    const beyond = [{ table: "events", via: "stripe_customer_id", reason: "（例）誤った宣言" }];
+
+    expect(compareDeletionCoverage(withCompanyId, deleted, [], beyond)).toEqual([
+      { kind: "beyond-with-column", table: "events" },
+    ]);
+  });
+
+  it("宣言しても、company_id を持つ表の消し残しは見逃さない", () => {
+    // beyond は stale-delete を黙らせるだけで、**uncovered には効かない**
+    const beyond = [
+      { table: "billing_webhook_unresolved", via: "stripe_customer_id", reason: "（例）" },
+    ];
+
+    expect(compareDeletionCoverage(withCompanyId, new Set([]), [], beyond)).toEqual([
+      { kind: "uncovered", table: "events" },
+    ]);
+  });
+});
+
 describe("実物との突合（宣言と手順書は実ファイルを読む）", () => {
   it("宣言が指す手順書から delete 文を読める（書式が変わったら気づく）", () => {
     const decl = loadDeclaration("docs/checklists/deletion-coverage.yml");
@@ -117,6 +158,8 @@ describe("実物との突合（宣言と手順書は実ファイルを読む）"
   it("実物の手順書が、company_id を持つ12件をすべて消している", () => {
     const decl = loadDeclaration("docs/checklists/deletion-coverage.yml");
     const deleted = parseRunbookDeletes(readFileSync(decl.runbook, "utf8"));
-    expect(compareDeletionCoverage(WITH_COMPANY_ID, deleted, decl.keep)).toEqual([]);
+    expect(compareDeletionCoverage(WITH_COMPANY_ID, deleted, decl.keep, decl.beyond)).toEqual(
+      [],
+    );
   });
 });

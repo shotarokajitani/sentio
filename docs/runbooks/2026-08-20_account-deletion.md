@@ -49,7 +49,15 @@ select
   (select count(*) from public.connections   c, target t where c.company_id = t.id) as connections,
   (select count(*) from public.delivery_log  d, target t where d.company_id = t.id) as delivery_log,
   (select count(*) from public.budget_usage  u, target t where u.company_id = t.id) as budget_usage,
-  (select count(*) from public.misjudgments  m, target t where m.company_id = t.id) as misjudgments;
+  (select count(*) from public.misjudgments  m, target t where m.company_id = t.id) as misjudgments,
+  (select count(*) from public.known_explanations k, target t where k.company_id = t.id) as known_explanations,
+  (select count(*) from public.retention_purge_runs r, target t where r.company_id = t.id) as retention_purge_runs,
+  -- company_id を持たない経路（stripe_customer_id で引く）
+  (select count(*) from public.billing_webhook_unresolved b
+    where b.stripe_customer_id in (
+      select raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id'
+        from auth.users where email = '<EMAIL>'
+    )) as billing_webhook_unresolved;
 ```
 
 **この件数を依頼メールのスレッドに控えてから消す。** 消した後では数えられない。
@@ -90,10 +98,29 @@ delete from public.misjudgments    where company_id in (select id from auth.user
 delete from public.known_explanations where company_id in (select id from auth.users where email = '<EMAIL>');
 delete from public.retention_purge_runs where company_id in (select id from auth.users where email = '<EMAIL>');
 
+-- **company_id を持たない経路（2026-09-08 追記）。**
+-- billing_webhook_unresolved は「会社を引けなかった事実」の記録なので company_id を持たない。
+-- 残るのは Stripe の customer id と event id だけだが、§6 は「すべてのデータ」を消すと公開している。
+-- **auth.users を消す前に**行うこと（消したあとでは customer id を引けない）。
+delete from public.billing_webhook_unresolved
+ where stripe_customer_id is not null
+   and stripe_customer_id in (
+     select raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id'
+       from auth.users
+      where email = '<EMAIL>'
+        and raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id' is not null
+   );
+
 -- ここで手順5の確認クエリを流し、全部 0 になっていることを見てから commit する
 -- 想定と違ったら rollback;
 commit;
 ```
+
+> **この1経路は `check:deletion-coverage` の射程外である。**
+> あの検査器が見るのは `company_id` を持つテーブルの列挙だけで、
+> `stripe_customer_id` のような紐づけは見ない。
+> **見えないまま消し残さないよう**、`docs/checklists/deletion-coverage.yml` の
+> `beyond_company_id` に宣言してある（宣言と実物の突合はしていない）。
 
 > **`begin;` … `commit;` で囲むこと。** 途中で想定外の件数に気づいたら `rollback;` で戻せる。
 > 囲まずに流すと、気づいた時点で既に消えている。

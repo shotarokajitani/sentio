@@ -5,6 +5,8 @@ import { Masthead } from "@/components/Masthead";
 import { t } from "@/i18n";
 import type { ConnectionOverview, ConnectionRow } from "@/lib/connections/overview";
 import { requestDisconnect, type DisconnectOutcome } from "@/lib/connections/disconnect";
+// カードの「状態 → 何を出すか」は純ロジックに閉じてある（原則の担保をテストで固定するため）
+import { cardActions, syncFreshness } from "@/lib/connections/card-state";
 // 列の対応推定は「1行目が列名の行か」を確かめてからでないと呼べない（契約 スライスCH）。
 // 関門ごとモジュールに移してあるので、ここからは直接 fetch しない
 import { requestColumnMapping, type ColumnMapping } from "@/lib/csv/analyze";
@@ -326,14 +328,7 @@ export function ConnectClient({
             desc={t.connect.calendarDesc}
             connection={calConn}
             connectHref="/api/auth/google"
-            meta={
-              calConn
-                ? [
-                    `${t.connect.eventsCount} ${calCount}`,
-                    `${t.connect.lastSync} ${formatDate(calConn.last_refresh)}`,
-                  ]
-                : []
-            }
+            meta={syncMeta(t.connect.eventsCount, calCount, calConn)}
             // 解除 UI は Google カレンダーだけに置く（契約の非スコープ: 他 provider の解除 UI）
             disconnect={{
               session: disconnect?.provider === "google_calendar" ? disconnect : null,
@@ -356,14 +351,7 @@ export function ConnectClient({
             desc={t.connect.freeeDesc}
             connection={freeeConn}
             connectHref="/api/auth/freee"
-            meta={
-              freeeConn
-                ? [
-                    `${t.connect.transactionsCount} ${freeeCount}`,
-                    `${t.connect.lastSync} ${formatDate(freeeConn.last_refresh)}`,
-                  ]
-                : []
-            }
+            meta={syncMeta(t.connect.transactionsCount, freeeCount, freeeConn)}
           />
 
           <div className="row">
@@ -549,7 +537,7 @@ interface DisconnectProps {
   onClose: () => void;
 }
 
-function SourceRow({
+export function SourceRow({
   name,
   desc,
   connection,
@@ -561,19 +549,20 @@ function SourceRow({
   desc: string;
   connection: ConnectionRow | undefined;
   connectHref: string;
-  meta: string[];
+  meta: MetaItem[];
   /** 渡さない行には解除 UI が出ない（契約の非スコープ: 他 provider の解除 UI） */
   disconnect?: DisconnectProps;
 }) {
   // U-3（2026-08-27 確定）: revoked を検知してもお客様には通知しない。
   // 画面に既存の「要再連携」が出るだけで、Sentio 側からは何も送らない。
-  // revoked と reauth_required の区別は DB（status / revoked_at）に残る
-  const needsReauth = connection?.status === "reauth_required" || connection?.status === "revoked";
-
-  // 解除ボタンは接続行がある限り出す。status は問わない（受入基準 D-1-1）。
-  // active でも reauth_required でも revoked でも、解除したい気持ちは同じである
-  const canDisconnect = Boolean(disconnect && connection);
+  // revoked と reauth_required の区別は DB（status / revoked_at）に残る。
+  //
+  // **どの操作を出すかは `cardActions` が決める**（2026-09-07）。
+  // 状態ごとに主操作は1つで、取り消しのきかない「解除」は主操作にならない
   const session = disconnect?.session ?? null;
+  const canDisconnect = Boolean(disconnect && connection);
+  const actions = cardActions(connection, canDisconnect);
+  const needsReauth = actions.kind === "needs_reauth";
 
   return (
     <div className={needsReauth ? "row row-attention" : "row"}>
@@ -583,35 +572,44 @@ function SourceRow({
         {meta.length > 0 && (
           <div className="row-meta">
             {meta.map((m) => (
-              <span key={m}>{m}</span>
+              <span key={m.text} className={m.stale ? "meta-stale" : undefined}>
+                {m.text}
+              </span>
             ))}
           </div>
         )}
 
+        {/* **確認パネルの開く場所を変えない。** … から呼んでも同じここに開く */}
         {canDisconnect && session && disconnect && (
           <DisconnectPanel name={name} session={session} disconnect={disconnect} />
         )}
       </div>
 
       <div className="row-side">
-        {canDisconnect && disconnect && !session && (
-          <button className="btn btn-quiet" onClick={disconnect.onOpen}>
-            {t.connect.disconnect}
-          </button>
-        )}
-        {needsReauth ? (
-          <>
-            <span className="state state-attention">{t.connect.needsReauth}</span>
-            <a className="btn" href={connectHref}>
-              {t.connect.reconnect}
-            </a>
-          </>
-        ) : connection ? (
-          <span className="state">{t.connect.connected}</span>
-        ) : (
-          <a className="btn btn-quiet" href={connectHref}>
+        {needsReauth && <span className="state state-attention">{t.connect.needsReauth}</span>}
+        {actions.kind === "connected" && <span className="state">{t.connect.connected}</span>}
+
+        {actions.primary === "connect" && (
+          <a className="btn" href={connectHref}>
             {t.connect.connect}
           </a>
+        )}
+        {actions.primary === "reconnect" && (
+          <a className="btn" href={connectHref}>
+            {t.connect.reconnect}
+          </a>
+        )}
+
+        {/* **中身が空なら … 自体を出さない。** 開いて何も無いメニューを作らない */}
+        {actions.menu.length > 0 && disconnect && !session && (
+          <details className="rowmenu">
+            <summary aria-label={t.connect.moreActions}>…</summary>
+            <div className="rowmenu-items">
+              <button className="rowmenu-item" onClick={disconnect.onOpen}>
+                {t.connect.disconnect}
+              </button>
+            </div>
+          </details>
         )}
       </div>
     </div>
@@ -752,6 +750,34 @@ const LAST_SYNC_FORMAT = new Intl.DateTimeFormat("ja-JP", {
 });
 
 // null は「まだ一度も同期していない」。例外にせず既存どおり never を出す
+/** 行の下に出す小さな事実。**古い同期だけ色を上げる**ので、真偽値を持たせる */
+interface MetaItem {
+  text: string;
+  stale: boolean;
+}
+
+/**
+ * 件数と最終同期の2つを組む。
+ *
+ * **この画面でいちばん重い事実は「最後に取り込めたのはいつか」である。**
+ * 新しいうちは今までどおり沈めておき、**古いときだけ**色を上げて相対表記を添える
+ * （閾値は `STALE_SYNC_HOURS = 12`。取り込み間隔6時間の2回ぶん）。
+ */
+function syncMeta(countLabel: string, count: number, connection: ConnectionRow | undefined) {
+  if (!connection) return [];
+
+  const fresh = syncFreshness(connection.last_refresh);
+  const stamp = `${t.connect.lastSync} ${formatDate(connection.last_refresh)}`;
+
+  return [
+    { text: `${countLabel} ${count}`, stale: false },
+    {
+      text: fresh.stale && fresh.relative ? `${stamp}（${fresh.relative}）` : stamp,
+      stale: fresh.stale,
+    },
+  ];
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return t.connect.never;
   return LAST_SYNC_FORMAT.format(new Date(iso));

@@ -191,6 +191,75 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 最終同期が古いとき（12時間＝取り込み2回ぶんを超えたとき）だけ、
+ * 沈めてある事実を1段だけ持ち上げる。**色の体系は変えない**——
+ * 既にある `--attention` を借りるだけで、新しい色は足さない。
+ */
+.meta-stale {
+  color: var(--attention);
+}
+
+/*
+ * 畳んだ操作（`…`）。**取り消しのきかない操作を、主操作と同じ高さに並べない**ための器。
+ * 中身が空のときはそもそも描かない（コンポーネント側で出し分ける）。
+ * `details` を使うのは、開閉とキーボード操作をブラウザに任せるため。
+ */
+.rowmenu {
+  position: relative;
+}
+
+.rowmenu > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  user-select: none;
+}
+
+.rowmenu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rowmenu > summary:hover {
+  color: var(--ink-muted);
+  border-color: var(--rule);
+}
+
+.rowmenu-items {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 2;
+  min-width: 10rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: var(--s1) 0;
+}
+
+.rowmenu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  padding: 8px var(--s3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rowmenu-item:hover {
+  background: var(--paper);
+}
+
 /* ---- 状態表示 ---- */
 
 .state {

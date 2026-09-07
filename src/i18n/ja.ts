@@ -73,7 +73,9 @@ export const ja = {
     reconnect: "再接続",
     connected: "接続済み",
     needsReauth: "要再連携",
-    needsReauthDesc: "連携先での許可が切れました。再接続すると元に戻ります。",
+    // バッジ（要再連携）とボタン（再接続）と同じことを3回言わない（2026-09-07）。
+    // 状態はバッジが言う。説明文は**戻せることだけ**を言う
+    needsReauthDesc: "再接続すると元に戻ります。",
     preparing: "準備中",
     eventsCount: "イベント",
     transactionsCount: "取引",
@@ -86,6 +88,8 @@ export const ja = {
 
     // 連携解除（契約 スライスD / privacy §6「Sentio の画面から解除した場合」の経路）。
     // 二段確認はアカウントのメールアドレス入力（U-2・2026-08-27 確定）
+    // 畳んだ操作を開くボタン。**中身が空のときは出さない**（freee の行）
+    moreActions: "その他の操作",
     disconnect: "連携を解除",
     disconnectTitle: (name: string) => `${name}の連携を解除します`,
     disconnectLead:

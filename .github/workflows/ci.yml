@@ -373,6 +373,44 @@ jobs:
             pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tee "/tmp/it-$i.log"
           done
 
+      # ============================================================
+      # 調査用ステップ（**このブランチ限定。merge しない**）
+      # 07_open_items.md「integration の 401 陰性コントロールが、3回のうち
+      # 3回目だけ5秒でタイムアウトする」の入口 1-5 / 1-6 を実測する。
+      # continue-on-error なので、赤でも後続を走らせて両方の結果を採る。
+      # ============================================================
+
+      # 1-5: 当該ファイルだけを3回走らせる。
+      # 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
+      # 積み上がった状態の問題である。
+      - name: "調査 1-5 — delivery-idempotency だけを3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          for i in 1 2 3; do
+            echo "===== 1-5 run $i/3 (single file) ====="
+            pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
+            echo "----- run $i exit=${PIPESTATUS[0]} -----"
+          done
+
+      # 1-6: ファイルの並びを逆にして3回走らせる。
+      # 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
+      # 動かないなら「3回目」という位置そのものに原因がある。
+      - name: "調査 1-6 — ファイル順を逆にして3回"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
+          FILES=$(ls tests/integration/*.test.ts | sort -r)
+          echo "順序: $FILES"
+          for i in 1 2 3; do
+            echo "===== 1-6 run $i/3 (reversed order) ====="
+            pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
+            echo "----- run $i exit=${PIPESTATUS[0]} -----"
+          done
+
       # 「env が無いから skip で緑」を作らないための可視化（契約 S-5-5）。
       # skip の件数と対象を必ずログに出す。0件でも「0件だった」と言わせる。
       - name: Report skipped tests

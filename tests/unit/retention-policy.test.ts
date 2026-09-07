@@ -5,6 +5,9 @@ import {
   sourcesForProvider,
   retentionCutoff,
   evaluateDeletion,
+  REVOKED_GRACE_DAYS,
+  revokedCutoff,
+  planPurge,
 } from "@/lib/retention/policy";
 import * as edge from "@edge/_shared/retention";
 
@@ -129,6 +132,85 @@ describe("evaluateDeletion — 消しすぎを止める門", () => {
   });
 });
 
+describe("D-3: 取り消しから30日（陽性・陰性）", () => {
+  const now = new Date("2026-09-08T00:00:00.000Z");
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+
+  it("猶予は30日（契約D の D-3）", () => {
+    expect(REVOKED_GRACE_DAYS).toBe(30);
+  });
+
+  it("D-3-1（陰性コントロール）: 30日**未満**は対象にならない", () => {
+    const cutoff = revokedCutoff(now);
+    // `revoked_at > cutoff` が「まだ消さない」側である
+    expect(daysAgo(29).getTime()).toBeGreaterThan(cutoff.getTime());
+    expect(daysAgo(1).getTime()).toBeGreaterThan(cutoff.getTime());
+  });
+
+  it("D-3-2（陽性）: 30日**以上**経過は対象になる", () => {
+    const cutoff = revokedCutoff(now);
+    expect(daysAgo(30).getTime()).toBeLessThanOrEqual(cutoff.getTime());
+    expect(daysAgo(31).getTime()).toBeLessThan(cutoff.getTime());
+  });
+});
+
+describe("planPurge — 消すか、数えるだけか", () => {
+  const base = { companyId: "c", max: 10 };
+
+  it("既定の安全側: dryRun なら数えるだけで、削除の判断に落ちない", () => {
+    expect(planPurge({ ...base, counted: 3, dryRun: true })).toEqual({
+      decision: "dry_run",
+      count: 3,
+    });
+  });
+
+  it("dryRun でなければ削除の判断になる", () => {
+    expect(planPurge({ ...base, counted: 3, dryRun: false })).toEqual({
+      decision: "deleted",
+      count: 3,
+    });
+  });
+
+  it("0件は削除にも dry_run にもしない（区別できる形で返す）", () => {
+    expect(planPurge({ ...base, counted: 0, dryRun: false })).toEqual({
+      decision: "nothing",
+      count: 0,
+    });
+  });
+
+  it("D-3-3（陰性コントロール）: 上限超過は dryRun でなくても止まる", () => {
+    expect(planPurge({ ...base, counted: 11, dryRun: false })).toEqual({
+      decision: "blocked",
+      reason: "over-limit",
+      count: 11,
+    });
+  });
+
+  it("D-3-3（陰性コントロール）: 数えられなければ止まる。**null を 0 に丸めない**", () => {
+    expect(planPurge({ ...base, counted: null, dryRun: false })).toEqual({
+      decision: "blocked",
+      reason: "uncounted",
+      count: 0,
+    });
+  });
+
+  it("D-3-4（陰性コントロール）: company_id が取れなければ止まる", () => {
+    expect(planPurge({ ...base, companyId: "", counted: 3, dryRun: false })).toEqual({
+      decision: "blocked",
+      reason: "unscoped",
+      count: 3,
+    });
+  });
+
+  it("**止まるときは dryRun かどうかで結果が変わらない**（門は常に効く）", () => {
+    for (const counted of [11, null]) {
+      expect(planPurge({ ...base, counted, dryRun: true })).toEqual(
+        planPurge({ ...base, counted, dryRun: false }),
+      );
+    }
+  });
+});
+
 describe("Edge 側と Next.js 側でポリシーがずれていない", () => {
   // Edge Function は supabase/functions の外を import できないため、保持期間は
   // _shared/retention.ts にも要る。二重に持つ以上、ずれを機械で止める
@@ -156,5 +238,34 @@ describe("Edge 側と Next.js 側でポリシーがずれていない", () => {
       { companyId: "c", counted: null, max: 10 },
     ];
     for (const c of cases) expect(edge.evaluateDeletion(c)).toEqual(evaluateDeletion(c));
+  });
+
+  it("REVOKED_GRACE_DAYS が一致する（D-3-5）", () => {
+    expect(edge.REVOKED_GRACE_DAYS).toBe(REVOKED_GRACE_DAYS);
+  });
+
+  it("revokedCutoff が同じ値を返す", () => {
+    for (const iso of ["2026-09-08T00:00:00.000Z", "2026-01-01T09:00:00.000Z"]) {
+      expect(edge.revokedCutoff(new Date(iso)).toISOString()).toBe(
+        revokedCutoff(new Date(iso)).toISOString(),
+      );
+    }
+  });
+
+  it("planPurge が同じ判断を返す", () => {
+    const cases = [
+      { companyId: "c", counted: 3, max: 10, dryRun: false },
+      { companyId: "c", counted: 3, max: 10, dryRun: true },
+      { companyId: "c", counted: 11, max: 10, dryRun: false },
+      { companyId: "c", counted: null, max: 10, dryRun: true },
+      { companyId: "", counted: 1, max: 10, dryRun: false },
+    ];
+    for (const c of cases) expect(edge.planPurge(c)).toEqual(planPurge(c));
+  });
+
+  it("sourcesForProvider が同じ対応を返す（**片側だけ増えない**）", () => {
+    for (const provider of ["google_calendar", "freee", "unknown", ""]) {
+      expect(edge.sourcesForProvider(provider)).toEqual(sourcesForProvider(provider));
+    }
   });
 });

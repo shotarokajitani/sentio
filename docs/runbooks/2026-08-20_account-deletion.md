@@ -88,6 +88,7 @@ delete from public.delivery_log    where company_id in (select id from auth.user
 delete from public.budget_usage    where company_id in (select id from auth.users where email = '<EMAIL>');
 delete from public.misjudgments    where company_id in (select id from auth.users where email = '<EMAIL>');
 delete from public.known_explanations where company_id in (select id from auth.users where email = '<EMAIL>');
+delete from public.retention_purge_runs where company_id in (select id from auth.users where email = '<EMAIL>');
 
 -- ここで手順5の確認クエリを流し、全部 0 になっていることを見てから commit する
 -- 想定と違ったら rollback;

@@ -54,6 +54,18 @@ describe("原則: 1画面に主操作は1つ", () => {
   });
 });
 
+describe("文言を入口ごとに出し分ける（2026-09-08 追加）", () => {
+  it("同意の文は**登録のときだけ**出す", () => {
+    // ログインするだけの人は、いま同意を求められていない
+    expect(loginView("signup", "/connect").showLegalNote).toBe(true);
+    expect(loginView(null, "/connect").showLegalNote).toBe(false);
+  });
+
+  it("**陰性コントロール**: 知らない mode でも同意の文は出ない（login に倒れる）", () => {
+    expect(loginView("register", "/connect").showLegalNote).toBe(false);
+  });
+});
+
 describe("next は両方向で引き継ぐ", () => {
   it("login → signup のリンクに next が載る", () => {
     expect(loginView(null, "/connect").switchHref).toBe("/login?mode=signup&next=%2Fconnect");

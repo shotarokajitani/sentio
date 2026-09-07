@@ -1,10 +1,20 @@
 import { Masthead } from "@/components/Masthead";
 import { t, errorMessage } from "@/i18n";
-import { loginView } from "@/lib/auth/login-view";
-
-export const metadata = { title: `${t.login.title} — ${t.brand}` };
+import { loginMode, loginView } from "@/lib/auth/login-view";
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
+
+/**
+ * タブに出る題も入口ごとに変える。
+ * **静的な `metadata` では出し分けられない**（`?mode=` を読めない）ので
+ * `generateMetadata` にする。登録の画面のタブに「ログイン」と出るのは、
+ * 見出しとボタンを分けた意味を半分に減らす。
+ */
+export async function generateMetadata({ searchParams }: { searchParams: Search }) {
+  const params = await searchParams;
+  const signup = loginMode(first(params.mode)) === "signup";
+  return { title: `${signup ? t.login.signUpTitle : t.login.title} — ${t.brand}` };
+}
 
 function first(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -34,7 +44,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
       <Masthead />
 
       <h1>{signup ? t.login.signUpTitle : t.login.title}</h1>
-      <p className="lead">{signup ? t.login.signUpLead2 : t.login.lead}</p>
+      {/* **リードは登録のときだけ。** 「メールアドレスとパスワードだけで始められます」は
+          これから始める人に向けた文で、**ログインしに来た人には要らない**。
+          代わりの文を置かないのは、題と欄で用が足りているからである */}
+      {signup && <p className="lead">{t.login.signUpLead2}</p>}
 
       {failure && (
         <div className="failure" role="alert" style={{ marginTop: 24 }}>
@@ -100,9 +113,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </p>
       </form>
 
+      {/* **同意の文はログイン側に出さない。** ログインするだけの人は、
+          いま同意を求められていない。規約とポリシーへのリンクは両方に残す */}
       <p className="footnote">
-        {t.login.legalLead} <a href="/terms">{t.login.terms}</a> ・{" "}
-        <a href="/privacy">{t.login.privacy}</a>
+        {view.showLegalNote && <>{t.login.legalLead} </>}
+        <a href="/terms">{t.login.terms}</a> ・ <a href="/privacy">{t.login.privacy}</a>
       </p>
     </main>
   );

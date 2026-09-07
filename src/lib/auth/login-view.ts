@@ -22,6 +22,11 @@ export interface LoginView {
   passwordAutoComplete: "current-password" | "new-password";
   /** もう一方の入口へのリンク。**`next` を必ず引き継ぐ** */
   switchHref: string;
+  /**
+   * 「登録すると、以下に同意したものとみなされます。」を出すか。
+   * **登録のときだけ。** ログインするだけの人は、いま同意を求められていない
+   */
+  showLegalNote: boolean;
 }
 
 /**
@@ -48,6 +53,7 @@ export function loginView(rawMode: string | null | undefined, next: string): Log
       showSiteUrl: true,
       passwordAutoComplete: "new-password",
       switchHref: `/login?${nextParam}`,
+      showLegalNote: true,
     };
   }
 
@@ -57,5 +63,6 @@ export function loginView(rawMode: string | null | undefined, next: string): Log
     showSiteUrl: false,
     passwordAutoComplete: "current-password",
     switchHref: `/login?mode=signup&${nextParam}`,
+    showLegalNote: false,
   };
 }

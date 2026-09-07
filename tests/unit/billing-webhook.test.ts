@@ -42,7 +42,20 @@ const updateUserById = vi.fn();
 const rpc = vi.fn();
 /** 引けなかったイベントを残す表への書き込み */
 const upsert = vi.fn();
-const from = vi.fn(() => ({ upsert }));
+/** 再送で直ったときに行を閉じる経路（`update().eq().is()`）*/
+const resolveUpdate = vi.fn();
+const resolvedCalls: Array<{ values: Record<string, unknown>; eventId: unknown }> = [];
+const from = vi.fn(() => ({
+  upsert,
+  update: (values: Record<string, unknown>) => ({
+    eq: (_column: string, eventId: unknown) => ({
+      is: async () => {
+        resolvedCalls.push({ values, eventId });
+        return await resolveUpdate();
+      },
+    }),
+  }),
+}));
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({ auth: { admin: { updateUserById } }, rpc, from }),
@@ -127,6 +140,8 @@ function resetMocks() {
   updateUserById.mockReset().mockResolvedValue({ data: {}, error: null });
   rpc.mockReset().mockResolvedValue({ data: { company_id: COMPANY, matches: 1 }, error: null });
   upsert.mockReset().mockResolvedValue({ error: null });
+  resolveUpdate.mockReset().mockResolvedValue({ error: null });
+  resolvedCalls.length = 0;
   from.mockClear();
   retrieve
     .mockReset()
@@ -462,8 +477,9 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(updated, sign(updated)));
 
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: "ignored", reason: "stripe_unavailable" });
+    // **再送で直る芽がある失敗なので 503。** Stripe が再送する
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "retry", reason: "stripe_unavailable" });
     expect(updateUserById).not.toHaveBeenCalled();
     const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
     expect(row).toMatchObject({ reason: "retrieve_failed", stripe_event_id: "evt_fetchfail" });
@@ -499,10 +515,119 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(body, sign(body)));
 
-    expect(await res.json()).toEqual({ status: "ignored", reason: "no_company" });
+    // 逆引きの障害は**こちら側の一時障害**なので、再送に賭ける
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "retry", reason: "no_company" });
     expect(updateUserById).not.toHaveBeenCalled();
     const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
     expect(row).toMatchObject({ reason: "lookup_failed" });
+  });
+});
+
+/**
+ * ④-a の追補（2026-09-07）。**再送で直る芽があるものだけ 5xx を返す。**
+ *
+ * 5xx は Stripe に再送させる合図であり、**再送で直れば人手が要らなくなる。**
+ * 副次的に、失敗が続けば Stripe から「webhook が失敗している」通知が届く
+ * ——**気づく経路がもう1つ増える。**
+ *
+ * ただし**対象を `customer.subscription.*` に限る。** Stripe の文献に
+ * 「`invoice.created` へ成功応答が返らないと自動収納の請求ファイナライズが最大72時間遅れる」
+ * とある。波及するかは未確認だが、**限定すれば危険そのものが消える。**
+ */
+describe("④-a 追補: 再送させる範囲と、再送で直った行の後始末", () => {
+  beforeEach(() => {
+    resetMocks();
+    stubEnv();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("not_found は 200 のまま（再送しても直らない。人が対処するまで変わらない）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 0 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(200);
+  });
+
+  it("ambiguous も 200 のまま（2社に付いた customer id は再送では直らない）", async () => {
+    rpc.mockResolvedValue({ data: { company_id: null, matches: 2 }, error: null });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(200);
+  });
+
+  it("（陰性コントロール）**checkout.session.completed では 5xx を返さない**", async () => {
+    // 5xx の対象は `customer.subscription.*` だけである
+    retrieve.mockRejectedValue(new Error("stripe unavailable"));
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    expect(res.status).toBe(200);
+    expect(updateUserById).not.toHaveBeenCalled();
+    const [row] = upsert.mock.calls[0] as unknown as UpsertCall;
+    expect(row).toMatchObject({ reason: "retrieve_failed" });
+  });
+
+  it("（陰性コントロール）**invoice 系では、どの理由でも 5xx を返さない**", async () => {
+    // 請求ファイナライズを遅らせない。そもそも扱わない種別なので DB にも触らない
+    rpc.mockResolvedValue({ data: null, error: { message: "permission denied" } });
+    for (const type of ["invoice.created", "invoice.paid", "invoice.payment_failed"]) {
+      const body = JSON.stringify({
+        id: `evt_${type}`,
+        type,
+        data: { object: { id: "in_ref", customer: "customer-ref", status: "open" } },
+      });
+      const { POST } = await import("@/app/api/billing/webhook/route");
+      const res = await POST(post(body, sign(body)));
+
+      expect(res.status, type).toBe(200);
+      expect(upsert, type).not.toHaveBeenCalled();
+    }
+  });
+
+  it("（陰性コントロール）解約は取り直せなくても 5xx にしない（canceled を書いて解決している）", async () => {
+    retrieve.mockRejectedValue(new Error("stripe unavailable"));
+    const canceled = subscriptionEvent("customer.subscription.deleted", "canceled");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(canceled, sign(canceled)));
+
+    expect(res.status).toBe(200);
+  });
+
+  it("再送で直ったら、**同じイベントIDの行を解決済みにする**", async () => {
+    const body = subscriptionEvent("customer.subscription.updated", "active", "evt_retry");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(resolvedCalls).toHaveLength(1);
+    expect(resolvedCalls[0].eventId).toBe("evt_retry");
+    // 行は消さない。**いつ解決したかを残す**
+    expect(Object.keys(resolvedCalls[0].values)).toEqual(["resolved_at"]);
+  });
+
+  it("（陰性コントロール）**再送でも失敗したら、行は未解決のまま残す**", async () => {
+    retrieve.mockRejectedValue(new Error("stripe unavailable"));
+    const body = subscriptionEvent("customer.subscription.updated", "active", "evt_retry_fail");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    await POST(post(body, sign(body)));
+
+    expect(resolvedCalls).toEqual([]);
+  });
+
+  it("解決済みにできなくても、書けた購読は巻き戻さない（200 で返す）", async () => {
+    // ここで 5xx を返すと、反映が済んでいるのに Stripe が再送し続ける
+    resolveUpdate.mockResolvedValue({ error: { message: "update failed" } });
+    const body = subscriptionEvent("customer.subscription.updated", "active");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(updateUserById).toHaveBeenCalled();
   });
 });
 

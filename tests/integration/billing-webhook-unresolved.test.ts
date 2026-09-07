@@ -250,6 +250,57 @@ if (mode === "run") {
       expect(error).not.toBeNull();
     });
 
+    it("**3日を超えた未解決**を実DBで数えられる（dispatch-daily の集計と同じ形）", async () => {
+      const old = `${RUN_ID}_stale`;
+      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+      const threshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
+      await admin.from("billing_webhook_unresolved").insert({
+        stripe_event_id: old,
+        event_type: "customer.subscription.updated",
+        reason: "retrieve_failed",
+        stripe_customer_id: CUSTOMER,
+        created_at: fourDaysAgo,
+      });
+
+      const { count, error } = await admin
+        .from("billing_webhook_unresolved")
+        .select("stripe_event_id", { count: "exact", head: true })
+        .is("resolved_at", null)
+        .lt("created_at", threshold)
+        .eq("stripe_event_id", old);
+
+      expect(error).toBeNull();
+      // **「再送中でまだ望みがある」と「再送が尽きた」を分けるための数え方**
+      expect(count).toBe(1);
+    });
+
+    it("再送で直った行は `resolved_at` で閉じられる（webhook 側と同じ更新の形）", async () => {
+      const id = `${RUN_ID}_reopened`;
+      await admin.from("billing_webhook_unresolved").insert({
+        stripe_event_id: id,
+        event_type: "customer.subscription.updated",
+        reason: "lookup_failed",
+        stripe_customer_id: CUSTOMER,
+      });
+
+      const { error } = await admin
+        .from("billing_webhook_unresolved")
+        .update({ resolved_at: new Date().toISOString() })
+        .eq("stripe_event_id", id)
+        .is("resolved_at", null);
+
+      expect(error).toBeNull();
+
+      const { count } = await admin
+        .from("billing_webhook_unresolved")
+        .select("stripe_event_id", { count: "exact", head: true })
+        .is("resolved_at", null)
+        .eq("stripe_event_id", id);
+
+      expect(count).toBe(0);
+    });
+
     it("集計は resolved_at IS NULL だけを数える（対処済みは鳴らし続けない）", async () => {
       const done = `${RUN_ID}_resolved`;
       await admin.from("billing_webhook_unresolved").insert({

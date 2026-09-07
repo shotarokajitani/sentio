@@ -9,7 +9,14 @@
 import { getSupabaseAdmin } from "./supabase-client.ts";
 import { mustCount, mustData } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
-import type { CompanyTarget, DispatchDeps, InvokeResult, OpsNotifyResult } from "./dispatch.ts";
+import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
+import type {
+  BillingCounts,
+  CompanyTarget,
+  DispatchDeps,
+  InvokeResult,
+  OpsNotifyResult,
+} from "./dispatch.ts";
 
 /**
  * 宛先の正本は `auth.users.email`（CD-D1）。**新しいテーブルを作らない。**
@@ -68,15 +75,40 @@ export function buildDeps(): DispatchDeps {
      * ディスパッチ全体を落として「配信が失敗した」ように見える。
      * 見分けがつかなくなるくらいなら、失敗を値にして summary に出す。
      */
-    countBillingUnresolved: async (): Promise<number | null> => {
+    countBillingUnresolved: async (): Promise<BillingCounts | null> => {
+      const staleBefore = new Date(
+        Date.now() - STRIPE_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       try {
-        return await mustCount(
-          supabase
-            .from("billing_webhook_unresolved")
-            .select("stripe_event_id", { count: "exact", head: true })
-            .is("resolved_at", null),
-          "dispatch: billing_webhook_unresolved",
-        );
+        const [unresolved, resolved, stale] = await Promise.all([
+          mustCount(
+            supabase
+              .from("billing_webhook_unresolved")
+              .select("stripe_event_id", { count: "exact", head: true })
+              .is("resolved_at", null),
+            "dispatch: billing_webhook_unresolved (unresolved)",
+          ),
+          // **解決済みは集計（＝通知の判断）から外すが、件数は消さない**（④-a・2-4）
+          mustCount(
+            supabase
+              .from("billing_webhook_unresolved")
+              .select("stripe_event_id", { count: "exact", head: true })
+              .not("resolved_at", "is", null),
+            "dispatch: billing_webhook_unresolved (resolved)",
+          ),
+          // **再送が尽きた見込みの行。** 「まだ望みがある」と混ぜない
+          mustCount(
+            supabase
+              .from("billing_webhook_unresolved")
+              .select("stripe_event_id", { count: "exact", head: true })
+              .is("resolved_at", null)
+              .lt("created_at", staleBefore),
+            "dispatch: billing_webhook_unresolved (stale)",
+          ),
+        ]);
+
+        return { unresolved, resolved, stale };
       } catch (e) {
         console.error(
           "dispatch: 未解決の課金 webhook を数えられなかった:",
@@ -113,6 +145,7 @@ export function buildDeps(): DispatchDeps {
         "対処手順: docs/runbooks/2026-09-07_billing-webhook-unresolved.md",
         "",
         "対処が済んだら resolved_at を埋めてください。埋めるまで毎日この通知が出ます。",
+        "（再送で直った行は webhook 側が自動で resolved_at を埋めます）",
       ].join("\n");
 
       const outcome = await sendEmail(mail.config, {

@@ -33,6 +33,26 @@ export interface InvokeResult {
   status: number;
 }
 
+/**
+ * 課金 webhook の取りこぼしの件数（④-a）。
+ *
+ * **3つとも出す。項目ごと消さない。**
+ * `resolved` を出すのは「解決した」と「そもそも何も起きていない」を分けるため。
+ * `stale` を出すのは「**再送中でまだ望みがある**」と「**再送が尽きた**」を分けるため
+ * ——Stripe の再送は本番で最大3日・指数バックオフで、そこを過ぎたら人が動くしかない。
+ */
+export interface BillingCounts {
+  /** `resolved_at IS NULL`。**メールと non-2xx の判断はこれだけで行う** */
+  unresolved: number;
+  /** `resolved_at IS NOT NULL`（累計）。再送で直った分もここに入る */
+  resolved: number;
+  /** 未解決のうち、受信から3日を超えたもの。**Stripe の再送が尽きた見込み** */
+  stale: number;
+}
+
+/** Stripe の webhook 再送の上限（本番で最大3日・指数バックオフ）。 */
+export const STRIPE_RETRY_WINDOW_DAYS = 3;
+
 /** 運用宛の通知の結果。**送ったつもりを作らない**ので、失敗も値で返す */
 export interface OpsNotifyResult {
   ok: boolean;
@@ -45,12 +65,12 @@ export interface DispatchDeps {
   listTargets(): Promise<CompanyTarget[]>;
   invoke(fn: string, body: Record<string, unknown>): Promise<InvokeResult>;
   /**
-   * 会社を引けなかった課金 webhook のうち、**まだ対処していない**行数（④-a）。
+   * 会社を引けなかった課金 webhook の件数（④-a）。
    *
    * **集計に失敗したら null を返す。** 0件と区別できなくなると
    * 「0件が続いている」と「集計の経路が壊れている」が同じ顔になる。
    */
-  countBillingUnresolved(): Promise<number | null>;
+  countBillingUnresolved(): Promise<BillingCounts | null>;
   /** 1件以上あるときだけ呼ぶ。運用宛に1通出す */
   notifyOpsBillingUnresolved(count: number): Promise<OpsNotifyResult>;
 }
@@ -79,6 +99,16 @@ export interface DispatchSummary {
    * `null` は**集計そのものに失敗した**ことを表す。
    */
   billing_unresolved?: number | null;
+  /**
+   * 解決済みの累計（daily のみ）。**集計からは外すが、件数は消さない**（④-a・2-4）。
+   * 再送で直った行もここに入る。`null` は集計そのものの失敗。
+   */
+  billing_resolved?: number | null;
+  /**
+   * 未解決のうち受信から3日を超えたもの（daily のみ）。**Stripe の再送が尽きた見込み**。
+   * **出すだけである。** これで non-2xx にするかは、実際に1件目が出てから決める（未判断）。
+   */
+  billing_stale?: number | null;
   /**
    * 運用宛の通知をどうしたか（daily のみ）。
    *
@@ -182,8 +212,12 @@ export async function runDispatch(
   // **daily だけで見る。** weekly でも見ると同じ通知が週2回出て、早く読まれなくなる。
   let billingProblem = false;
   if (kind === "daily") {
-    const count = await deps.countBillingUnresolved();
-    summary.billing_unresolved = count;
+    const counts = await deps.countBillingUnresolved();
+    summary.billing_unresolved = counts === null ? null : counts.unresolved;
+    summary.billing_resolved = counts === null ? null : counts.resolved;
+    summary.billing_stale = counts === null ? null : counts.stale;
+
+    const count = counts === null ? null : counts.unresolved;
 
     if (count === null) {
       // 集計が壊れているのを「0件」と読ませない

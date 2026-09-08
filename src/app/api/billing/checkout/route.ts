@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
+import { hasStripeSubscription } from "@/lib/billing/subscription-state";
 
 /**
  * 標準プランの購読を始める（Stripe Checkout のセッションを作る）。
@@ -17,16 +18,6 @@ import { getAuthedContext, unauthorized } from "@/lib/auth/company";
  * ここが作るのは**支払い画面へのリンクだけ**である。購読が成立するのは
  * 利用者が Stripe の画面で確定したときで、その結果は webhook で受け取る。
  */
-/**
- * **すでに購読がある状態**（2026-09-08 追加）。この状態では checkout を作らない。
- *
- * `customer` を渡す実装に直す案もあったが、**渡し忘れれば同じことが起きる。**
- * 作らせない方が fail-closed である。
- *
- * `canceled` は入れない——購読が終わっているので、**新しく始めるのが正しい**。
- */
-const BLOCKS_NEW_CHECKOUT = new Set(["active", "past_due", "trialing"]);
-
 export async function POST() {
   const ctx = await getAuthedContext();
   if (!ctx) return unauthorized();
@@ -36,7 +27,11 @@ export async function POST() {
   // 既に購読がある会社が押すと**新しい Customer と2本目の購読ができる**。
   // さらに webhook が `user_metadata.subscription` をまるごと上書きするので、
   // **古い購読はこちらから辿れなくなる**（2026-09-08 に判明）。
-  if (ctx.subscriptionStatus && BLOCKS_NEW_CHECKOUT.has(ctx.subscriptionStatus)) {
+  //
+  // **判定は否定リストである**（`lib/billing/subscription-state.ts`）。
+  // 状態を列挙すると、列挙漏れと**Stripe が足した新しい状態**がそのまま素通りする。
+  // `status = 'active'` の行だけを読んでいた 09-03 の沈黙と同じ構造なので、繰り返さない。
+  if (hasStripeSubscription(ctx.subscriptionStatus)) {
     return NextResponse.json(
       {
         error: "already_subscribed",

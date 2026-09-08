@@ -60,12 +60,23 @@ describe("④-b 解約導線（2026-09-08・BU-D4 を改めた）", () => {
   /**
    * **Stripe 側に購読がある状態**（2026-09-08 決定）。行き先はポータルである。
    *
-   * `past_due` をここに入れたのは、支払いが止まった会社の行き先が
-   * **「支払い方法の更新」であって、新規購読の作成ではない**ため。
-   * 購読ボタンを出すと、`customer` を渡していない checkout が
-   * **2本目の購読を作る**（`api/billing/checkout` は 409 で止める）。
+   * 判定は**否定リスト**（`lib/billing/subscription-state.ts`）で、
+   * Stripe の8状態のうち**購読が存在しないのは `canceled` と `incomplete_expired` の2つだけ**。
+   * 残りで購読ボタンを出すと、`customer` を渡していない checkout が
+   * **2本目の購読を作る**（`api/billing/checkout` は 409 で止める。二重の関門）。
+   *
+   * **知らない状態も既定でこちら側**である。列挙式に戻すと素通りする。
    */
-  const HAS_SUBSCRIPTION = ["active", "past_due", "trialing"];
+  const HAS_SUBSCRIPTION = [
+    "active",
+    "past_due",
+    "trialing",
+    "unpaid",
+    "incomplete",
+    "paused",
+    "ACTIVE",
+    "status_stripe_has_not_shipped_yet",
+  ];
 
   it("購読中には管理の入口と、**解約もここでできる**という1行を出す", () => {
     const html = render("active");
@@ -83,19 +94,23 @@ describe("④-b 解約導線（2026-09-08・BU-D4 を改めた）", () => {
     expect(html).not.toContain(ja.billing.subscribe);
   });
 
-  it("past_due は**支払い方法の更新**へ寄せる（解約の1行に差し替えない）", () => {
-    const html = render("past_due");
+  // `unpaid` は `past_due` の再試行が尽きた後で、**直す場所は同じ**（2026-09-08 決定）
+  it.each(["past_due", "unpaid"])(
+    "%s は**支払い方法の更新**へ寄せる（解約の1行に差し替えない）",
+    (status) => {
+      const html = render(status);
 
-    expect(html).toContain(ja.billing.paymentIssueState);
-    expect(html).toContain(ja.billing.paymentNote);
-    // 払えていない状態を「購読中」と読ませない。**直す場所がある**ことを出す
-    expect(html).not.toContain(ja.billing.subscribedState);
-    expect(html).not.toContain(ja.billing.manageNote);
-  });
+      expect(html).toContain(ja.billing.paymentIssueState);
+      expect(html).toContain(ja.billing.paymentNote);
+      // 払えていない状態を「購読中」と読ませない。**直す場所がある**ことを出す
+      expect(html).not.toContain(ja.billing.subscribedState);
+      expect(html).not.toContain(ja.billing.manageNote);
+    },
+  );
 
   it("**陰性コントロール**: 購読が無いときは管理の入口を出さない（押して 404 を見せない）", () => {
-    // `canceled` は購読が終わっている。**新しく始めるのが正しい**（BU-1-4）
-    for (const status of [null, "canceled", "incomplete", "unpaid", "", "ACTIVE"]) {
+    // 購読が存在しない2つと、記録が無いとき。**ここでポータルを出すと 404 を見せる**
+    for (const status of [null, "", "canceled", "incomplete_expired"]) {
       const html = render(status);
 
       expect(html, `status=${status}`).not.toContain(ja.billing.managePlan);
@@ -130,15 +145,15 @@ describe("BU-1-2 購読中の見せ方（陰性コントロール）", () => {
   });
 });
 
-describe("BU-1-4 購読が無い status は、すべて試用中として扱う", () => {
+describe("BU-1-4 購読が存在しない status だけ、試用中として扱う", () => {
   /**
-   * Stripe が返しうる status のうち、**枠を与えないもの**（`lib/billing/plan.ts` の外側）で、
-   * かつ**購読が Stripe 側に残っていない**もの。ここは新しく始めるのが正しい。
+   * **2026-09-08 に否定リストへ変えた。** 元は「`active` でなければ全部試用中」だったが、
+   * その形だと `past_due` / `unpaid` / `incomplete` / `paused` に購読ボタンが出て、
+   * 押せば2本目の購読ができる。
    *
-   * **`past_due` は 2026-09-08 にここから外した**（ポータル側へ寄せた）。
-   * `unpaid` は残してある——扱いは未判断で `docs/spec/07_open_items.md` に登録した。
+   * ここに残るのは**購読が Stripe 側に存在しない2つ**と、**記録が無いとき**だけである。
    */
-  const NOT_ACTIVE = ["canceled", "incomplete", "unpaid", "", "ACTIVE"];
+  const NOT_ACTIVE = ["canceled", "incomplete_expired", ""];
 
   it.each(NOT_ACTIVE)("status=%s のとき購読ボタンを出す", (status) => {
     const html = render(status);

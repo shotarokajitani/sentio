@@ -15,6 +15,7 @@ import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
 // 購読の開始は関門ごとモジュールに置いてある（契約 スライスBU）。
 // 連打の抑止も遷移も、ここからは直接書かない
 import { checkoutFailureMessage, startCheckout } from "@/lib/billing/checkout";
+import { hasStripeSubscription, needsPaymentUpdate } from "@/lib/billing/subscription-state";
 // 解約・支払い方法の変更・請求書は Stripe 側で完結する（④-b）。ここが持つのは入口だけ
 import { openBillingPortal } from "@/lib/billing/portal";
 
@@ -304,19 +305,20 @@ export function ConnectClient({
   /**
    * **Stripe 側に購読がある状態**（2026-09-08・④-b）。
    *
-   * `active` / `past_due` / `trialing` の3つ。**この状態では購読ボタンを出さない**——
-   * `checkout.sessions.create` に `customer` を渡していないので、押すと
-   * **新しい Customer と2本目の購読ができる**（サーバ側も 409 で止める。二重の関門）。
+   * 判定は**否定リスト**で、正本は `lib/billing/subscription-state.ts` にある。
+   * 画面とサーバ（`api/billing/checkout` の 409）が**同じ関数を見る**——
+   * 片方だけ直すと、押せる画面と止まる API のように挙動が割れる。
    *
-   * **`canceled` は入れない。** 購読が終わっているので、新しく始めるのが正しい（BU-1-4）。
+   * この状態では購読ボタンを出さない。`checkout.sessions.create` に `customer` を
+   * 渡していないので、押すと**新しい Customer と2本目の購読ができる**。
    */
-  const hasStripeSubscription =
-    subscriptionStatus === "active" ||
-    subscriptionStatus === "past_due" ||
-    subscriptionStatus === "trialing";
+  const subscriptionExists = hasStripeSubscription(subscriptionStatus);
 
-  /** `past_due` は**支払い方法の更新**が行き先である（新規購読の作成ではない） */
-  const paymentIssue = subscriptionStatus === "past_due";
+  /**
+   * **支払い方法の更新**が行き先である状態（`past_due` / `unpaid`）。
+   * 新規購読の作成ではない。
+   */
+  const paymentIssue = needsPaymentUpdate(subscriptionStatus);
 
   return (
     <main className="page">
@@ -537,7 +539,7 @@ export function ConnectClient({
             </div>
 
             <div className="row-side">
-              {hasStripeSubscription ? (
+              {subscriptionExists ? (
                 // ④-b（2026-09-08）: BU-D4「このスライスでは作らない」を改めた。
                 // **リンク1本で、解約も支払い方法の変更も請求書も Stripe 側で完結する。**
                 // 状態を自前で持たないので、`canceled` の順序保証の問題を背負わない

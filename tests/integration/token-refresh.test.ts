@@ -29,6 +29,11 @@ function createMockSupabase(vaultPayload: string | null) {
       });
     }),
     from: vi.fn((table: string) => ({
+      // 遷移の記録（PS-9）。**状態だけ変わって記録が残らない経路を作らない**
+      insert: vi.fn((row: any) => {
+        calls.push({ method: `from:${table}.insert`, args: { data: row } });
+        return Promise.resolve({ data: null, error: null });
+      }),
       update: vi.fn((data: any) => ({
         eq: vi.fn((col: string, val: string) => {
           calls.push({
@@ -46,6 +51,8 @@ function createMockSupabase(vaultPayload: string | null) {
 
 const EXPIRED_CONNECTION = {
   id: "conn-001",
+  company_id: "c0000000-0000-4000-8000-000000000001",
+  status: "active",
   provider: "google_calendar",
   vault_secret_id: "vault-secret-001",
   expires_at: new Date(Date.now() - 3600_000).toISOString(), // 1時間前

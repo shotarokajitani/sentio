@@ -6,7 +6,12 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
-import { renderPulseHtml, renderPulseText } from "../_shared/email-html.ts";
+import {
+  renderAlertHtml,
+  renderAlertText,
+  renderPulseHtml,
+  renderPulseText,
+} from "../_shared/email-html.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
@@ -19,6 +24,8 @@ import {
   resolvePulsePeriod,
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
+import { jstDateKey } from "../_shared/jst.ts";
+import { renderReconnectNotice } from "../_shared/reconnect-notice.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -36,7 +43,14 @@ Deno.serve(async (req: Request) => {
   if (!caller.ok) return caller.response;
 
   try {
-    const { company_id, email, target_date, intent: requestedIntent } = await req.json();
+    const {
+      company_id,
+      email,
+      target_date,
+      intent: requestedIntent,
+      kind: requestedKind,
+      detected_at,
+    } = await req.json();
 
     const scope = resolveCompanyId(caller.caller, company_id);
     if (!scope.ok) return scope.response;
@@ -49,6 +63,66 @@ Deno.serve(async (req: Request) => {
     }
 
     const now = new Date();
+
+    // ------------------------------------------------------------------
+    // 再連携のお願い（PS-9b）。**通常のパルスと本文を混ぜない。**
+    //
+    // 取り込みが止まっている会社に平常の状態記述を出すと、
+    // **古い値を今の状態として提示する**ことになる。したがってここで返し、
+    // `findings` も `events` も読まない。
+    //
+    // **この経路は LLM を通らない**（PS-9c）。定型文と provider 名だけで組める。
+    // LLM は `run-sense` → `investigate` の先にあり、ここからは呼ばない——
+    // ディスパッチャ側も取り消し中の会社には `run-sense` を呼ばない。
+    // **呼ばないことが担保である。**
+    // ------------------------------------------------------------------
+    if (requestedKind === "reconnect") {
+      const period = jstDateKey(now);
+      const mailConfig = resolveMailConfig();
+      if (!mailConfig.ok) {
+        return json(500, { error: `mail not configured: ${mailConfig.missing.join(", ")}` });
+      }
+
+      // 差し込みは2つだけ（PS-S4・2026-09-08 に会社名を外した）。**欠けたら送らない。**
+      // 欠けたまま送ると「(不明) から取り込めていません」が顧客に届く。
+      // 200 で流すと**送れていないのに送ったことになる**ので 500 を返し、
+      // ディスパッチャが `failed_deliver` として記録して実行そのものを non-2xx にする
+      const rawOrigin = (Deno.env.get("SENTIO_SITE_ORIGIN") ?? "").trim();
+      const origin = rawOrigin.endsWith("/") ? rawOrigin.slice(0, -1) : rawOrigin;
+      const notice = renderReconnectNotice({
+        detectedAt: typeof detected_at === "string" ? detected_at : "",
+        reconnectUrl: origin ? `${origin}/connect` : "",
+      });
+
+      if (!notice) {
+        return json(500, {
+          error: "reconnect notice not renderable",
+          missing: { detected_at: !detected_at, site_origin: !origin },
+        });
+      }
+
+      const noticeResult = await deliverOnce(
+        asDeliveryDb(supabase),
+        {
+          companyId,
+          channel: "email",
+          // **pulse と分ける**（PS-9d）。同じ種別に混ぜると、後から数え分けられない
+          deliveryType: "reconnect",
+          idempotencyKey: deliveryKey({ kind: "reconnect", companyId, period }),
+          content: { notice: "reconnect", period },
+          now,
+        },
+        () =>
+          sendEmail(mailConfig.config, {
+            to: email,
+            subject: notice.subject,
+            html: renderAlertHtml(notice.subject, notice.body),
+            text: renderAlertText(notice.subject, notice.body),
+          }),
+      );
+
+      return deliveryResponse(noticeResult, { company_id: companyId, kind: "reconnect", period });
+    }
 
     // 対象期間は**DBにも外部にも触る前**に決める。
     // 明示指定（target_date）があれば導出より優先する。導出は now 依存で

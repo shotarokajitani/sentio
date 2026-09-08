@@ -19,6 +19,7 @@ import {
   type BillingCounts,
   type CompanyTarget,
   type DispatchDeps,
+  type DispatchRecord,
   type InvokeResult,
   type OpsNotifyResult,
 } from "@edge/_shared/dispatch";
@@ -28,7 +29,9 @@ function target(overrides: Partial<CompanyTarget> = {}): CompanyTarget {
   return {
     companyId: "c0000000-0000-4000-8000-000000000001",
     email: "owner@example.invalid",
-    hasConnection: true,
+    connectionState: "active",
+    lastReconnectNoticeAt: null,
+    detectedAt: null,
     ...overrides,
   };
 }
@@ -51,12 +54,18 @@ function deps(
   targets: CompanyTarget[],
   results: Record<string, InvokeResult> = {},
   billing: BillingStub = {},
-): DispatchDeps & { calls: Call[]; notified: number[] } {
+): DispatchDeps & { calls: Call[]; notified: number[]; recorded: DispatchRecord[] } {
   const calls: Call[] = [];
   const notified: number[] = [];
+  const recorded: DispatchRecord[] = [];
   return {
     calls,
     notified,
+    recorded,
+    recordDispatch: async (rows) => {
+      recorded.push(...rows);
+      return { ok: true };
+    },
     listTargets: async () => targets,
     invoke: async (fn, body) => {
       calls.push({ fn, body });
@@ -87,7 +96,7 @@ describe("CD-1: 対象の選び方", () => {
   });
 
   it("CD-1-2（陰性コントロール）: 連携ゼロの会社に deliver-* を呼ばない", async () => {
-    const d = deps([target({ hasConnection: false })]);
+    const d = deps([target({ connectionState: "none" })]);
     const result = await runDispatch("daily", INTERNAL, d);
 
     expect(d.calls).toEqual([]);
@@ -214,7 +223,7 @@ describe("SB-1: 順序と対象", () => {
   });
 
   it("SB-1-3（陰性コントロール）: 連携ゼロの会社では state-baselines を呼ばない", async () => {
-    const d = deps([target({ hasConnection: false })]);
+    const d = deps([target({ connectionState: "none" })]);
     const result = await runDispatch("daily", INTERNAL, d);
 
     expect(d.calls).toEqual([]);
@@ -290,6 +299,147 @@ describe("SB-2: State の失敗の扱い", () => {
  * 0件でも項目を出すこと・集計の失敗を0件と読ませないこと・
  * 通知の送信失敗そのものを黙らせないこと。3つとも、今日までに実際に踏んだ形である。
  */
+/**
+ * PS-8 / PS-9（2026-09-08）。**送らなかった日を残し、取り消しを人へ届ける。**
+ *
+ * 2026-09-03〜09-06、パルスが4日間出ず、その事実がどこにも残らなかった。
+ * 取り消し → sync 対象外 → 0社 → 無記録、という連なりで、
+ * **cron は毎日 succeeded、応答は毎日 200 だった。**
+ */
+describe("PS-9: 取り消し中の会社へ再連携のお願いを送る", () => {
+  const revoked = target({ connectionState: "revoked" });
+
+  it("取り消し中の会社には**再連携のお願いだけ**を送る（state も sense も呼ばない）", async () => {
+    const d = deps([revoked]);
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    // **LLM へ入る経路（run-sense → investigate）を呼ばないことが担保である**（PS-9c）
+    expect(d.calls.map((c) => c.fn)).toEqual(["deliver-pulse"]);
+    expect(d.calls[0].body).toMatchObject({ kind: "reconnect" });
+    expect(result.body).toMatchObject({ reconnect_notice: 1, delivered: 0 });
+  });
+
+  it("PS-S4: 差し込み（検知日時）を渡す。**会社名は文面から外した**", async () => {
+    const detectedAt = "2026-09-03T06:00:03.841Z";
+    const d = deps([target({ connectionState: "revoked", detectedAt })]);
+    await runDispatch("daily", INTERNAL, d);
+
+    // 会社名は出所が無いので 2026-09-08 に文面から外した（検収者の決定）。
+    // **渡さないことを固定する**——復活させるなら文面ごと諮る
+    expect(d.calls[0].body).toMatchObject({ kind: "reconnect", detected_at: detectedAt });
+    expect(d.calls[0].body).not.toHaveProperty("company_name");
+  });
+
+  it("reauth_required でも同じ経路を通る", async () => {
+    const d = deps([target({ connectionState: "reauth_required" })]);
+    await runDispatch("daily", INTERNAL, d);
+
+    expect(d.calls.map((c) => c.fn)).toEqual(["deliver-pulse"]);
+    expect(d.calls[0].body).toMatchObject({ kind: "reconnect" });
+  });
+
+  it("**陰性コントロール**: 健全な会社の呼び出しは変わっていない（本文に kind を混ぜない）", async () => {
+    const d = deps([target()]);
+    await runDispatch("daily", INTERNAL, d);
+
+    expect(d.calls.map((c) => c.fn)).toEqual(["state-baselines", "run-sense", "deliver-pulse"]);
+    expect(d.calls[2].body).not.toHaveProperty("kind");
+  });
+
+  it("**陰性コントロール**: pending の会社は配信対象に入らない（関門を開けるのは2状態だけ）", async () => {
+    // 「active 以外すべて」にしていない。pending は認可が完了していない行である
+    const d = deps([target({ connectionState: "pending" as never })]);
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(d.calls).toEqual([]);
+    expect(result.body).toMatchObject({ skipped_no_connection: 1, reconnect_notice: 0 });
+  });
+
+  it("**陰性コントロール**: 週次では再連携のお願いを送らない（同じ内容が週2回届かない）", async () => {
+    const d = deps([revoked]);
+    const result = await runDispatch("weekly", INTERNAL, d);
+
+    expect(d.calls).toEqual([]);
+    expect(result.body).toMatchObject({ skipped_no_connection: 1 });
+  });
+
+  it("PS-9e: 7日以内に送っていれば**送らない**。理由つきで記録に残す", async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const d = deps([target({ connectionState: "revoked", lastReconnectNoticeAt: threeDaysAgo })]);
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(d.calls).toEqual([]);
+    expect(result.body).toMatchObject({ reconnect_suppressed: 1, reconnect_notice: 0 });
+    expect(d.recorded).toContainEqual({
+      kind: "company",
+      dispatch: "daily",
+      companyId: revoked.companyId,
+      outcome: "reconnect_suppressed",
+      reason: "sent_within_7_days",
+    });
+  });
+
+  it("PS-9e: 7日を過ぎていれば送る", async () => {
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const d = deps([target({ connectionState: "revoked", lastReconnectNoticeAt: eightDaysAgo })]);
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.body).toMatchObject({ reconnect_notice: 1 });
+  });
+
+  it("PS-9f: **送らなかった**と**送り損ねた**を別の値で残す", async () => {
+    const d = deps([revoked], { "deliver-pulse": { ok: false, status: 500 } });
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.status).not.toBe(200);
+    expect(d.recorded).toContainEqual({
+      kind: "company",
+      dispatch: "daily",
+      companyId: revoked.companyId,
+      outcome: "failed_deliver",
+      reason: "status_500",
+    });
+  });
+});
+
+describe("PS-8: 送らなかった日を記録する", () => {
+  it("**0社でも実行の行を必ず残す**（0件と、cron が発火していないを区別する）", async () => {
+    const d = deps([]);
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(d.recorded).toEqual([{ kind: "run", dispatch: "daily", companies: 0 }]);
+    expect(result.body).toMatchObject({ recorded: true });
+  });
+
+  it("スキップした会社も理由つきで残す", async () => {
+    const d = deps([target({ connectionState: "none" }), target({ companyId: "x", email: null })]);
+    await runDispatch("daily", INTERNAL, d);
+
+    expect(d.recorded).toContainEqual(
+      expect.objectContaining({ outcome: "skipped_no_connection" }),
+    );
+    expect(d.recorded).toContainEqual(expect.objectContaining({ outcome: "skipped_no_email" }));
+    expect(d.recorded).toContainEqual({ kind: "run", dispatch: "daily", companies: 2 });
+  });
+
+  it("**陰性コントロール**: 記録に失敗したら non-2xx にする（記録が無いと後から辿れない）", async () => {
+    const d = deps([target()]);
+    d.recordDispatch = async () => ({ ok: false, error: "insert failed" });
+
+    const result = await runDispatch("daily", INTERNAL, d);
+
+    expect(result.body).toMatchObject({ recorded: false });
+    expect(result.status).not.toBe(200);
+  });
+
+  it("記録にメールアドレスを載せない", async () => {
+    const d = deps([target()]);
+    await runDispatch("daily", INTERNAL, d);
+
+    expect(JSON.stringify(d.recorded)).not.toContain("@");
+  });
+});
+
 describe("④-a: 未解決の課金 webhook に気づく経路", () => {
   it("解決済みと3日超も、0件でも項目として出す（消さない）", async () => {
     const d = deps([target()], {}, { counts: { unresolved: 0, resolved: 4, stale: 0 } });

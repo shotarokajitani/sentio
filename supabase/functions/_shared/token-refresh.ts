@@ -7,6 +7,7 @@
  */
 
 import { takeError } from "./db.ts";
+import { recordConnectionEvent } from "./connection-events.ts";
 
 export const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
@@ -84,7 +85,13 @@ export interface RefreshError {
 
 interface Connection {
   id: string;
+  company_id: string;
   provider: string;
+  /**
+   * 遷移を残すために要る（PS-9）。**「どこから」変わったかが無いと、
+   * 平常と本物の遷移を区別できない。** 呼び出し元が select に含める
+   */
+  status?: string | null;
   /** 00007 では NULL 許容。認可が完了しなかった行には秘密が無い */
   vault_secret_id: string | null;
   expires_at: string | null;
@@ -119,7 +126,7 @@ export async function refreshToken(
     p_id: connection.vault_secret_id,
   });
   if (vaultError || !vaultData) {
-    await markReauthRequired(supabase, connection.id, "vault read failed");
+    await markReauthRequired(supabase, connection, "vault read failed");
     return {
       ok: false,
       reason: `vault read failed: ${vaultError?.message ?? "no data"}`,
@@ -132,7 +139,7 @@ export async function refreshToken(
     refreshTokenValue = payload.refresh_token;
     if (!refreshTokenValue) throw new Error("refresh_token missing in payload");
   } catch (e: any) {
-    await markReauthRequired(supabase, connection.id, "invalid vault payload");
+    await markReauthRequired(supabase, connection, "invalid vault payload");
     return { ok: false, reason: `invalid vault payload: ${e.message}` };
   }
 
@@ -150,7 +157,7 @@ export async function refreshToken(
       }),
     });
   } catch (e: any) {
-    await markReauthRequired(supabase, connection.id, "token fetch failed");
+    await markReauthRequired(supabase, connection, "token fetch failed");
     return { ok: false, reason: `token fetch failed: ${e.message}` };
   }
 
@@ -173,7 +180,7 @@ export async function refreshToken(
       };
     }
 
-    await markReauthRequired(supabase, connection.id, `token endpoint ${tokenRes.status}`);
+    await markReauthRequired(supabase, connection, `token endpoint ${tokenRes.status}`);
     return {
       ok: false,
       reason: `token endpoint returned ${tokenRes.status}`,
@@ -222,6 +229,19 @@ export async function refreshToken(
     return { ok: false, reason: `connection update failed: ${connUpdateError.message}` };
   }
 
+  // **取り消し中から自力で戻ったときだけ遷移を残す**（PS-9）。
+  // 毎回 active → active を書くと、平常の日に行が積み上がって本物の遷移が埋もれる
+  if (connection.status && connection.status !== "active") {
+    const recorded = await recordConnectionEvent(supabase, {
+      companyId: connection.company_id,
+      provider: connection.provider,
+      fromStatus: connection.status as "revoked" | "reauth_required" | "pending",
+      toStatus: "active",
+      reason: "reconnected",
+    });
+    if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
+  }
+
   return { ok: true, accessToken: newAccessToken, expiresAt: newExpiresAt };
 }
 
@@ -251,10 +271,20 @@ async function markRevoked(supabase: any, connection: Connection): Promise<boole
 
     if (destroyError) {
       console.error("failed to destroy vault secret on revoke:", destroyError.message);
-      await markReauthRequired(supabase, connection.id, "vault destroy failed on revoke");
+      await markReauthRequired(supabase, connection, "vault destroy failed on revoke");
       return false;
     }
   }
+
+  const recordedRevoke = await recordConnectionEvent(supabase, {
+    companyId: connection.company_id,
+    provider: connection.provider,
+    fromStatus: (connection.status as "active" | "reauth_required" | "pending" | null) ?? null,
+    toStatus: "revoked",
+    // **取り消しの確認である。** 「更新に失敗した」と混ぜない
+    reason: "invalid_grant",
+  });
+  if (!recordedRevoke.ok) console.error("connection_events insert failed:", recordedRevoke.error);
 
   const error = await takeError(
     supabase
@@ -278,17 +308,36 @@ async function markRevoked(supabase: any, connection: Connection): Promise<boole
   return true;
 }
 
-/** 接続ステータスを reauth_required に更新するヘルパー */
+/**
+ * 接続ステータスを `reauth_required` に更新するヘルパー。
+ *
+ * **遷移も同じ場所で残す**（PS-9）。ここを分けると、状態だけ変わって記録が残らない
+ * 経路ができる——それが 2026-09-03 に起きたことである。
+ */
 async function markReauthRequired(
   supabase: any,
-  connectionId: string,
+  connection: Connection,
   reason: string,
 ): Promise<void> {
   const error = await takeError(
-    supabase.from("connections").update({ status: "reauth_required" }).eq("id", connectionId),
+    supabase.from("connections").update({ status: "reauth_required" }).eq("id", connection.id),
     "token-refresh: mark reauth_required",
   );
   if (error) {
     console.error(`failed to mark reauth_required (${reason}):`, error.message);
   }
+
+  // **すでに reauth_required なら書かない。** 6時間おきに同じ行が積み上がると、
+  // 本物の遷移（active → reauth_required）が埋もれる
+  if (connection.status === "reauth_required") return;
+
+  const recorded = await recordConnectionEvent(supabase, {
+    companyId: connection.company_id,
+    provider: connection.provider,
+    fromStatus: (connection.status as "active" | "revoked" | "pending" | null) ?? null,
+    toStatus: "reauth_required",
+    // **取り消しの確認ではない。** Vault の破棄失敗だけは別の理由にする
+    reason: reason === "vault destroy failed on revoke" ? "vault_destroy_failed" : "refresh_failed",
+  });
+  if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
 }

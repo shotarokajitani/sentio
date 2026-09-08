@@ -1286,6 +1286,116 @@ from auth.users;
 **最初の1社が購読したとき。** 購読者が居ない間は、止める導線が無くても誰も困らない。
 逆に1社でも入ったら、**止められないことは約束の問題になる。**
 
+## 会社名の出所が無い（**未判断・2026-09-08 登録**）
+
+**`companies` に相当するテーブルが無く、会社名を持つ列も無い**（検収者の本番実測・2026-09-08）。
+
+- `company_summary` は `company_id` / `content` / `token_count` / `chapters` / `generated_at` の
+  5列で、**名前の列を持たない**
+- `company_id` は `auth.users.id` と一致する（3ユーザー中2件が一致）
+- `auth.users.raw_user_meta_data` に `company_name` を持つ行は **0件**。`full_name` も **0件**
+- 登録フォームが聞くのはメールアドレス・パスワード・自社サイトURL（任意）だけで、
+  本番の3件は **`site_url` も未設定**
+
+**2026-09-08 の決定: 「再連携のお願い」の文面から会社名を外した。**
+「登録時に会社名を聞く」は登録フローという別の面を開ける（`/register` にはフォームすら無い）。
+「ドメインから導く」は推測を本文に載せることになり、
+**本番の2社は同一ドメインのエイリアスなので導いても区別できない。**
+**1社1通なので、受け取った本人が自分宛と判別できないことはない。**
+
+**要るようになるのは、1社に複数ユーザーが入る形にしたときである。** そのときに決める。
+
+## オリジンの出所が2箇所ある（**未判断・2026-09-08 登録**）
+
+再連携URLを組むために **Supabase の Edge Function secrets に `SENTIO_SITE_ORIGIN`** を置く。
+一方 Next.js 側は `NEXT_PUBLIC_SITE_ORIGIN`（Vercel の環境変数）を使っている。
+**Edge Function は Vercel の環境変数を読めない**ので二重に持つことは避けられないが、
+**同じ意味の値が2箇所に存在し、ずれても検知できない。**
+
+`retentionCutoff` のような二重実装は `check:dual-impl` が止めるが、
+**あれはコードの二重化を見るものであって、設定値の二重化は見ない。**
+Vercel の `sentio-9e2b` には `www.sentio-ai.jp` と `sentio-ai.jp` の両方が紐づいている
+（2026-09-08 実測）ので、**どちらを正とするかでも割れうる。**
+
+**どう揃えるかは判断しない。**
+
+## 外部顧客が入ったとき、運用側が取り消しに気づけない（未判断・2026-09-08 登録）
+
+PS-9 で入れたのは**利用者に届ける経路**（取り消し中の会社に「再連携のお願い」を送る）である。
+**運用側（Sentio を運営する側）に届く経路は入れていない。**
+
+いまは利用者＝運用者なので実害が出ていない。**外部顧客が入ると変わる。**
+顧客の連携が切れても、こちらは `connection_events` と `dispatch_runs` を
+**自分で見に行かない限り気づかない。**
+
+足すなら ④-a で作った `notifyOpsBillingUnresolved` と同じ経路（`SENTIO_OPS_EMAIL` ＋ Resend）が
+そのまま使える。**遷移は `connection_events` に残るので、後から足せる。**
+**入れるかどうか、いつ入れるかは判断しない。**
+
+## パルスが4日間出ず、その事実がどこにも残らなかった（2026-09-08 登録）
+
+**2026-09-03 から 09-06 まで、毎朝のパルスが1通も出ていない。**
+`delivery_log` の pulse は 08-26 / 08-30 / 08-31 / 09-01 / 09-02 / 09-07 の11行で、
+**09-03 / 09-04 / 09-05 / 09-06 の行が存在しない**（検収者の本番実測・2026-09-08 17:54 JST）。
+一方 `cron.job_run_details` の `dispatch-daily` は 08-31 から 09-07 まで毎日 22:00 UTC に発火し、
+**全て succeeded** である。**「動いていた」と「何かをした」は別だった。**
+
+### 原因の構造（**推測ではなく、実装とログで辿れる**）
+
+1. **取り消し。** 2026-09-03 01:14 UTC に利用者が Google 側で連携を取り消した（意図的な実験）
+2. **検知は 06:00 UTC の `sync-connections`。** ログに実物が残っている（2026-09-08 に確認）
+
+   ```
+   2026-09-03T06:00:03.868Z refresh failed: provider=google_calendar company=197f2c0e…
+     reason=token endpoint returned 400 (invalid_grant: revoked)
+   2026-09-03T06:00:04.030Z refresh failed: provider=google_calendar company=ab73e516…
+     reason=token endpoint returned 400 (invalid_grant: revoked)
+   ```
+
+   `_shared/token-refresh.ts:262` の経路で **2社とも `status='revoked'`** に落ちた
+3. **以後 `sync-connections` の対象から外れる。** `sync-connections/index.ts:57` は
+   `.eq("status", "active")` で引くので、`revoked` の行は**二度と読まれない**。
+   カレンダーのイベントも取り込まれない
+4. **`dispatch-daily` が0社になる。** 会社の選別に使う条件は
+   `dispatch-runtime.ts:44-46` の **`status === "active"`** だけである
+   （`revoked_at` も `expires_at` も見ていない）。`dispatch.ts:159-163` が
+   `skipped_no_connection++` して `continue` するため、
+   **`state-baselines` / `run-sense` / `deliver-pulse` を1回も呼ばない**。
+   2026-09-06 22:00 UTC の Edge ログが `booted` / `POST 200 dispatch-daily` / `shutdown` の
+   **3行だけ**なのはこれである（09-07 の同じ窓には5関数ぶんが並ぶ）
+5. **記録が残らない。** 集計は応答本文に載るだけで（`dispatch.ts:244`）、DB に書く経路が無い。
+   応答は `net._http_response` に入るが **`pg_net.ttl = 6 hours`**（2026-09-08 実測）で消える。
+   **22:00 UTC の結果は翌 04:00 UTC までに読まないと存在しなくなる**
+
+**0社でも 200 を返す。** `dispatch.ts:244` の `failed` は配信・Sense・State の失敗数だけを見ており、
+**スキップは失敗ではない。** 例外は握り潰していない（`index.ts` の try/catch が 5xx を返す）。
+つまり **「何も無かった」と「何も起きなかった」が同じ 200 になる。**
+
+### `connections.status` は「最後に試したときの結果」である
+
+**「いま有効かどうか」ではない。** `status` を書き換えるのは4箇所だけで
+（`auth/callback/google/route.ts:103` / `freee/route.ts:101` / `_shared/token-refresh.ts:211,262,288`）、
+**`expires_at` を過ぎたことを理由に status を変えるコードは無い。**
+2026-09-08 09:06 UTC の実測では、2行とも `expires_at = 07:00 UTC`（2時間前に期限切れ）なのに
+`status = active` のままだった。次に触るのは `sync-connections` の cron（UTC 0/6/12/18）である。
+
+### D-3（30日で削除）の実削除は切り替えない
+
+**cron の本文は `{"dry_run": true}` のまま据え置く。** 理由は2つ。
+
+1. **削除の経路が一度も通っていない。** 2026-09-07 20:00:04 UTC の DRY-RUN は
+   `targets=0 deleted=0 blocked=0` で、通ったのは配管だけである
+   （`retention_purge_runs` に `kind=run / counted=0 / decision=dry_run` が1行）
+2. **取り消しに誰も気づけない状態で、30日後に本番データが自動で消える。**
+   09-03 の取り消しは、09-07 に人が手で再連携するまで**4日間どこにも出ていなかった**
+
+**解除条件: PS-9（取り消しを人へ届ける）が本番で1回実測できること。**
+順序を逆にする——**気づく経路が動いてから、消す経路を有効にする。**
+
+> 引用元は `claude/2026-09-08_本番実測_検収側.md` と `claude/Sentio_契約PS_20260903.md` §10。
+> **どちらもリポジトリ外の文書で、本文は確認していない**（この節の実測値は
+> 検収者から渡された数値と、こちらで実行した読み取り照会・ログ照会による）。
+
 ## 手元のマシンのメモリが足りない（2026-09-08 登録・**判断は書かない**）
 
 **ローカルで検証コマンドが完走しない。** 2026-09-08 02時台の実測。

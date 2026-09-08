@@ -16,6 +16,30 @@ import type { CallerKind } from "./caller.ts";
 
 export type DispatchKind = "daily" | "weekly";
 
+/**
+ * 連携の状態（PS-9a）。**関門を開けるのは `revoked` と `reauth_required` の2つだけ。**
+ * 「active 以外すべて」にしない——`pending` は認可が完了していない行で、
+ * 再連携のお願いを送る相手ではない。
+ */
+export type ConnectionState = "active" | "revoked" | "reauth_required" | "none";
+
+/** 会社ごとの結末。**00032 の `dispatch_runs_outcome_check` と同じ集合**である */
+export type CompanyOutcome =
+  | "delivered"
+  | "reconnect_notice"
+  | "reconnect_suppressed"
+  | "skipped_no_connection"
+  | "skipped_no_email"
+  | "failed_state"
+  | "failed_sense"
+  | "failed_deliver";
+
+/**
+ * 再連携のお願いを送る間隔（PS-9e）。**遷移が起きた日に1通、以後7日ごと。**
+ * 毎日送らないのは、毎日届く通知が**その日から無視される対象になる**ためである。
+ */
+export const RECONNECT_NOTICE_INTERVAL_DAYS = 7;
+
 export interface CompanyTarget {
   companyId: string;
   /**
@@ -24,8 +48,63 @@ export interface CompanyTarget {
    * **宛先テーブルを別に持たない。** 正本が2つになると片方が古くなる。
    */
   email: string | null;
-  /** `connections` に有効な行が1つ以上あるか（CD-D3） */
-  hasConnection: boolean;
+  /**
+   * 連携の状態（会社ごとに1つに畳む）。**`active` が1つでもあれば `active`**、
+   * 無ければ `revoked` / `reauth_required` の順に拾い、どれも無ければ `none`（CD-D3 の後継）。
+   */
+  connectionState: ConnectionState;
+  /** 直近で「再連携のお願い」を送った時刻。**7日ごとの判定に使う**（PS-9e） */
+  lastReconnectNoticeAt: string | null;
+  /**
+   * 連携が切れたことを検知した時刻（文面の差し込み・PS-S4）。
+   * **無ければ送らない**——「(不明) から取り込めていません」を顧客に出さない
+   */
+  detectedAt: string | null;
+}
+
+/** 1社ぶんの判断。**実行はしない** */
+export type CompanyPlan =
+  | { action: "deliver" }
+  | { action: "reconnect" }
+  | { action: "suppress"; outcome: "reconnect_suppressed"; reason: string }
+  | { action: "skip"; outcome: "skipped_no_connection" | "skipped_no_email" };
+
+/**
+ * その会社に何をするかを決める。**判断をここに閉じる**（画面の `cardActions` と同じ作法）。
+ *
+ * 順序が要件である。
+ *   1. 連携の状態で関門を通す（`active` ／ daily の `revoked` `reauth_required` 以外は落とす）
+ *   2. 宛先が無ければ落とす
+ *   3. `active` は通常の配信
+ *   4. 取り消し中は、7日以内に送っていなければ「再連携のお願い」、送っていれば抑制
+ *
+ * **weekly では再連携のお願いを送らない**（PS-9 は毎朝の経路である）。
+ * 週次でも送ると、同じ内容が週2回届く。
+ */
+export function planCompany(target: CompanyTarget, kind: DispatchKind, now: Date): CompanyPlan {
+  const needsReconnect =
+    target.connectionState === "revoked" || target.connectionState === "reauth_required";
+
+  if (target.connectionState !== "active" && !(needsReconnect && kind === "daily")) {
+    return { action: "skip", outcome: "skipped_no_connection" };
+  }
+  if (!target.email) return { action: "skip", outcome: "skipped_no_email" };
+  if (target.connectionState === "active") return { action: "deliver" };
+
+  const last = target.lastReconnectNoticeAt ? new Date(target.lastReconnectNoticeAt) : null;
+  if (last && !Number.isNaN(last.getTime())) {
+    const days = (now.getTime() - last.getTime()) / (24 * 60 * 60 * 1000);
+    if (days < RECONNECT_NOTICE_INTERVAL_DAYS) {
+      // **「送らなかった」を「送り損ねた」と混ぜない。** 理由を添えて残す（PS-9f）
+      return {
+        action: "suppress",
+        outcome: "reconnect_suppressed",
+        reason: `sent_within_${RECONNECT_NOTICE_INTERVAL_DAYS}_days`,
+      };
+    }
+  }
+
+  return { action: "reconnect" };
 }
 
 export interface InvokeResult {
@@ -73,7 +152,25 @@ export interface DispatchDeps {
   countBillingUnresolved(): Promise<BillingCounts | null>;
   /** 1件以上あるときだけ呼ぶ。運用宛に1通出す */
   notifyOpsBillingUnresolved(count: number): Promise<OpsNotifyResult>;
+  /**
+   * 実行の記録を残す（PS-8）。**0社でも `kind='run'` の1行は必ず書く。**
+   *
+   * ここで throw しない。記録の失敗で配信そのものを落とすと、
+   * 「送れたのに 5xx」が起きる。失敗は値で返し、summary に出す。
+   */
+  recordDispatch(rows: DispatchRecord[]): Promise<{ ok: boolean; error?: string }>;
 }
+
+/** `dispatch_runs`（00032）に書く1行。**列と同じ形にしてある** */
+export type DispatchRecord =
+  | { kind: "run"; dispatch: DispatchKind; companies: number }
+  | {
+      kind: "company";
+      dispatch: DispatchKind;
+      companyId: string;
+      outcome: CompanyOutcome;
+      reason?: string;
+    };
 
 /**
  * 集計。**メールアドレスを載せない**（CD-2-3）。会社数と件数だけを出す。
@@ -91,6 +188,15 @@ export interface DispatchSummary {
   sense_failed: number;
   /** うち `state-baselines` の失敗（配信も Sense も止めない。SB-D2） */
   state_failed: number;
+  /** 再連携のお願いを送った会社数（PS-9） */
+  reconnect_notice: number;
+  /** **送らなかった**会社数（7日以内に送っている。PS-9e/f） */
+  reconnect_suppressed: number;
+  /**
+   * 実行の記録を書けたか（PS-8）。**書けなかったことを黙らせない。**
+   * `failed` は配信の失敗数なので、ここは別に持つ
+   */
+  recorded: boolean;
   /**
    * 会社を引けなかった課金 webhook の未対処件数（daily のみ・④-a）。
    *
@@ -153,18 +259,78 @@ export async function runDispatch(
     failed: 0,
     sense_failed: 0,
     state_failed: 0,
+    reconnect_notice: 0,
+    reconnect_suppressed: 0,
+    recorded: false,
   };
 
+  const records: DispatchRecord[] = [];
+  const now = new Date();
+
   for (const target of targets) {
-    // 連携ゼロの会社に空のパルスを送らない（CD-1-2）
-    if (!target.hasConnection) {
-      summary.skipped_no_connection++;
+    const plan = planCompany(target, kind, now);
+
+    // 連携ゼロの会社に空のパルスを送らない（CD-1-2）／宛先が無ければ呼ばない（CD-1-3）。
+    // **落とした事実は記録に残す**（PS-8）
+    if (plan.action === "skip") {
+      if (plan.outcome === "skipped_no_connection") summary.skipped_no_connection++;
+      else summary.skipped_no_email++;
+      records.push({
+        kind: "company",
+        dispatch: kind,
+        companyId: target.companyId,
+        outcome: plan.outcome,
+      });
       continue;
     }
 
-    // 宛先が取れない会社は呼ばない。400 を積み上げない（CD-1-3）
-    if (!target.email) {
-      summary.skipped_no_email++;
+    // **送らなかった日も残す**（PS-9f）。「送り損ねた」（failed_deliver）と別の値にしてある
+    if (plan.action === "suppress") {
+      summary.reconnect_suppressed++;
+      records.push({
+        kind: "company",
+        dispatch: kind,
+        companyId: target.companyId,
+        outcome: plan.outcome,
+        reason: plan.reason,
+      });
+      continue;
+    }
+
+    // 取り消し中の会社には**再連携のお願いだけ**を送る（PS-9b）。
+    //
+    // **`state-baselines` も `run-sense` も呼ばない。** 取り込みが止まっている会社に
+    // 平常の状態記述を出すと、**古い値を今の状態として提示する**ことになる。
+    // 同時に、この経路は LLM へ入らない（LLM は `run-sense` → `investigate` の先にある）。
+    // **呼ばないことが担保である**（PS-9c）
+    if (plan.action === "reconnect") {
+      const notice = await deps.invoke("deliver-pulse", {
+        company_id: target.companyId,
+        email: target.email,
+        kind: "reconnect",
+        // 差し込みは2つだけ（PS-S4・会社名は 2026-09-08 に文面から外した）。
+        // **欠けたら deliver 側が送らずに 500 を返す**
+        detected_at: target.detectedAt,
+      });
+
+      if (notice.ok) {
+        summary.reconnect_notice++;
+        records.push({
+          kind: "company",
+          dispatch: kind,
+          companyId: target.companyId,
+          outcome: "reconnect_notice",
+        });
+      } else {
+        summary.failed++;
+        records.push({
+          kind: "company",
+          dispatch: kind,
+          companyId: target.companyId,
+          outcome: "failed_deliver",
+          reason: `status_${notice.status}`,
+        });
+      }
       continue;
     }
 
@@ -185,6 +351,13 @@ export async function runDispatch(
         // ただし黙って進めない。失敗として数え、non-2xx に効かせる
         summary.state_failed++;
         summary.failed++;
+        records.push({
+          kind: "company",
+          dispatch: kind,
+          companyId: target.companyId,
+          outcome: "failed_state",
+          reason: `status_${state.status}`,
+        });
       }
 
       const sense = await deps.invoke("run-sense", { company_id: target.companyId });
@@ -192,6 +365,13 @@ export async function runDispatch(
         // **sense の失敗で配信を止めない**（CD-2-4）。ただし失敗として数える
         summary.sense_failed++;
         summary.failed++;
+        records.push({
+          kind: "company",
+          dispatch: kind,
+          companyId: target.companyId,
+          outcome: "failed_sense",
+          reason: `status_${sense.status}`,
+        });
       }
     }
 
@@ -201,8 +381,24 @@ export async function runDispatch(
       email: target.email,
     });
 
-    if (delivered.ok) summary.delivered++;
-    else summary.failed++;
+    if (delivered.ok) {
+      summary.delivered++;
+      records.push({
+        kind: "company",
+        dispatch: kind,
+        companyId: target.companyId,
+        outcome: "delivered",
+      });
+    } else {
+      summary.failed++;
+      records.push({
+        kind: "company",
+        dispatch: kind,
+        companyId: target.companyId,
+        outcome: "failed_deliver",
+        reason: `status_${delivered.status}`,
+      });
+    }
   }
 
   // ④-a: 会社を引けなかった課金 webhook に**気づく経路**はここ1本だけである。
@@ -236,10 +432,23 @@ export async function runDispatch(
     }
   }
 
+  // **異常の有無に関わらず、毎日1行の実行記録が残る**（改訂後の PS-5）。
+  // 0社の日も `companies: 0` の行が残るので、
+  // **「0社だった」と「cron が発火していない」が区別できる。**
+  records.push({ kind: "run", dispatch: kind, companies: targets.length });
+
+  const recorded = await deps.recordDispatch(records);
+  summary.recorded = recorded.ok;
+  if (!recorded.ok) {
+    // **記録の失敗を黙らせない。** ただし配信の失敗数（failed）には混ぜない
+    console.error("dispatch: 実行記録の書き込みに失敗:", recorded.error ?? "unknown");
+  }
+
   // 失敗があれば non-2xx。**呼び出し元（cron）は読まないが、手動実行と CI からは読める**
   //
   // 課金の未解決は `failed` に足さない（あちらは配信・Sense・State の失敗数である）。
   // **数え方を混ぜずに、non-2xx にだけ効かせる。**
-  const failed = summary.failed > 0 || billingProblem;
+  // 記録できなかった実行も non-2xx にする。**記録が無いと、後から何も辿れない**
+  const failed = summary.failed > 0 || billingProblem || !summary.recorded;
   return { status: failed ? 502 : 200, body: { ...summary } };
 }

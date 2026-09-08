@@ -76,11 +76,34 @@ export function buildDeps(): DispatchDeps {
         if (!lastNotice.has(companyId)) lastNotice.set(companyId, n.created_at as string);
       }
 
+      // 検知日時は `connection_events` の**遷移そのもの**から引く（PS-S4 の差し込み）。
+      // `connections.revoked_at` は再連携で NULL に戻るうえ、`reauth_required` には
+      // 対応する列が無い。**遷移の記録だけが両方を持っている**
+      const transitions = await mustData(
+        supabase
+          .from("connection_events")
+          .select("company_id, to_status, occurred_at")
+          .in("to_status", ["revoked", "reauth_required"])
+          .order("occurred_at", { ascending: false }),
+        "dispatch: connection events",
+      );
+
+      const detectedAt = new Map<string, string>();
+      for (const t of transitions) {
+        const companyId = t.company_id as string;
+        if (!detectedAt.has(companyId)) detectedAt.set(companyId, t.occurred_at as string);
+      }
+
       return (data?.users ?? []).map((user) => ({
         companyId: user.id,
         email: user.email ?? null,
         connectionState: stateByCompany.get(user.id) ?? "none",
         lastReconnectNoticeAt: lastNotice.get(user.id) ?? null,
+        detectedAt: detectedAt.get(user.id) ?? null,
+        // **会社名の正本が無い**（列も metadata も無く、本番の3件とも site_url すら未設定）。
+        // 埋められないので null のまま渡し、deliver 側が送らずに止める（fail-closed）。
+        // 何を会社名とするかは**未判断**（`docs/spec/07_open_items.md`）
+        companyName: null,
       }));
     },
 

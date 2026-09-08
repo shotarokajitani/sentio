@@ -55,6 +55,13 @@ export interface CompanyTarget {
   connectionState: ConnectionState;
   /** 直近で「再連携のお願い」を送った時刻。**7日ごとの判定に使う**（PS-9e） */
   lastReconnectNoticeAt: string | null;
+  /**
+   * 連携が切れたことを検知した時刻（文面の差し込み・PS-S4）。
+   * **無ければ送らない**——「(不明) から取り込めていません」を顧客に出さない
+   */
+  detectedAt: string | null;
+  /** 文面に差し込む会社名。**内部IDでもメールアドレスでもない**（PS-S4） */
+  companyName: string | null;
 }
 
 /** 1社ぶんの判断。**実行はしない** */
@@ -303,6 +310,9 @@ export async function runDispatch(
         company_id: target.companyId,
         email: target.email,
         kind: "reconnect",
+        // 差し込みは3つだけ（PS-S4）。**欠けたら deliver 側が送らずに 500 を返す**
+        company_name: target.companyName,
+        detected_at: target.detectedAt,
       });
 
       if (notice.ok) {

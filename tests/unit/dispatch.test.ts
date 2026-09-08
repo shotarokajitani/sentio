@@ -31,6 +31,8 @@ function target(overrides: Partial<CompanyTarget> = {}): CompanyTarget {
     email: "owner@example.invalid",
     connectionState: "active",
     lastReconnectNoticeAt: null,
+    detectedAt: null,
+    companyName: null,
     ...overrides,
   };
 }
@@ -316,6 +318,17 @@ describe("PS-9: 取り消し中の会社へ再連携のお願いを送る", () =
     expect(d.calls.map((c) => c.fn)).toEqual(["deliver-pulse"]);
     expect(d.calls[0].body).toMatchObject({ kind: "reconnect" });
     expect(result.body).toMatchObject({ reconnect_notice: 1, delivered: 0 });
+  });
+
+  it("PS-S4: 差し込み3つのうち、こちらが持つ2つを渡す（会社名は正本が無い）", async () => {
+    const detectedAt = "2026-09-03T06:00:03.841Z";
+    const d = deps([target({ connectionState: "revoked", detectedAt })]);
+    await runDispatch("daily", INTERNAL, d);
+
+    // **会社名の正本がリポジトリにも本番にも無い**ため null を渡す。
+    // 受け側（deliver-pulse）は欠けたら送らずに 500 を返す（fail-closed）
+    expect(d.calls[0].body).toMatchObject({ kind: "reconnect", detected_at: detectedAt });
+    expect(d.calls[0].body).toHaveProperty("company_name", null);
   });
 
   it("reauth_required でも同じ経路を通る", async () => {

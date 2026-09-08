@@ -25,30 +25,7 @@ import {
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import { jstDateKey } from "../_shared/jst.ts";
-
-/**
- * 再連携のお願いの文面（PS-9b / 停止点 PS-S4）。**定型文である。**
- *
- * **provider 名は入れない。** ディスパッチャは会社ごとに状態を1つへ畳んでおり、
- * どの連携が止まっているかをこの経路には渡していない。名前を入れると、
- * freee が止まっている会社に「Google カレンダー」と書きうる。
- *
- * **URL も入れない。** この Function には公開オリジンの設定が無く、
- * 入れるなら新しい設定が1つ増える（今回の範囲外）。
- */
-const RECONNECT_SUBJECT = "[Sentio] 連携が停止しています（再接続のお願い）";
-
-const RECONNECT_BODY = [
-  "Sentio との連携が停止しているため、データの取り込みが行われていません。",
-  "この状態では、日次レポートは配信されません。",
-  "",
-  "再接続の手順",
-  "1. Sentio にログインする",
-  "2. 「会社情報の接続」で「要再連携」と表示されている項目の「再接続」を押す",
-  "",
-  "再接続が完了すると、翌日の配信から再開します。",
-  "この案内は、再接続が完了するまで7日ごとに送信します。",
-].join("\n");
+import { renderReconnectNotice } from "../_shared/reconnect-notice.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -72,6 +49,8 @@ Deno.serve(async (req: Request) => {
       target_date,
       intent: requestedIntent,
       kind: requestedKind,
+      company_name,
+      detected_at,
     } = await req.json();
 
     const scope = resolveCompanyId(caller.caller, company_id);
@@ -105,6 +84,29 @@ Deno.serve(async (req: Request) => {
         return json(500, { error: `mail not configured: ${mailConfig.missing.join(", ")}` });
       }
 
+      // 差し込みは3つだけ（PS-S4）。**1つでも欠けたら送らない。**
+      // 欠けたまま送ると「(不明) の連携が切れています」が顧客に届く。
+      // 200 で流すと**送れていないのに送ったことになる**ので 500 を返し、
+      // ディスパッチャが `failed_deliver` として記録して実行そのものを non-2xx にする
+      const rawOrigin = (Deno.env.get("SENTIO_SITE_ORIGIN") ?? "").trim();
+      const origin = rawOrigin.endsWith("/") ? rawOrigin.slice(0, -1) : rawOrigin;
+      const notice = renderReconnectNotice({
+        companyName: typeof company_name === "string" ? company_name : "",
+        detectedAt: typeof detected_at === "string" ? detected_at : "",
+        reconnectUrl: origin ? `${origin}/connect` : "",
+      });
+
+      if (!notice) {
+        return json(500, {
+          error: "reconnect notice not renderable",
+          missing: {
+            company_name: !company_name,
+            detected_at: !detected_at,
+            site_origin: !origin,
+          },
+        });
+      }
+
       const noticeResult = await deliverOnce(
         asDeliveryDb(supabase),
         {
@@ -119,9 +121,9 @@ Deno.serve(async (req: Request) => {
         () =>
           sendEmail(mailConfig.config, {
             to: email,
-            subject: RECONNECT_SUBJECT,
-            html: renderAlertHtml(RECONNECT_SUBJECT, RECONNECT_BODY),
-            text: renderAlertText(RECONNECT_SUBJECT, RECONNECT_BODY),
+            subject: notice.subject,
+            html: renderAlertHtml(notice.subject, notice.body),
+            text: renderAlertText(notice.subject, notice.body),
           }),
       );
 

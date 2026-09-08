@@ -15,6 +15,8 @@ import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
 // 購読の開始は関門ごとモジュールに置いてある（契約 スライスBU）。
 // 連打の抑止も遷移も、ここからは直接書かない
 import { checkoutFailureMessage, startCheckout } from "@/lib/billing/checkout";
+// 解約・支払い方法の変更・請求書は Stripe 側で完結する（④-b）。ここが持つのは入口だけ
+import { openBillingPortal } from "@/lib/billing/portal";
 
 type CsvStep = "idle" | "analyzing" | "confirm" | "ingesting" | "done" | "error";
 
@@ -83,6 +85,8 @@ export function ConnectClient({
   // 持つと Webhook が書いた正本と画面の思い込みが二重になる
   const [billingStep, setBillingStep] = useState<BillingStep>("idle");
   const [billingError, setBillingError] = useState("");
+  // ポータルを開く手続き（④-b）。**購読しているかどうかはここにも持たない**
+  const [portalStep, setPortalStep] = useState<"idle" | "opening">("idle");
 
   /**
    * 標準プランの購読を始める。
@@ -104,6 +108,25 @@ export function ConnectClient({
     console.error("billing/checkout 失敗:", outcome.status);
     setBillingError(checkoutFailureMessage(outcome) ?? "");
     setBillingStep("failed");
+  }, []);
+
+  /**
+   * カスタマーポータルを開く（④-b）。
+   *
+   * **成功したときは何もしない。** Stripe の画面へ出るので、この画面は置き去りになる。
+   * 連打（`in_flight`）も失敗として扱わない——前の1回がまだ動いているだけである。
+   */
+  const handleManagePlan = useCallback(async () => {
+    setBillingError("");
+    setPortalStep("opening");
+
+    const outcome = await openBillingPortal();
+    if (outcome.ok || outcome.reason === "in_flight") return;
+
+    // 原因はコンソールにだけ残す。画面には内部コードもステータスも出さない（BU-D5）
+    console.error("billing/portal 失敗:", outcome.reason, outcome.status);
+    setBillingError(t.billing.portalFailed);
+    setPortalStep("idle");
   }, []);
 
   /**
@@ -498,9 +521,19 @@ export function ConnectClient({
 
             <div className="row-side">
               {subscribed ? (
-                // 解約の導線は**このスライスでは作らない**（BU-D4）。
-                // カスタマーポータルの実装が要るので `07_open_items.md` に登録してある
-                <span className="state">{t.billing.subscribedState}</span>
+                // ④-b（2026-09-08）: BU-D4「このスライスでは作らない」を改めた。
+                // **リンク1本で、解約も支払い方法の変更も請求書も Stripe 側で完結する。**
+                // 状態を自前で持たないので、`canceled` の順序保証の問題を背負わない
+                <>
+                  <span className="state">{t.billing.subscribedState}</span>
+                  <button
+                    className="btn btn-quiet"
+                    disabled={portalStep === "opening"}
+                    onClick={() => void handleManagePlan()}
+                  >
+                    {portalStep === "opening" ? t.billing.openingPortal : t.billing.managePlan}
+                  </button>
+                </>
               ) : (
                 <>
                   <span className="state">{t.billing.trialState}</span>

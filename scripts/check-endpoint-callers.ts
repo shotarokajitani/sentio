@@ -124,6 +124,14 @@ export const ENDPOINT_SPECS: EndpointSpec[] = [
     route: "src/app/api/billing/checkout/route.ts",
     contract: "BU-2-1",
   },
+  // ④-b（2026-09-08）。解約・支払い方法の変更・請求書は Stripe 側で完結する。
+  // **到達しない実装にしない**ため、入口（/connect のボタン）とセットで宣言に載せる
+  {
+    id: "billing-portal",
+    endpoint: "/api/billing/portal",
+    route: "src/app/api/billing/portal/route.ts",
+    contract: "④-b（BU-D4 を 2026-09-08 に改めた）",
+  },
 ];
 
 export type UnreachableReason = "missing-route" | "no-caller" | "no-importer";

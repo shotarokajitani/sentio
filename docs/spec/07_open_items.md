@@ -1212,12 +1212,12 @@ from auth.users;
 **入ったのは「解約の通知が届いたときに反映される」ところまでである。**
 利用者が Sentio の画面から解約する導線は**まだ無い**（方式が未判断のため。下の1）。
 
-| 何を                                      | どこに                                                                                                                                  |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 会社の逆引き（`customer` → `company_id`） | `00029` の SECURITY DEFINER RPC `company_id_by_stripe_customer`。**新しいテーブルは作らない**（正本は `auth.users.raw_user_meta_data`） |
-| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない・**なぜ引けなかったかを4値で持つ**: `not_found` / `ambiguous` / `lookup_failed` / `retrieve_failed`）                                                      |
-| 気づく経路                                | `dispatch-daily` が毎日数え、1件以上なら運用宛に1通。**0件でも summary に0件と書く**                                                    |
-| 状態の正本                                | **Stripe から取り直した Subscription**（下記のとおり BS-D4 を撤回した）                                                                 |
+| 何を                                      | どこに                                                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 会社の逆引き（`customer` → `company_id`） | `00029` の SECURITY DEFINER RPC `company_id_by_stripe_customer`。**新しいテーブルは作らない**（正本は `auth.users.raw_user_meta_data`）                                                |
+| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない・**なぜ引けなかったかを4値で持つ**: `not_found` / `ambiguous` / `lookup_failed` / `retrieve_failed`） |
+| 気づく経路                                | `dispatch-daily` が毎日数え、1件以上なら運用宛に1通。**0件でも summary に0件と書く**                                                                                                   |
+| 状態の正本                                | **Stripe から取り直した Subscription**（下記のとおり BS-D4 を撤回した）                                                                                                                |
 
 **BS-D4「Stripe API を呼ばない。webhook の本文だけで決める」は撤回した。**
 ペイロードの `status` はイベントごとに意味が違い、実際に本番で `"complete"` が書かれた。
@@ -1286,6 +1286,23 @@ from auth.users;
 **最初の1社が購読したとき。** 購読者が居ない間は、止める導線が無くても誰も困らない。
 逆に1社でも入ったら、**止められないことは約束の問題になる。**
 
+## `metric_key='revenue'` の中身は入金であって売上ではない（2026-09-08 登録）
+
+**表示は「入金」、内部の鍵は `revenue` のまま**と決まった（2026-09-08・検収者）。
+移行を挟むと①の着手が遅れるため、`metric_key` は据え置く。
+
+**したがって、コードを読む人が誤解する余地が残っている。**
+
+- `_shared/baseline-stats.ts:139` は `metricKey: "revenue"` を固定している
+- `_shared/scan.ts:134-150` は `metrics.revenue` を読み、
+  外れ値の説明に `Revenue ... outside [...]` と英語で書く
+- 実データの出所は `csv:accounting` の `metrics.amount`（銀行の入出金明細）で、
+  **着金日ベースの入金額**である。発生主義の売上ではない
+  （会計仕訳を仕訳として解釈する経路が無いため、いまの取り込みでは作れない）
+
+**パルス本文では「入金」と呼び、「売上」とは書かない。**
+名前を揃えるかどうかは、①が動いてから判断する。
+
 ## 会社名の出所が無い（**未判断・2026-09-08 登録**）
 
 **`companies` に相当するテーブルが無く、会社名を持つ列も無い**（検収者の本番実測・2026-09-08）。
@@ -1353,6 +1370,7 @@ PS-9 で入れたのは**利用者に届ける経路**（取り消し中の会�
    ```
 
    `_shared/token-refresh.ts:262` の経路で **2社とも `status='revoked'`** に落ちた
+
 3. **以後 `sync-connections` の対象から外れる。** `sync-connections/index.ts:57` は
    `.eq("status", "active")` で引くので、`revoked` の行は**二度と読まれない**。
    カレンダーのイベントも取り込まれない
@@ -1413,11 +1431,11 @@ $ pnpm exec vitest run tests/unit/login-entry.test.ts   → 同じく exit 134 �
 
 **一時的ではなく、続いている状態である。実測は3点ある。**
 
-| いつ | 何が起きたか | 出所 |
-| --- | --- | --- |
-| 2026-08-18 | **物理 7.8GB に対し空き 0.6GB**、コミット上限 22.5GB に対し空き 0.8GB。Stop hook が `uv_spawn` で失敗（hooks ではなく**プロセス生成の失敗**）。主因は chrome 47プロセス 7.7GB ＋ claude 13プロセス 3.7GB | セッション記録（リポジトリ外・`~/.claude` のメモリ） |
-| 2026-08-20 | 「CC の環境注意: **メモリ枯渇（空き 0.3GB）が継続中**。コマンドが散発的に落ちる可能性がある」 | `claude/2026-08-20_OAuth審査_進行中.md`（**リポジトリ外**・プロジェクト側の文書） |
-| 2026-09-08 | 上の実測（**空き 300 MB / 8017 MB**）。`tsc` も `vitest` もフックの node も落ちる | このセッション（リポジトリ内の本項目） |
+| いつ       | 何が起きたか                                                                                                                                                                                             | 出所                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 2026-08-18 | **物理 7.8GB に対し空き 0.6GB**、コミット上限 22.5GB に対し空き 0.8GB。Stop hook が `uv_spawn` で失敗（hooks ではなく**プロセス生成の失敗**）。主因は chrome 47プロセス 7.7GB ＋ claude 13プロセス 3.7GB | セッション記録（リポジトリ外・`~/.claude` のメモリ）                              |
+| 2026-08-20 | 「CC の環境注意: **メモリ枯渇（空き 0.3GB）が継続中**。コマンドが散発的に落ちる可能性がある」                                                                                                            | `claude/2026-08-20_OAuth審査_進行中.md`（**リポジトリ外**・プロジェクト側の文書） |
+| 2026-09-08 | 上の実測（**空き 300 MB / 8017 MB**）。`tsc` も `vitest` もフックの node も落ちる                                                                                                                        | このセッション（リポジトリ内の本項目）                                            |
 
 > **出所が2種類あることに注意。** 2026-08-20 の記述は**プロジェクト側の文書にあり、
 > リポジトリには無い**。リポジトリにも同名の `docs/reports/2026-08-20_OAuth審査_進行中.md` が
@@ -1522,10 +1540,10 @@ Google が **`redirect_uri_mismatch`（エラー 400）** で弾いた。
 
 ## 再連携の現況（2026-09-07 夜に完了）
 
-| 会社 | status | revoked_at | last_refresh |
-| --- | --- | --- | --- |
-| `197f2c0e…`（+sentio） | `active` | NULL | 2026-09-07 15:35:43 UTC |
-| `ab73e516…`（+google-review） | `active` | NULL | 2026-09-07 14:09:40 UTC |
+| 会社                          | status   | revoked_at | last_refresh            |
+| ----------------------------- | -------- | ---------- | ----------------------- |
+| `197f2c0e…`（+sentio）        | `active` | NULL       | 2026-09-07 15:35:43 UTC |
+| `ab73e516…`（+google-review） | `active` | NULL       | 2026-09-07 14:09:40 UTC |
 
 **2社とも接続済みである。** これにより契約D の停止点
 （`revoked` の実例を人間が確認するまで D-3 を有効にしない）の前提が変わった。
@@ -1685,13 +1703,13 @@ webhook が着く前にこの画面を描くと、状態の正本はまだ空で
 > 散らすと片方だけ見て判断されるため。ここには #80 固有のこと（merge しない判断と
 > 依存7本の内訳）だけを残す。
 
-| 項目 | 値 |
-| --- | --- |
-| PR | [#80](https://github.com/shotarokajitani/sentio/pull/80) `chore(deps-dev): bump the dev-dependencies group across 1 directory with 7 updates` |
-| 落ちている job | **`integration`**（5m49s） |
-| run | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100150574107 |
-| 他の5チェック | `verify` / `edge-functions` / `gitleaks` / Vercel 2件 — すべて pass |
-| 最終更新 | 2026-09-02（レビュー0件・人間コメント0件） |
+| 項目           | 値                                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR             | [#80](https://github.com/shotarokajitani/sentio/pull/80) `chore(deps-dev): bump the dev-dependencies group across 1 directory with 7 updates` |
+| 落ちている job | **`integration`**（5m49s）                                                                                                                    |
+| run            | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100150574107                                                           |
+| 他の5チェック  | `verify` / `edge-functions` / `gitleaks` / Vercel 2件 — すべて pass                                                                           |
+| 最終更新       | 2026-09-02（レビュー0件・人間コメント0件）                                                                                                    |
 
 落ちているのは**1テストだけ**である。
 
@@ -1726,15 +1744,15 @@ Error: Test timed out in 5000ms.
   （production-dependencies）は**全6チェック pass** している
 - **7本の更新のうちどれが効いたか。** 切り分けていない。7本は次のとおり。
 
-  | Package | From | To |
-  | --- | --- | --- |
-  | `@types/node` | 26.2.0 | 26.4.0 |
-  | `@types/react-dom` | 19.2.4 | 19.2.5 |
-  | `@vitejs/plugin-react` | 6.0.5 | 6.1.1 |
-  | `eslint-config-next` | 16.3.1 | 16.3.3 |
-  | `supabase` | 2.114.0 | 2.116.0 |
-  | `tsx` | 4.23.12 | 4.23.13 |
-  | `vitest` | 4.1.10 | 4.1.11 |
+  | Package                | From    | To      |
+  | ---------------------- | ------- | ------- |
+  | `@types/node`          | 26.2.0  | 26.4.0  |
+  | `@types/react-dom`     | 19.2.4  | 19.2.5  |
+  | `@vitejs/plugin-react` | 6.0.5   | 6.1.1   |
+  | `eslint-config-next`   | 16.3.1  | 16.3.3  |
+  | `supabase`             | 2.114.0 | 2.116.0 |
+  | `tsx`                  | 4.23.12 | 4.23.13 |
+  | `vitest`               | 4.1.10  | 4.1.11  |
 
   登録時（2026-09-03 午前）は「タイミングに触りうるのは `vitest` と `supabase` CLI
   の2本」と書いたが、**実測で否定された。**
@@ -1761,6 +1779,7 @@ Error: Test timed out in 5000ms.
   **2026-09-07 に一段強まった。** 根拠は2件 —— **#54（依存差分0）** と
   **#92（`vitest` 据え置き）** である。**#80 側で寄与した可能性は否定していない。**
   詳細は下記「integration の 401 陰性コントロールが〜」に集約した
+
 - CI の 503 フレークは過去にも観測がある
   （`docs/reports/2026-08-21_CI_503フレークの実測.md`）。同じ経路かは**未確認**
 
@@ -1768,12 +1787,12 @@ Error: Test timed out in 5000ms.
 
 **attempt 2 は緑になった。同一コミットで結果が変わった。**
 
-| 項目 | 値 |
-| --- | --- |
-| run | https://github.com/shotarokajitani/sentio/actions/runs/33599722941 （attempt 2） |
-| 結論 | `conclusion=success` |
+| 項目              | 値                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| run               | https://github.com/shotarokajitani/sentio/actions/runs/33599722941 （attempt 2）              |
+| 結論              | `conclusion=success`                                                                          |
 | `integration` job | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100600569373 → success |
-| 3回の内訳 | ステップ `Run integration suite 3 times` で3回とも `Test Files 13 passed (13)` |
+| 3回の内訳         | ステップ `Run integration suite 3 times` で3回とも `Test Files 13 passed (13)`                |
 
 **落ち方は `Test timed out in 5000ms.` であり、アサーションの失敗ではない**（attempt 1）。
 
@@ -1822,11 +1841,11 @@ $ ls node_modules/@sentry            → No such file or directory
 
 ### 観測（実測。1件ずつ足す）
 
-| PR | run ID | attempt | ファイル:行 | 3回中 | 落ち方 | 再実行 |
-| --- | --- | --- | --- | --- | --- | --- |
-| #80 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2 | `tests/integration/pipeline-db.test.ts:281` | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed） |
-| #54 | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2 | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑** |
-| #92 | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | — |
+| PR  | run ID                                                                            | attempt       | ファイル:行                                          | 3回中     | 落ち方                      | 再実行                      |
+| --- | --------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | --------- | --------------------------- | --------------------------- |
+| #80 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed） |
+| #54 | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                      |
+| #92 | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                           |
 
 **「赤 → 再実行 → 緑」にした回数は、この表に1行ずつ残す。**
 数えないと「たまに落ちる」が「問題ない」に変わる。2026-09-03 に踏んだ形と同じである。
@@ -1875,14 +1894,14 @@ skip され、黙って緑になっていた**のを止めることだった。
 draft PR **#93**（`chore/investigate-integration-timeout`・**merge しない**）で5実験を回した。
 run: https://github.com/shotarokajitani/sentio/actions/runs/34090554382/job/101643011074
 
-| 実験 | 内容 | 回数 | 結果 |
-| --- | --- | --- | --- |
-| 基準 | `Run integration suite 3 times` そのまま | 3 | **3回とも 13 passed** |
-| C | `--testTimeout=30000` | 3 | 3回とも 13 passed / exit=0 |
-| B | リセットなしで5回 | 5 | 5回とも 13 passed / exit=0 |
-| A | 各回の前に `supabase db reset` | 3 | 3回とも 13 passed / exit=0 |
-| 1-5 | `delivery-idempotency.test.ts` だけ | 3 | 3回とも 1 passed / exit=0 |
-| 1-6 | ファイル順を逆に | 3 | 3回とも 13 passed / exit=0 |
+| 実験 | 内容                                     | 回数 | 結果                       |
+| ---- | ---------------------------------------- | ---- | -------------------------- |
+| 基準 | `Run integration suite 3 times` そのまま | 3    | **3回とも 13 passed**      |
+| C    | `--testTimeout=30000`                    | 3    | 3回とも 13 passed / exit=0 |
+| B    | リセットなしで5回                        | 5    | 5回とも 13 passed / exit=0 |
+| A    | 各回の前に `supabase db reset`           | 3    | 3回とも 13 passed / exit=0 |
+| 1-5  | `delivery-idempotency.test.ts` だけ      | 3    | 3回とも 1 passed / exit=0  |
+| 1-6  | ファイル順を逆に                         | 3    | 3回とも 13 passed / exit=0 |
 
 **20回すべて緑。症状が再現しなかった。**
 
@@ -1904,13 +1923,13 @@ integration ジョブの実行回数: 46
 
 **failure 5件のうち、この症状は3件だけ**である。残り2件は別原因だった。
 
-| run | 分類 |
-| --- | --- |
-| [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378)（#92） | **401 タイムアウト** |
-| [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) att.1（#54） | **401 タイムアウト** |
-| [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト** |
-| [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634) | 別原因（`SUPABASE_DB_URL` 未設定） |
-| [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1 | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
+| run                                                                                            | 分類                                                             |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378)（#92）       | **401 タイムアウト**                                             |
+| [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) att.1（#54） | **401 タイムアウト**                                             |
+| [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト**                                             |
+| [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634)              | 別原因（`SUPABASE_DB_URL` 未設定）                               |
+| [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1        | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
 
 **2026-09-08 追記（1件増えた）。** PR #99 の
 [run 34140416123](https://github.com/shotarokajitani/sentio/actions/runs/34140416123) で
@@ -1939,81 +1958,81 @@ integration ジョブの実行回数: 46
 1-5（単独ファイル3回）と 1-6（逆順3回）も同じ形で並べてあった。
 
 ```yaml
-      - name: "調査C — testTimeout 30s で3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== C run $i/3 (testTimeout=30000) ====="
-            pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
-            echo "----- C run $i exit=${PIPESTATUS[0]} -----"
-          done
+- name: "調査C — testTimeout 30s で3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== C run $i/3 (testTimeout=30000) ====="
+      pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
+      echo "----- C run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # ------------------------------------------------------------
-      # 実験B: リセットなしで5回。単調に悪化しているかを見る。
-      #   3回目だけ落ちる      → 3回目に固有の何かがある
-      #   4回目・5回目も落ちる → 蓄積で単調に悪化している
-      # **各回を継続させ、全回の結果を採る**（set -e を使わない）。
-      # ------------------------------------------------------------
-      - name: "調査B — リセットなしで5回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3 4 5; do
-            echo "===== B run $i/5 ====="
-            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
-            echo "----- B run $i exit=${PIPESTATUS[0]} -----"
-          done
+# ------------------------------------------------------------
+# 実験B: リセットなしで5回。単調に悪化しているかを見る。
+#   3回目だけ落ちる      → 3回目に固有の何かがある
+#   4回目・5回目も落ちる → 蓄積で単調に悪化している
+# **各回を継続させ、全回の結果を採る**（set -e を使わない）。
+# ------------------------------------------------------------
+- name: "調査B — リセットなしで5回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3 4 5; do
+      echo "===== B run $i/5 ====="
+      pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+      echo "----- B run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # ------------------------------------------------------------
-      # 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
-      #   落ちなければ、蓄積が効いている強い証拠になる。
-      # リセット経路は「Apply all migrations from scratch」で実在が確認できている。
-      # ------------------------------------------------------------
-      - name: "調査A — 各回の前に db reset して3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== A run $i/3 (db reset 済み) ====="
-            supabase db reset
-            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
-            echo "----- A run $i exit=${PIPESTATUS[0]} -----"
-          done
+# ------------------------------------------------------------
+# 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
+#   落ちなければ、蓄積が効いている強い証拠になる。
+# リセット経路は「Apply all migrations from scratch」で実在が確認できている。
+# ------------------------------------------------------------
+- name: "調査A — 各回の前に db reset して3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== A run $i/3 (db reset 済み) ====="
+      supabase db reset
+      pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+      echo "----- A run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # 1-5: 当該ファイルだけを3回走らせる。
-      # 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
-      # 積み上がった状態の問題である。
-      - name: "調査 1-5 — delivery-idempotency だけを3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== 1-5 run $i/3 (single file) ====="
-            pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
-            echo "----- run $i exit=${PIPESTATUS[0]} -----"
-          done
+# 1-5: 当該ファイルだけを3回走らせる。
+# 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
+# 積み上がった状態の問題である。
+- name: "調査 1-5 — delivery-idempotency だけを3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== 1-5 run $i/3 (single file) ====="
+      pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
+      echo "----- run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # 1-6: ファイルの並びを逆にして3回走らせる。
-      # 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
-      # 動かないなら「3回目」という位置そのものに原因がある。
-      - name: "調査 1-6 — ファイル順を逆にして3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
-          FILES=$(ls tests/integration/*.test.ts | sort -r)
-          echo "順序: $FILES"
-          for i in 1 2 3; do
-            echo "===== 1-6 run $i/3 (reversed order) ====="
-            pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
-            echo "----- run $i exit=${PIPESTATUS[0]} -----"
-          done
+# 1-6: ファイルの並びを逆にして3回走らせる。
+# 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
+# 動かないなら「3回目」という位置そのものに原因がある。
+- name: "調査 1-6 — ファイル順を逆にして3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
+    FILES=$(ls tests/integration/*.test.ts | sort -r)
+    echo "順序: $FILES"
+    for i in 1 2 3; do
+      echo "===== 1-6 run $i/3 (reversed order) ====="
+      pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
+      echo "----- run $i exit=${PIPESTATUS[0]} -----"
+    done
 ```
 
 **実験どうしが汚染していたことも書いておく。** 実験Aは各回の前に `supabase db reset`
@@ -2098,7 +2117,7 @@ integration ジョブの実行回数: 46
 
 ```ts
 // scripts/check-endpoint-callers.ts
-function collectSources(root = "src"): SourceFile[]   // ← src/ しか走査しない
+function collectSources(root = "src"): SourceFile[]; // ← src/ しか走査しない
 ```
 
 ```ts
@@ -2139,10 +2158,10 @@ CI（run 33733352340・`ci.integration`）でも同じで、
 陰性コントロールは効いている（宣言したジョブが DB から消えれば `missing`、
 宣言外のジョブが DB に居れば `undeclared`）。**射程が違うだけで、検査器は間違っていない。**
 
-| 今日踏んだ形 | `check:cron-jobs` | `check:endpoint-callers` | `check:caller-guard` |
-| --- | --- | --- | --- |
-| `state-baselines` — 実装はあるが呼び出し元が無い | 射程外（cron の話ではない） | 射程外（`src/` しか走査しない） | 射程外（呼ばれ方の検査） |
-| `retention-purge` — 実装はあるが cron が張られていない | **射程外**（両側に居ないので一致） | 射程外 | 射程外 |
+| 今日踏んだ形                                           | `check:cron-jobs`                  | `check:endpoint-callers`        | `check:caller-guard`     |
+| ------------------------------------------------------ | ---------------------------------- | ------------------------------- | ------------------------ |
+| `state-baselines` — 実装はあるが呼び出し元が無い       | 射程外（cron の話ではない）        | 射程外（`src/` しか走査しない） | 射程外（呼ばれ方の検査） |
+| `retention-purge` — 実装はあるが cron が張られていない | **射程外**（両側に居ないので一致） | 射程外                          | 射程外                   |
 
 **つまり「デプロイされているのに起動経路を持たない Function」を見る検査器は、
 いまリポジトリに1本も無い。** 上の「判断が要ること」は、cron 経路も対象に含めて決める。

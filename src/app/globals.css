@@ -180,6 +180,16 @@ a {
   align-items: center;
   gap: var(--s3);
   flex-shrink: 0;
+  /* 補足を1行下に落とすため（④-b）。既存の行は折り返さないので見た目は変わらない */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ボタンの下に置く補足。**色もフォントも既存のものを使う**（体系は変えない） */
+.row-side-note {
+  flex-basis: 100%;
+  text-align: right;
+  margin-top: var(--s1);
 }
 
 .row-meta {

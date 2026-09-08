@@ -533,6 +533,9 @@ export function ConnectClient({
                   >
                     {portalStep === "opening" ? t.billing.openingPortal : t.billing.managePlan}
                   </button>
+                  {/* **ボタンの文言だけでは「解約はここ」と分からない。**
+                      ④-b の目的は解約導線なので、1行だけ補う */}
+                  <p className="row-side-note field-hint">{t.billing.manageNote}</p>
                 </>
               ) : (
                 <>

@@ -56,6 +56,31 @@ describe("BU-1-1 / BU-1-3 試用中の見せ方", () => {
   });
 });
 
+describe("④-b 解約導線（2026-09-08・BU-D4 を改めた）", () => {
+  it("購読中には管理の入口と、**解約もここでできる**という1行を出す", () => {
+    const html = render("active");
+
+    expect(html).toContain(ja.billing.managePlan);
+    // ボタンの文言だけでは「解約はここ」と分からない。**導線として機能しない**
+    expect(html).toContain(ja.billing.manageNote);
+  });
+
+  it("**陰性コントロール**: 購読が無いときは管理の入口を出さない（押して 404 を見せない）", () => {
+    for (const status of [null, "trialing", "canceled", "past_due", "incomplete"]) {
+      const html = render(status);
+
+      expect(html, `status=${status}`).not.toContain(ja.billing.managePlan);
+      expect(html, `status=${status}`).not.toContain(ja.billing.manageNote);
+    }
+  });
+
+  it("**陰性コントロール**: 解約という語を主操作の文言にしない（できるのは解約だけではない）", () => {
+    expect(ja.billing.managePlan).not.toContain("解約");
+    // ただし補足の1行では明示する。**分からなければ導線として機能しない**
+    expect(ja.billing.manageNote).toContain("解約");
+  });
+});
+
 describe("BU-1-2 購読中の見せ方（陰性コントロール）", () => {
   it("status === active のとき「標準プラン・購読中」を出す", () => {
     expect(render("active")).toContain(ja.billing.subscribedState);

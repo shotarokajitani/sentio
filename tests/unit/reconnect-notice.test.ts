@@ -12,7 +12,6 @@ import { describe, it, expect } from "vitest";
 import { formatDetectedAt, renderReconnectNotice } from "@edge/_shared/reconnect-notice";
 
 const INPUT = {
-  companyName: "株式会社サンプル",
   detectedAt: "2026-09-03T06:00:03.841Z",
   reconnectUrl: "https://www.sentio-ai.jp/connect",
 };
@@ -24,10 +23,10 @@ describe("承認された文面と一致する", () => {
     );
   });
 
-  it("本文（差し込み3つが入り、行の並びも承認どおり）", () => {
+  it("本文（差し込み2つが入り、行の並びも承認どおり）", () => {
     expect(renderReconnectNotice(INPUT)?.body).toBe(
       [
-        "株式会社サンプル のGoogleカレンダーの連携が切れています。",
+        "Googleカレンダーの連携が切れています。",
         "2026年9月3日 15:00 から、新しいデータを取り込めていません。",
         "",
         "この状態が続く間、毎朝の状態レポートは配信を停止します。",
@@ -62,7 +61,6 @@ describe("承認された文面と一致する", () => {
 
 describe("差し込みが欠けたら組み立てない（fail-closed）", () => {
   it.each([
-    ["会社名", { ...INPUT, companyName: "" }],
     ["検知日時", { ...INPUT, detectedAt: "" }],
     ["再連携URL", { ...INPUT, reconnectUrl: "" }],
   ])("%s が無ければ null を返す（「(不明)」で埋めて送らない）", (_label, input) => {
@@ -70,7 +68,7 @@ describe("差し込みが欠けたら組み立てない（fail-closed）", () =>
   });
 
   it("空白だけの差し込みも欠けているものとして扱う", () => {
-    expect(renderReconnectNotice({ ...INPUT, companyName: "   " })).toBeNull();
+    expect(renderReconnectNotice({ ...INPUT, reconnectUrl: "   " })).toBeNull();
   });
 
   it("壊れた日時では組み立てない（推測で日付を作らない）", () => {

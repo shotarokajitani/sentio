@@ -49,7 +49,6 @@ Deno.serve(async (req: Request) => {
       target_date,
       intent: requestedIntent,
       kind: requestedKind,
-      company_name,
       detected_at,
     } = await req.json();
 
@@ -84,14 +83,13 @@ Deno.serve(async (req: Request) => {
         return json(500, { error: `mail not configured: ${mailConfig.missing.join(", ")}` });
       }
 
-      // 差し込みは3つだけ（PS-S4）。**1つでも欠けたら送らない。**
-      // 欠けたまま送ると「(不明) の連携が切れています」が顧客に届く。
+      // 差し込みは2つだけ（PS-S4・2026-09-08 に会社名を外した）。**欠けたら送らない。**
+      // 欠けたまま送ると「(不明) から取り込めていません」が顧客に届く。
       // 200 で流すと**送れていないのに送ったことになる**ので 500 を返し、
       // ディスパッチャが `failed_deliver` として記録して実行そのものを non-2xx にする
       const rawOrigin = (Deno.env.get("SENTIO_SITE_ORIGIN") ?? "").trim();
       const origin = rawOrigin.endsWith("/") ? rawOrigin.slice(0, -1) : rawOrigin;
       const notice = renderReconnectNotice({
-        companyName: typeof company_name === "string" ? company_name : "",
         detectedAt: typeof detected_at === "string" ? detected_at : "",
         reconnectUrl: origin ? `${origin}/connect` : "",
       });
@@ -99,11 +97,7 @@ Deno.serve(async (req: Request) => {
       if (!notice) {
         return json(500, {
           error: "reconnect notice not renderable",
-          missing: {
-            company_name: !company_name,
-            detected_at: !detected_at,
-            site_origin: !origin,
-          },
+          missing: { detected_at: !detected_at, site_origin: !origin },
         });
       }
 

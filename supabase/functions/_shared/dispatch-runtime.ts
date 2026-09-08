@@ -100,10 +100,6 @@ export function buildDeps(): DispatchDeps {
         connectionState: stateByCompany.get(user.id) ?? "none",
         lastReconnectNoticeAt: lastNotice.get(user.id) ?? null,
         detectedAt: detectedAt.get(user.id) ?? null,
-        // **会社名の正本が無い**（列も metadata も無く、本番の3件とも site_url すら未設定）。
-        // 埋められないので null のまま渡し、deliver 側が送らずに止める（fail-closed）。
-        // 何を会社名とするかは**未判断**（`docs/spec/07_open_items.md`）
-        companyName: null,
       }));
     },
 

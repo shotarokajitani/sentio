@@ -5,9 +5,14 @@
  * 送られている版が割れる。**LLM は通らない**（PS-9c）——差し込むのは3つだけで、
  * 翻訳する対象が無い。
  *
- * 差し込みは **{会社名} / {検知日時 JST} / {再連携URL}** の3つ。
+ * 差し込みは **{検知日時 JST} / {再連携URL}** の2つ。
  * **1つでも欠けたら組み立てない。** 欠けたまま送ると
- * 「(不明) の連携が切れています」のような文面が顧客に届く。
+ * 「(不明) から取り込めていません」のような文面が顧客に届く。
+ *
+ * **会社名は 2026-09-08 に文面から外した**（検収者の決定）。
+ * 出所がシステムに無く（`companies` 相当の表も、metadata の `company_name` も0件）、
+ * ドメインから導くと推測を本文に載せることになる（本番の2社は同一ドメインのエイリアスで
+ * 区別もできない）。**1社1通なので、受け取った本人が自分宛と判別できないことはない。**
  *
  * ## 文面の意図（変更は検収者に諮る）
  *
@@ -18,8 +23,6 @@
  */
 
 export interface ReconnectNoticeInput {
-  /** 宛先の会社を指す名前。**内部IDでもメールアドレスでもない** */
-  companyName: string;
   /** 連携が切れたことを検知した時刻（ISO 8601） */
   detectedAt: string;
   /** 再連携の入口。公開オリジンから組み立てる */
@@ -61,14 +64,13 @@ export function formatDetectedAt(iso: string): string | null {
  * **「(不明)」で埋めて送る形にしない。**
  */
 export function renderReconnectNotice(input: ReconnectNoticeInput): ReconnectNotice | null {
-  const companyName = input.companyName?.trim() ?? "";
   const reconnectUrl = input.reconnectUrl?.trim() ?? "";
   const detectedAt = input.detectedAt ? formatDetectedAt(input.detectedAt) : null;
 
-  if (!companyName || !reconnectUrl || !detectedAt) return null;
+  if (!reconnectUrl || !detectedAt) return null;
 
   const body = [
-    `${companyName} の${PROVIDER_LABEL}の連携が切れています。`,
+    `${PROVIDER_LABEL}の連携が切れています。`,
     `${detectedAt} から、新しいデータを取り込めていません。`,
     "",
     "この状態が続く間、毎朝の状態レポートは配信を停止します。",

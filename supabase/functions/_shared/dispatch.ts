@@ -60,8 +60,6 @@ export interface CompanyTarget {
    * **無ければ送らない**——「(不明) から取り込めていません」を顧客に出さない
    */
   detectedAt: string | null;
-  /** 文面に差し込む会社名。**内部IDでもメールアドレスでもない**（PS-S4） */
-  companyName: string | null;
 }
 
 /** 1社ぶんの判断。**実行はしない** */
@@ -310,8 +308,8 @@ export async function runDispatch(
         company_id: target.companyId,
         email: target.email,
         kind: "reconnect",
-        // 差し込みは3つだけ（PS-S4）。**欠けたら deliver 側が送らずに 500 を返す**
-        company_name: target.companyName,
+        // 差し込みは2つだけ（PS-S4・会社名は 2026-09-08 に文面から外した）。
+        // **欠けたら deliver 側が送らずに 500 を返す**
         detected_at: target.detectedAt,
       });
 

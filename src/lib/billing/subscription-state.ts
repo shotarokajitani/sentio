@@ -51,12 +51,33 @@ export function hasStripeSubscription(status: string | null | undefined): boolea
 }
 
 /**
- * **支払い方法の更新が要る状態。** 行き先は新規購読ではなくポータルである。
+ * 画面に出す状態の区分（2026-09-08 決定）。
+ *
+ * **文言も否定リストで組む。** 知らない状態を「試用中」に落とすのは、
+ * **知らないものを既知として表示する**ことであり、関門を列挙式にしていたのと同じ誤りである。
+ * 既定は `unknown`（中立の表示）で、**解約も支払いも補足しない。**
+ *
+ * `none` は購読が存在しない状態で、画面は購読ボタン側になる。
+ */
+export type BillingDisplay =
+  "none" | "subscribed" | "trial" | "payment_issue" | "incomplete" | "paused" | "unknown";
+
+/**
+ * 状態を画面の区分に落とす。**知らない状態は `unknown` に落ちる**（既定）。
  *
  * `past_due` は請求が失敗して再試行中、`unpaid` はその再試行が尽きた後。
- * **どちらも直す場所は同じ**なので、同じ文言に寄せる（2026-09-08 決定）。
+ * **どちらも直す場所は同じ**なので、同じ区分に寄せる。
  */
-export function needsPaymentUpdate(status: string | null | undefined): boolean {
+export function billingDisplay(status: string | null | undefined): BillingDisplay {
+  if (!hasStripeSubscription(status)) return "none";
+
   const value = (status ?? "").trim();
-  return value === "past_due" || value === "unpaid";
+  if (value === "active") return "subscribed";
+  if (value === "trialing") return "trial";
+  if (value === "past_due" || value === "unpaid") return "payment_issue";
+  if (value === "incomplete") return "incomplete";
+  if (value === "paused") return "paused";
+
+  // **既定は「知らない」。** 列挙に無い状態を、試用中や購読中に見せない
+  return "unknown";
 }

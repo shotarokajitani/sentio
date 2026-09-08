@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextResponse } from "next/server";
 import { PORTAL_ENDPOINT } from "@/lib/billing/portal";
-import { hasStripeSubscription, needsPaymentUpdate } from "@/lib/billing/subscription-state";
+import { billingDisplay, hasStripeSubscription } from "@/lib/billing/subscription-state";
 
 /** モックから読む可変の状態。`vi.mock` は巻き上がるので、値は後から差し替える */
 const session = { subscriptionStatus: null as string | null };
@@ -153,12 +153,23 @@ describe("判定は1か所にある", () => {
     expect(hasStripeSubscription("   ")).toBe(false);
   });
 
-  it("支払い方法の更新が要るのは past_due と unpaid の2つだけ", () => {
-    expect(needsPaymentUpdate("past_due")).toBe(true);
-    expect(needsPaymentUpdate("unpaid")).toBe(true);
-    // **陰性コントロール**: 購読中や試用中に「お支払いを確認できていません」を出さない
-    for (const status of ["active", "trialing", "incomplete", "paused", "canceled", null]) {
-      expect(needsPaymentUpdate(status), `status=${status}`).toBe(false);
+  it("状態ごとの区分（**知らない状態は unknown に落ちる**）", () => {
+    expect(billingDisplay("active")).toBe("subscribed");
+    expect(billingDisplay("trialing")).toBe("trial");
+    // 直す場所が同じなので同じ区分に寄せる
+    expect(billingDisplay("past_due")).toBe("payment_issue");
+    expect(billingDisplay("unpaid")).toBe("payment_issue");
+    expect(billingDisplay("incomplete")).toBe("incomplete");
+    expect(billingDisplay("paused")).toBe("paused");
+    // 購読が存在しない2つと、記録が無いとき
+    expect(billingDisplay("canceled")).toBe("none");
+    expect(billingDisplay("incomplete_expired")).toBe("none");
+    expect(billingDisplay(null)).toBe("none");
+  });
+
+  it("**陰性コントロール**: 知らない状態を既知の区分に落とさない", () => {
+    for (const status of ["ACTIVE", "grace_period", "status_stripe_has_not_shipped_yet"]) {
+      expect(billingDisplay(status), status).toBe("unknown");
     }
   });
 });

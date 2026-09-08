@@ -119,6 +119,32 @@ describe("④-b 解約導線（2026-09-08・BU-D4 を改めた）", () => {
     }
   });
 
+  it("incomplete は**支払いの手続きが終わっていない**ことを出す（試用中に落とさない）", () => {
+    const html = render("incomplete");
+
+    expect(html).toContain(ja.billing.incompleteState);
+    // 支払い方法の1行は出す。**解約の1行は出さない**
+    expect(html).toContain(ja.billing.paymentNote);
+    expect(html).not.toContain(ja.billing.manageNote);
+    expect(html).not.toContain(ja.billing.trialState);
+  });
+
+  it("paused は一時停止中とだけ出す（**補足は付けない**）", () => {
+    const html = render("paused");
+
+    expect(html).toContain(ja.billing.pausedState);
+    expect(html).not.toContain(ja.billing.manageNote);
+    expect(html).not.toContain(ja.billing.paymentNote);
+    expect(html).not.toContain(ja.billing.trialState);
+  });
+
+  it.each(["active", "trialing"])("%s は解約の1行を出す", (status) => {
+    const html = render(status);
+
+    expect(html).toContain(ja.billing.manageNote);
+    expect(html).not.toContain(ja.billing.paymentNote);
+  });
+
   it("**陰性コントロール**: 解約という語を主操作の文言にしない（できるのは解約だけではない）", () => {
     expect(ja.billing.managePlan).not.toContain("解約");
     // ただし補足の1行では明示する。**分からなければ導線として機能しない**
@@ -160,6 +186,43 @@ describe("BU-1-4 購読が存在しない status だけ、試用中として扱�
 
     expect(html).toContain(ja.billing.subscribe);
     expect(html).not.toContain(ja.billing.subscribedState);
+  });
+});
+
+describe("**陰性コントロール**: 知らない状態を既知として見せない（2026-09-08 決定）", () => {
+  /**
+   * 知らない状態を「試用中」に落とすのは、**知らないものを既知として表示する**ことである。
+   * 関門を列挙式にしていたのと同じ誤りなので、文言にも同じ発想を通す。
+   *
+   * **列挙で埋める形に戻すと、ここが赤くなる。**
+   */
+  const UNKNOWN = ["ACTIVE", "grace_period", "status_stripe_has_not_shipped_yet"];
+
+  it.each(UNKNOWN)("status=%s では「試用中」と表示しない", (status) => {
+    const html = render(status);
+
+    expect(html).not.toContain(ja.billing.trialState);
+    expect(html).not.toContain(ja.billing.subscribedState);
+    expect(html).not.toContain(ja.billing.paymentIssueState);
+    expect(html).not.toContain(ja.billing.incompleteState);
+    expect(html).not.toContain(ja.billing.pausedState);
+  });
+
+  it.each(UNKNOWN)("status=%s では解約も支払いも補足しない", (status) => {
+    const html = render(status);
+
+    // 中立の表示だけを出す。**できるかどうかを確かめていないことを、できると書かない**
+    expect(html).toContain(ja.billing.unknownState);
+    expect(html).not.toContain(ja.billing.manageNote);
+    expect(html).not.toContain(ja.billing.paymentNote);
+  });
+
+  it("中立の表示に情緒的な語を入れない", () => {
+    for (const word of ["申し訳", "ご迷惑", "恐れ入り", "残念", "！"]) {
+      expect(ja.billing.unknownState, word).not.toContain(word);
+    }
+    // それでも**購読ボタンは出さない**（押せば2本目の購読ができる）
+    expect(render("grace_period")).not.toContain(ja.billing.subscribe);
   });
 });
 

@@ -15,7 +15,7 @@ import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
 // 購読の開始は関門ごとモジュールに置いてある（契約 スライスBU）。
 // 連打の抑止も遷移も、ここからは直接書かない
 import { checkoutFailureMessage, startCheckout } from "@/lib/billing/checkout";
-import { hasStripeSubscription, needsPaymentUpdate } from "@/lib/billing/subscription-state";
+import { billingDisplay, type BillingDisplay } from "@/lib/billing/subscription-state";
 // 解約・支払い方法の変更・請求書は Stripe 側で完結する（④-b）。ここが持つのは入口だけ
 import { openBillingPortal } from "@/lib/billing/portal";
 
@@ -39,6 +39,34 @@ interface DisconnectSession {
   typed: string;
   outcome: DisconnectOutcome | null;
 }
+
+/**
+ * 状態ごとの表示（2026-09-08 決定）。
+ *
+ * **`Record` にしてあるのは、区分が増えたときに型検査で止めるため。**
+ * 列挙漏れを既定値で埋めると、知らない状態が「試用中」に落ちる形に戻る。
+ */
+const STATE_LABEL: Record<Exclude<BillingDisplay, "none">, string> = {
+  subscribed: t.billing.subscribedState,
+  trial: t.billing.trialState,
+  payment_issue: t.billing.paymentIssueState,
+  incomplete: t.billing.incompleteState,
+  paused: t.billing.pausedState,
+  unknown: t.billing.unknownState,
+};
+
+/** 補足の1行。**`null` は「補足を出さない」**（できると確かめていないことを書かない） */
+const STATE_NOTE: Record<Exclude<BillingDisplay, "none">, string | null> = {
+  subscribed: t.billing.manageNote,
+  trial: t.billing.manageNote,
+  payment_issue: t.billing.paymentNote,
+  incomplete: t.billing.paymentNote,
+  paused: null,
+  unknown: null,
+};
+
+/** 目立たせる区分。**手当てが要るものだけ**で、知らない状態は含めない */
+const ATTENTION = new Set<BillingDisplay>(["payment_issue", "incomplete"]);
 
 export function ConnectClient({
   failureMessage,
@@ -289,36 +317,21 @@ export function ConnectClient({
   const nothingConnected = load === "loaded" && connections.length === 0 && csvCount === 0;
 
   /**
-   * **`active` だけを購読中とみなす**（BU-1-2）。
+   * 画面に出す区分（2026-09-08・④-b）。
    *
-   * `canceled` / `past_due` は購読ボタン側に落とす。支払いが止まった会社が
-   * **自分で再開できる**必要があるからである（BU-1-4）。
-   *
-   * 枠を与える判定（`lib/billing/plan.ts` の `ENTITLED_STATUSES`）とは**別物**で、
-   * あちらは `trialing` にも枠を与える。Stripe 側の trial は使っていない
-   * （試用の期間は `09_pricing.md` で未決）ので、いまその値はここに来ない。
-   * **trial を使うと決めた日に、この行は二重購読の入口になる。**
-   * 判断は `docs/spec/07_open_items.md`「`trialing` を購読中と見なすか」に登録済み。
-   */
-  const subscribed = subscriptionStatus === "active";
-
-  /**
-   * **Stripe 側に購読がある状態**（2026-09-08・④-b）。
+   * **`subscribed = status === "active"` は消した。** `active` だけを見る形が
+   * `past_due` / `unpaid` / `incomplete` / `paused` を「試用中」に落としていた。
+   * 枠を与える判定（`lib/billing/plan.ts` の `ENTITLED_STATUSES`）とは**別物**である
+   * （07「`trialing` を購読中と見なすか」を見よ。集合が違うのは意図）。
    *
    * 判定は**否定リスト**で、正本は `lib/billing/subscription-state.ts` にある。
    * 画面とサーバ（`api/billing/checkout` の 409）が**同じ関数を見る**——
    * 片方だけ直すと、押せる画面と止まる API のように挙動が割れる。
    *
-   * この状態では購読ボタンを出さない。`checkout.sessions.create` に `customer` を
+   * `none` 以外では購読ボタンを出さない。`checkout.sessions.create` に `customer` を
    * 渡していないので、押すと**新しい Customer と2本目の購読ができる**。
    */
-  const subscriptionExists = hasStripeSubscription(subscriptionStatus);
-
-  /**
-   * **支払い方法の更新**が行き先である状態（`past_due` / `unpaid`）。
-   * 新規購読の作成ではない。
-   */
-  const paymentIssue = needsPaymentUpdate(subscriptionStatus);
+  const display = billingDisplay(subscriptionStatus);
 
   return (
     <main className="page">
@@ -539,17 +552,13 @@ export function ConnectClient({
             </div>
 
             <div className="row-side">
-              {subscriptionExists ? (
+              {display !== "none" ? (
                 // ④-b（2026-09-08）: BU-D4「このスライスでは作らない」を改めた。
                 // **リンク1本で、解約も支払い方法の変更も請求書も Stripe 側で完結する。**
                 // 状態を自前で持たないので、`canceled` の順序保証の問題を背負わない
                 <>
-                  <span className={paymentIssue ? "state state-attention" : "state"}>
-                    {subscribed
-                      ? t.billing.subscribedState
-                      : paymentIssue
-                        ? t.billing.paymentIssueState
-                        : t.billing.trialState}
+                  <span className={ATTENTION.has(display) ? "state state-attention" : "state"}>
+                    {STATE_LABEL[display]}
                   </span>
                   <button
                     className="btn btn-quiet"
@@ -559,10 +568,12 @@ export function ConnectClient({
                     {portalStep === "opening" ? t.billing.openingPortal : t.billing.managePlan}
                   </button>
                   {/* **ボタンの文言だけでは「解約はここ」と分からない。**
-                      ④-b の目的は解約導線なので、1行だけ補う */}
-                  <p className="row-side-note field-hint">
-                    {paymentIssue ? t.billing.paymentNote : t.billing.manageNote}
-                  </p>
+                      ④-b の目的は解約導線なので、1行だけ補う。
+                      **知らない状態と `paused` には付けない**——
+                      できるかどうかを確かめていないことを、できると書かない */}
+                  {STATE_NOTE[display] && (
+                    <p className="row-side-note field-hint">{STATE_NOTE[display]}</p>
+                  )}
                 </>
               ) : (
                 <>

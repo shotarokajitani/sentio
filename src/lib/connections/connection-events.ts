@@ -34,7 +34,9 @@ export interface ConnectionEventInput {
 /** `insert` だけができれば足りる。テストから差し替えられるように最小の形にする */
 export interface ConnectionEventDb {
   from(table: string): {
-    insert(row: Record<string, unknown>): PromiseLike<{ error: { message: string } | null }>;
+    insert(
+      row: Record<string, unknown>,
+    ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
   };
 }
 
@@ -56,5 +58,7 @@ export async function recordConnectionEvent(
     reason: input.reason,
   });
 
-  return error ? { ok: false, error: error.message } : { ok: true };
+  // **Edge 側の `takeError` と同じ文字列にする。** 片方だけ context を付けると、
+  // 同じ失敗が別の文言でログに出る（両側比較の試験がそれを止めている）
+  return error ? { ok: false, error: `connection-events: insert: ${error.message}` } : { ok: true };
 }

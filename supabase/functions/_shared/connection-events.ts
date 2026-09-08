@@ -8,7 +8,12 @@
  * **正本は `src/lib/connections/connection-events.ts`。** Edge Function は
  * `supabase/functions/` の外を import できないため二重に持つ。
  * ずれは `tests/unit/connection-events.test.ts` が機械で止める（`check:dual-impl` の宣言つき）。
+ *
+ * **実装が1点だけ違う。** Edge 側は `.from()` を `takeError` で包む（契約 S-2-4・
+ * `check:db-errors` は `supabase/functions` だけを見る）。Next.js 側は素の分割代入である。
+ * **返す値は同じ**で、それを `connection-events.test.ts` が両側比較で固定している。
  */
+import { takeError } from "./db.ts";
 
 /** `00032` の `connection_events_status_check` と同じ集合 */
 export type ConnectionStatus = "active" | "revoked" | "reauth_required" | "pending";
@@ -34,7 +39,9 @@ export interface ConnectionEventInput {
 /** `insert` だけができれば足りる。テストから差し替えられるように最小の形にする */
 export interface ConnectionEventDb {
   from(table: string): {
-    insert(row: Record<string, unknown>): PromiseLike<{ error: { message: string } | null }>;
+    insert(
+      row: Record<string, unknown>,
+    ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
   };
 }
 
@@ -48,13 +55,18 @@ export async function recordConnectionEvent(
   db: ConnectionEventDb,
   input: ConnectionEventInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await db.from("connection_events").insert({
-    company_id: input.companyId,
-    provider: input.provider,
-    from_status: input.fromStatus,
-    to_status: input.toStatus,
-    reason: input.reason,
-  });
+  // `takeError` で包むのは契約 S-2-4 の正規形（`check:db-errors` が機械で見る）。
+  // **throw しない形**を選ぶのは、記録の失敗を「トークンの更新に失敗した」に化けさせないため
+  const error = await takeError(
+    db.from("connection_events").insert({
+      company_id: input.companyId,
+      provider: input.provider,
+      from_status: input.fromStatus,
+      to_status: input.toStatus,
+      reason: input.reason,
+    }),
+    "connection-events: insert",
+  );
 
   return error ? { ok: false, error: error.message } : { ok: true };
 }

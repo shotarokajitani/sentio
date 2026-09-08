@@ -21,7 +21,7 @@ function fakeDb(error: { message: string } | null = null) {
   const rows: Record<string, unknown>[] = [];
   const insert = vi.fn(async (row: Record<string, unknown>) => {
     rows.push(row);
-    return { error };
+    return { data: null, error };
   });
   return { rows, insert, from: vi.fn(() => ({ insert })) };
 }
@@ -61,7 +61,8 @@ describe("書く行の形", () => {
     const db = fakeDb({ message: "insert failed" });
     const result = await recordConnectionEvent(db, revoked);
 
-    expect(result).toEqual({ ok: false, error: "insert failed" });
+    // **どこで失敗したかを文言に残す**（Edge 側の `takeError` と同じ形）
+    expect(result).toEqual({ ok: false, error: "connection-events: insert: insert failed" });
   });
 });
 

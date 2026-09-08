@@ -179,7 +179,7 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
         },
         insert: (row: Record<string, unknown>) => {
           if (table === "connection_events") events.push(row);
-          return Promise.resolve({ error: null });
+          return Promise.resolve({ data: null, error: null });
         },
       })),
     };
@@ -268,7 +268,7 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
           return { eq: () => Promise.resolve({ data: null, error: null }) };
         },
         // 遷移の記録も同じ経路を通る（PS-9）
-        insert: () => Promise.resolve({ error: null }),
+        insert: () => Promise.resolve({ data: null, error: null }),
       })),
     };
 

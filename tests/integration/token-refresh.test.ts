@@ -29,6 +29,11 @@ function createMockSupabase(vaultPayload: string | null) {
       });
     }),
     from: vi.fn((table: string) => ({
+      // 遷移の記録（PS-9）。**状態だけ変わって記録が残らない経路を作らない**
+      insert: vi.fn((row: any) => {
+        calls.push({ method: `from:${table}.insert`, args: { data: row } });
+        return Promise.resolve({ data: null, error: null });
+      }),
       update: vi.fn((data: any) => ({
         eq: vi.fn((col: string, val: string) => {
           calls.push({

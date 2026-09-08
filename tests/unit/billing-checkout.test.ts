@@ -120,6 +120,40 @@ describe("BU-2-2 失敗したときに何を出さないか（陰性コントロ
   });
 });
 
+describe("すでに購読があるとき（409・2026-09-08）", () => {
+  it("409 は失敗ではなく**行き先が違う**。遷移せず、別の理由として返す", async () => {
+    const fetchImpl = spyFetch(
+      jsonResponse(409, {
+        error: "already_subscribed",
+        status: "past_due",
+        portal: "/api/billing/portal",
+      }),
+    );
+    const navigate = vi.fn();
+
+    const outcome = await startCheckout({ fetchImpl, navigate });
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ ok: false, reason: "already_subscribed", status: 409 });
+  });
+
+  it("文言は「開始できません」ではない。**行き先を言う**", () => {
+    const message = checkoutFailureMessage({
+      ok: false,
+      reason: "already_subscribed",
+      status: 409,
+    });
+
+    expect(message).toBe(ja.billing.alreadySubscribed);
+    expect(message).not.toBe(ja.billing.startFailed);
+    // ここも BU-D5 と同じ。**ステータスコードも内部の理由も出さない**
+    expect(message).not.toMatch(/[0-9]/);
+    for (const leak of ["409", "already_subscribed", "past_due", "Stripe", "portal"]) {
+      expect(message ?? "", leak).not.toContain(leak);
+    }
+  });
+});
+
 describe("BU-2-3 連打で2セッション作らない（陰性コントロール）", () => {
   it("応答が返る前に2回押しても、fetch も遷移も1回だけ", async () => {
     let release: (() => void) | undefined;

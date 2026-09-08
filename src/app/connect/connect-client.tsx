@@ -301,6 +301,23 @@ export function ConnectClient({
    */
   const subscribed = subscriptionStatus === "active";
 
+  /**
+   * **Stripe 側に購読がある状態**（2026-09-08・④-b）。
+   *
+   * `active` / `past_due` / `trialing` の3つ。**この状態では購読ボタンを出さない**——
+   * `checkout.sessions.create` に `customer` を渡していないので、押すと
+   * **新しい Customer と2本目の購読ができる**（サーバ側も 409 で止める。二重の関門）。
+   *
+   * **`canceled` は入れない。** 購読が終わっているので、新しく始めるのが正しい（BU-1-4）。
+   */
+  const hasStripeSubscription =
+    subscriptionStatus === "active" ||
+    subscriptionStatus === "past_due" ||
+    subscriptionStatus === "trialing";
+
+  /** `past_due` は**支払い方法の更新**が行き先である（新規購読の作成ではない） */
+  const paymentIssue = subscriptionStatus === "past_due";
+
   return (
     <main className="page">
       <Masthead signedIn />
@@ -520,12 +537,18 @@ export function ConnectClient({
             </div>
 
             <div className="row-side">
-              {subscribed ? (
+              {hasStripeSubscription ? (
                 // ④-b（2026-09-08）: BU-D4「このスライスでは作らない」を改めた。
                 // **リンク1本で、解約も支払い方法の変更も請求書も Stripe 側で完結する。**
                 // 状態を自前で持たないので、`canceled` の順序保証の問題を背負わない
                 <>
-                  <span className="state">{t.billing.subscribedState}</span>
+                  <span className={paymentIssue ? "state state-attention" : "state"}>
+                    {subscribed
+                      ? t.billing.subscribedState
+                      : paymentIssue
+                        ? t.billing.paymentIssueState
+                        : t.billing.trialState}
+                  </span>
                   <button
                     className="btn btn-quiet"
                     disabled={portalStep === "opening"}
@@ -535,7 +558,9 @@ export function ConnectClient({
                   </button>
                   {/* **ボタンの文言だけでは「解約はここ」と分からない。**
                       ④-b の目的は解約導線なので、1行だけ補う */}
-                  <p className="row-side-note field-hint">{t.billing.manageNote}</p>
+                  <p className="row-side-note field-hint">
+                    {paymentIssue ? t.billing.paymentNote : t.billing.manageNote}
+                  </p>
                 </>
               ) : (
                 <>

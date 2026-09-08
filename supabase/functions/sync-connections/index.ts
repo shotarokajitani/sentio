@@ -32,6 +32,8 @@ interface Connection {
   provider: string;
   vault_secret_id: string;
   expires_at: string | null;
+  /** 遷移を残すために引く（PS-9）。「どこから」が無いと本物の遷移を見分けられない */
+  status: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -53,7 +55,7 @@ Deno.serve(async (req: Request) => {
     const connections = await mustData(
       supabase
         .from("connections")
-        .select("id, company_id, provider, vault_secret_id, expires_at")
+        .select("id, company_id, provider, vault_secret_id, expires_at, status")
         .eq("status", "active"),
       "sync-connections: active connections",
     );

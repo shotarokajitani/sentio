@@ -14,8 +14,8 @@ import {
 } from "../../scripts/check-deletion-coverage";
 
 /**
- * `company_id` を持つテーブル。**2026-09-08 時点で12件**
- * （2026-09-03 の11件 ＋ `retention_purge_runs`）。
+ * `company_id` を持つテーブル。**2026-09-08 時点で14件**
+ * （2026-09-03 の11件 ＋ `retention_purge_runs` / `dispatch_runs` / `connection_events`）。
  *
  * **実DBを引く検査器のほうが正本で、これはその写しである。**
  * 新しい表を足したらここも足す——足し忘れると、実物では
@@ -35,6 +35,9 @@ const WITH_COMPANY_ID = new Set([
   "narratives",
   // 削除の実行記録（00030）。**削除の証跡そのものも、アカウント削除では消す**
   "retention_purge_runs",
+  // 配信の実行記録と連携の遷移（00032）
+  "dispatch_runs",
+  "connection_events",
 ]);
 
 describe("parseRunbookDeletes", () => {
@@ -155,11 +158,9 @@ describe("実物との突合（宣言と手順書は実ファイルを読む）"
     expect(deleted.has("known_explanations")).toBe(true);
   });
 
-  it("実物の手順書が、company_id を持つ12件をすべて消している", () => {
+  it("実物の手順書が、company_id を持つ14件をすべて消している", () => {
     const decl = loadDeclaration("docs/checklists/deletion-coverage.yml");
     const deleted = parseRunbookDeletes(readFileSync(decl.runbook, "utf8"));
-    expect(compareDeletionCoverage(WITH_COMPANY_ID, deleted, decl.keep, decl.beyond)).toEqual(
-      [],
-    );
+    expect(compareDeletionCoverage(WITH_COMPANY_ID, deleted, decl.keep, decl.beyond)).toEqual([]);
   });
 });

@@ -7,13 +7,15 @@
  */
 
 import { getSupabaseAdmin } from "./supabase-client.ts";
-import { mustCount, mustData } from "./db.ts";
+import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
 import type {
   BillingCounts,
   CompanyTarget,
+  ConnectionState,
   DispatchDeps,
+  DispatchRecord,
   InvokeResult,
   OpsNotifyResult,
 } from "./dispatch.ts";
@@ -36,19 +38,49 @@ export function buildDeps(): DispatchDeps {
       const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
       if (error) throw new Error(`dispatch: auth ユーザー一覧の取得に失敗: ${error.message}`);
 
-      // 連携の有無は provider ごとではなく会社ごとに畳む（CD-D3）
+      // 連携の状態は provider ごとではなく**会社ごとに1つへ畳む**（CD-D3 の後継）。
+      // **`active` が1つでもあれば `active`。** 無ければ revoked / reauth_required を拾う
       const connections = await mustData(
         supabase.from("connections").select("company_id, status"),
         "dispatch: connections",
       );
-      const connected = new Set(
-        connections.filter((c) => c.status === "active").map((c) => c.company_id as string),
+
+      const stateByCompany = new Map<string, ConnectionState>();
+      for (const c of connections) {
+        const companyId = c.company_id as string;
+        const status = c.status as string;
+        const current = stateByCompany.get(companyId);
+        if (current === "active") continue;
+        if (status === "active") stateByCompany.set(companyId, "active");
+        else if (status === "revoked" || status === "reauth_required") {
+          stateByCompany.set(companyId, status);
+        }
+        // `pending` とその他は畳まない。**関門を開ける対象ではない**（PS-9a）
+      }
+
+      // 直近の「再連携のお願い」を1回の照会で引く（PS-9e の7日判定に使う）。
+      // **送信済み（sent）だけを見る。** 予約止まり（sending）や失敗を「送った」と読まない
+      const notices = await mustData(
+        supabase
+          .from("delivery_log")
+          .select("company_id, created_at")
+          .eq("delivery_type", "reconnect")
+          .eq("status", "sent")
+          .order("created_at", { ascending: false }),
+        "dispatch: reconnect notices",
       );
+
+      const lastNotice = new Map<string, string>();
+      for (const n of notices) {
+        const companyId = n.company_id as string;
+        if (!lastNotice.has(companyId)) lastNotice.set(companyId, n.created_at as string);
+      }
 
       return (data?.users ?? []).map((user) => ({
         companyId: user.id,
         email: user.email ?? null,
-        hasConnection: connected.has(user.id),
+        connectionState: stateByCompany.get(user.id) ?? "none",
+        lastReconnectNoticeAt: lastNotice.get(user.id) ?? null,
       }));
     },
 
@@ -65,6 +97,43 @@ export function buildDeps(): DispatchDeps {
 
       // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
       return { ok: res.ok, status: res.status };
+    },
+
+    /**
+     * 実行の記録を書く（PS-8）。**まとめて1回の insert にする。**
+     *
+     * `takeError` で値にして返すのは、**記録の失敗で配信を 5xx にしない**ため。
+     * 送れたのに 5xx を返すと、cron から見て「失敗した」ことになる。
+     */
+    recordDispatch: async (rows: DispatchRecord[]): Promise<{ ok: boolean; error?: string }> => {
+      if (rows.length === 0) return { ok: true };
+
+      const error = await takeError(
+        supabase.from("dispatch_runs").insert(
+          rows.map((r) =>
+            r.kind === "run"
+              ? {
+                  kind: "run",
+                  dispatch: r.dispatch,
+                  company_id: null,
+                  outcome: null,
+                  companies: r.companies,
+                  reason: null,
+                }
+              : {
+                  kind: "company",
+                  dispatch: r.dispatch,
+                  company_id: r.companyId,
+                  outcome: r.outcome,
+                  companies: null,
+                  reason: r.reason ?? null,
+                },
+          ),
+        ),
+        "dispatch: dispatch_runs",
+      );
+
+      return error ? { ok: false, error: error.message } : { ok: true };
     },
 
     /**

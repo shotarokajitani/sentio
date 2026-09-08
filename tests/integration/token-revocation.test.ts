@@ -178,6 +178,8 @@ if (mode === "run") {
       const result = await refreshToken(
         {
           id: connectionId,
+          company_id: COMPANY_ID,
+          status: "active",
           provider: GOOGLE_CALENDAR_PROVIDER,
           vault_secret_id: vaultId,
           expires_at: new Date(Date.now() - 3600_000).toISOString(),
@@ -210,6 +212,8 @@ if (mode === "run") {
       const result = await refreshToken(
         {
           id: connectionId,
+          company_id: COMPANY_ID,
+          status: "active",
           provider: GOOGLE_CALENDAR_PROVIDER,
           vault_secret_id: vaultId,
           expires_at: new Date(Date.now() - 3600_000).toISOString(),
@@ -240,9 +244,11 @@ if (mode === "run") {
       await refreshToken(
         {
           id: revoked.connectionId,
+          company_id: COMPANY_ID,
           provider: GOOGLE_CALENDAR_PROVIDER,
           vault_secret_id: revoked.vaultId,
           expires_at: new Date(Date.now() - 3600_000).toISOString(),
+          status: "active",
         },
         admin,
         getEnv,

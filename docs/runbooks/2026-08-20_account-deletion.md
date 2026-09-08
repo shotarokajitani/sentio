@@ -97,6 +97,8 @@ delete from public.budget_usage    where company_id in (select id from auth.user
 delete from public.misjudgments    where company_id in (select id from auth.users where email = '<EMAIL>');
 delete from public.known_explanations where company_id in (select id from auth.users where email = '<EMAIL>');
 delete from public.retention_purge_runs where company_id in (select id from auth.users where email = '<EMAIL>');
+delete from public.dispatch_runs     where company_id in (select id from auth.users where email = '<EMAIL>');
+delete from public.connection_events where company_id in (select id from auth.users where email = '<EMAIL>');
 
 -- **company_id を持たない経路（2026-09-08 追記）。**
 -- billing_webhook_unresolved は「会社を引けなかった事実」の記録なので company_id を持たない。

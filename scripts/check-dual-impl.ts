@@ -76,6 +76,13 @@ export const DUAL_IMPL_SPECS: DualImplSpec[] = [
     reason: "保持期間の方針。privacy §6 の正本。二重実装の**あるべき形**の実例",
   },
   {
+    fn: "recordConnectionEvent",
+    src: "src/lib/connections/connection-events.ts",
+    edge: "supabase/functions/_shared/connection-events.ts",
+    pinnedBy: "tests/unit/connection-events.test.ts",
+    reason: "連携の遷移を残す唯一の口（PS-9）。**片側だけ直すと、その経路の遷移だけ記録が落ちる**",
+  },
+  {
     fn: "revokedCutoff",
     src: "src/lib/retention/policy.ts",
     edge: "supabase/functions/_shared/retention.ts",

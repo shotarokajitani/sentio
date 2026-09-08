@@ -6,7 +6,12 @@
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
-import { renderPulseHtml, renderPulseText } from "../_shared/email-html.ts";
+import {
+  renderAlertHtml,
+  renderAlertText,
+  renderPulseHtml,
+  renderPulseText,
+} from "../_shared/email-html.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
@@ -19,6 +24,31 @@ import {
   resolvePulsePeriod,
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
+import { jstDateKey } from "../_shared/jst.ts";
+
+/**
+ * 再連携のお願いの文面（PS-9b / 停止点 PS-S4）。**定型文である。**
+ *
+ * **provider 名は入れない。** ディスパッチャは会社ごとに状態を1つへ畳んでおり、
+ * どの連携が止まっているかをこの経路には渡していない。名前を入れると、
+ * freee が止まっている会社に「Google カレンダー」と書きうる。
+ *
+ * **URL も入れない。** この Function には公開オリジンの設定が無く、
+ * 入れるなら新しい設定が1つ増える（今回の範囲外）。
+ */
+const RECONNECT_SUBJECT = "[Sentio] 連携が停止しています（再接続のお願い）";
+
+const RECONNECT_BODY = [
+  "Sentio との連携が停止しているため、データの取り込みが行われていません。",
+  "この状態では、日次レポートは配信されません。",
+  "",
+  "再接続の手順",
+  "1. Sentio にログインする",
+  "2. 「会社情報の接続」で「要再連携」と表示されている項目の「再接続」を押す",
+  "",
+  "再接続が完了すると、翌日の配信から再開します。",
+  "この案内は、再接続が完了するまで7日ごとに送信します。",
+].join("\n");
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -36,7 +66,13 @@ Deno.serve(async (req: Request) => {
   if (!caller.ok) return caller.response;
 
   try {
-    const { company_id, email, target_date, intent: requestedIntent } = await req.json();
+    const {
+      company_id,
+      email,
+      target_date,
+      intent: requestedIntent,
+      kind: requestedKind,
+    } = await req.json();
 
     const scope = resolveCompanyId(caller.caller, company_id);
     if (!scope.ok) return scope.response;
@@ -49,6 +85,48 @@ Deno.serve(async (req: Request) => {
     }
 
     const now = new Date();
+
+    // ------------------------------------------------------------------
+    // 再連携のお願い（PS-9b）。**通常のパルスと本文を混ぜない。**
+    //
+    // 取り込みが止まっている会社に平常の状態記述を出すと、
+    // **古い値を今の状態として提示する**ことになる。したがってここで返し、
+    // `findings` も `events` も読まない。
+    //
+    // **この経路は LLM を通らない**（PS-9c）。定型文と provider 名だけで組める。
+    // LLM は `run-sense` → `investigate` の先にあり、ここからは呼ばない——
+    // ディスパッチャ側も取り消し中の会社には `run-sense` を呼ばない。
+    // **呼ばないことが担保である。**
+    // ------------------------------------------------------------------
+    if (requestedKind === "reconnect") {
+      const period = jstDateKey(now);
+      const mailConfig = resolveMailConfig();
+      if (!mailConfig.ok) {
+        return json(500, { error: `mail not configured: ${mailConfig.missing.join(", ")}` });
+      }
+
+      const noticeResult = await deliverOnce(
+        asDeliveryDb(supabase),
+        {
+          companyId,
+          channel: "email",
+          // **pulse と分ける**（PS-9d）。同じ種別に混ぜると、後から数え分けられない
+          deliveryType: "reconnect",
+          idempotencyKey: deliveryKey({ kind: "reconnect", companyId, period }),
+          content: { notice: "reconnect", period },
+          now,
+        },
+        () =>
+          sendEmail(mailConfig.config, {
+            to: email,
+            subject: RECONNECT_SUBJECT,
+            html: renderAlertHtml(RECONNECT_SUBJECT, RECONNECT_BODY),
+            text: renderAlertText(RECONNECT_SUBJECT, RECONNECT_BODY),
+          }),
+      );
+
+      return deliveryResponse(noticeResult, { company_id: companyId, kind: "reconnect", period });
+    }
 
     // 対象期間は**DBにも外部にも触る前**に決める。
     // 明示指定（target_date）があれば導出より優先する。導出は now 依存で

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { recordConnectionEvent } from "@/lib/connections/connection-events";
 import { getAuthedContext } from "@/lib/auth/company";
 import { oauthStateCookieName, isMatchingState } from "@/lib/auth/oauth-state";
 import { createClient } from "@supabase/supabase-js";
@@ -93,6 +94,15 @@ export async function GET(req: NextRequest) {
   // 3. Register connection
   const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
 
+  // **上書きする前の状態を読む**（PS-9）。upsert のあとでは「どこから戻ったか」が消える。
+  // 取れなくても連携そのものは止めない（記録が1行欠けるだけで、認可は成立している）
+  const { data: previous } = await supabase
+    .from("connections")
+    .select("status")
+    .eq("company_id", companyId)
+    .eq("provider", "google_calendar")
+    .maybeSingle();
+
   const { error: connErr } = await supabase.from("connections").upsert(
     {
       company_id: companyId,
@@ -113,6 +123,21 @@ export async function GET(req: NextRequest) {
   if (connErr) {
     console.error("Connection insert failed:", connErr.message);
     return redirect("/connect?e=connect_failed");
+  }
+
+  // **取り消し中から戻ったときだけ遷移を残す**（PS-9）。
+  // 初回の連携（previous が無い）や、既に active だった場合は書かない——
+  // 毎回書くと平常の行が積み上がり、本物の遷移が埋もれる
+  const previousStatus = previous?.status as string | undefined;
+  if (previousStatus && previousStatus !== "active") {
+    const recorded = await recordConnectionEvent(supabase, {
+      companyId,
+      provider: "google_calendar",
+      fromStatus: previousStatus as "revoked" | "reauth_required" | "pending",
+      toStatus: "active",
+      reason: "reconnected",
+    });
+    if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
   }
 
   // 4. Sync calendar events (past 12 months)

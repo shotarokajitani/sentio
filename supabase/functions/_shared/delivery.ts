@@ -124,6 +124,12 @@ export function resolveWeeklyPeriod(now: Date, explicit?: string | null): string
  */
 export type DeliveryKeyInput =
   | { kind: "pulse"; companyId: string; period: string }
+  /**
+   * 再連携のお願い（PS-9d）。**`pulse` と衝突させない。**
+   * 同じ日に両方が出ることは無い（取り消し中はパルスを送らない）が、
+   * キーを共有すると「片方を送ったせいでもう片方が予約できない」形になる
+   */
+  | { kind: "reconnect"; companyId: string; period: string }
   | { kind: "weekly"; companyId: string; period: string }
   | { kind: "alert"; companyId: string; eventId: string }
   | { kind: "day0"; companyId: string }
@@ -140,6 +146,7 @@ export function deliveryKey(input: DeliveryKeyInput): string {
   switch (input.kind) {
     case "pulse":
     case "weekly":
+    case "reconnect":
       return `${input.kind}:${input.companyId}:${input.period}`;
     case "alert":
       return `alert:${input.companyId}:${input.eventId}`;

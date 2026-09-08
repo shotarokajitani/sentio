@@ -136,9 +136,13 @@ describe("classifyTokenFailure — 失敗応答を取り消しと一時的失敗
 describe("refreshToken の失敗4経路 — revoked と reauth_required の書き分け", () => {
   const CONNECTION = {
     id: "conn-d2",
+    // 遷移を残すために要る（PS-9）。**どの会社の連携が切れたかが分からないと記録できない**
+    company_id: "c0000000-0000-4000-8000-00000000000d",
     provider: "google_calendar",
     vault_secret_id: "vault-d2",
     expires_at: new Date("2025-12-31T23:00:00Z").toISOString(),
+    // 「どこから」変わったか。**平常（active→active）と本物の遷移を区別する材料**
+    status: "active",
   };
 
   // 秘密そのものはフィクスチャに置かない（契約の禁止事項）。
@@ -156,6 +160,8 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
   function createSupabaseStub(deleteVault: { data: unknown; error: { message: string } | null }) {
     const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
     const updates: Array<Record<string, unknown>> = [];
+    // **遷移の記録も見る**（PS-9）。状態だけ変わって記録が残らない経路を作らない
+    const events: Array<Record<string, unknown>> = [];
 
     const client = {
       rpc: vi.fn((fn: string, args: Record<string, unknown>) => {
@@ -166,15 +172,19 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
         if (fn === "delete_vault_secret") return Promise.resolve(deleteVault);
         return Promise.resolve({ data: null, error: { message: `unknown rpc: ${fn}` } });
       }),
-      from: vi.fn(() => ({
+      from: vi.fn((table: string) => ({
         update: (data: Record<string, unknown>) => {
           updates.push(data);
           return { eq: () => Promise.resolve({ data: null, error: null }) };
         },
+        insert: (row: Record<string, unknown>) => {
+          if (table === "connection_events") events.push(row);
+          return Promise.resolve({ error: null });
+        },
       })),
     };
 
-    return { client, rpcCalls, updates };
+    return { client, rpcCalls, updates, events };
   }
 
   const okDelete = { data: true, error: null };
@@ -257,6 +267,8 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
           updates.push(data);
           return { eq: () => Promise.resolve({ data: null, error: null }) };
         },
+        // 遷移の記録も同じ経路を通る（PS-9）
+        insert: () => Promise.resolve({ error: null }),
       })),
     };
 
@@ -265,6 +277,48 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     expect(result.ok).toBe(false);
     expect(updates[0]).toEqual({ status: "reauth_required" });
     expect(rpcCalls).not.toContain("delete_vault_secret");
+  });
+
+  // ---- PS-9: 状態だけ変わって記録が残らない経路を作らない --------------------
+
+  it("PS-9（陰性コントロール）: revoked に落ちたら connection_events に必ず1行残る", async () => {
+    const { client, events } = createSupabaseStub(okDelete);
+    globalThis.fetch = vi.fn(async () =>
+      respond(400, JSON.stringify({ error: "invalid_grant" })),
+    ) as never;
+
+    await refreshToken(CONNECTION, client, getEnv);
+
+    // **これが無いと、2026-09-03 と同じことが起きる**——状態は変わったのに
+    // 記録が残らず、再連携で `revoked_at` が NULL に戻って痕跡ごと消える
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      company_id: CONNECTION.company_id,
+      provider: "google_calendar",
+      from_status: "active",
+      to_status: "revoked",
+      reason: "invalid_grant",
+    });
+  });
+
+  it("PS-9（陰性コントロール）: reauth_required でも遷移が残る。**理由は取り消しと分ける**", async () => {
+    const { client, events } = createSupabaseStub(okDelete);
+    globalThis.fetch = vi.fn(async () => respond(500, "boom")) as never;
+
+    await refreshToken(CONNECTION, client, getEnv);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ to_status: "reauth_required", reason: "refresh_failed" });
+  });
+
+  it("PS-9（陰性コントロール）: すでに reauth_required なら書かない（毎回積み上げない）", async () => {
+    const { client, events } = createSupabaseStub(okDelete);
+    globalThis.fetch = vi.fn(async () => respond(500, "boom")) as never;
+
+    await refreshToken({ ...CONNECTION, status: "reauth_required" }, client, getEnv);
+
+    // 6時間おきに同じ行が積み上がると、**本物の遷移が埋もれる**
+    expect(events).toEqual([]);
   });
 
   // ---- 陽性コントロール（唯一 revoked に倒す経路）--------------------------

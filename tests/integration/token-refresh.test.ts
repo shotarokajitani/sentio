@@ -46,6 +46,8 @@ function createMockSupabase(vaultPayload: string | null) {
 
 const EXPIRED_CONNECTION = {
   id: "conn-001",
+  company_id: "c0000000-0000-4000-8000-000000000001",
+  status: "active",
   provider: "google_calendar",
   vault_secret_id: "vault-secret-001",
   expires_at: new Date(Date.now() - 3600_000).toISOString(), // 1時間前

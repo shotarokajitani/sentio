@@ -11,6 +11,11 @@ import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
 import {
+  COMPANY_TIMEOUT_MS,
+  planResume,
+  type ResumeRow,
+} from "./dispatch-resume.ts";
+import {
   ABANDONED,
   STALE_SENDING,
   planStaleSweep,
@@ -24,6 +29,7 @@ import type {
   DispatchRecord,
   InvokeResult,
   OpsNotifyResult,
+  DispatchKind,
 } from "./dispatch.ts";
 
 /**
@@ -57,7 +63,12 @@ function subscriptionStatusOf(metadata: unknown): string | null {
  */
 const SWEEP_LIMIT = 500;
 
-export function buildDeps(): DispatchDeps {
+/**
+ * `dispatch` 列に書く値。**再開のときに daily と weekly を取り違えない**ため、
+ * どの実行として組み立てた deps かを引数で受け取る（発注 ⑥J-4）。
+ */
+export function buildDeps(kind: DispatchKind): DispatchDeps {
+  const kindOf = () => kind;
   const supabase = getSupabaseAdmin();
   // `listTargets` が立て、`runDispatch` が読む。**取り切れなかった事実を持ち帰る**
   let truncated = false;
@@ -174,18 +185,106 @@ export function buildDeps(): DispatchDeps {
     },
 
     invoke: async (fn: string, body: Record<string, unknown>): Promise<InvokeResult> => {
-      // `run-sense` が `scan` を呼ぶのと同じ作法（service_role で internal 経路に入る）
-      const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceRoleKey}`,
-        },
-        body: JSON.stringify(body),
-      });
+      // **返ってこない相手で全体を道連れにしない**（発注 ⑥J-4）。
+      // 1社が固まると、後ろの会社が全員届かなくなる。90秒で切って次へ進む
+      try {
+        // `run-sense` が `scan` を呼ぶのと同じ作法（service_role で internal 経路に入る）
+        const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(COMPANY_TIMEOUT_MS),
+        });
 
-      // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
-      return { ok: res.ok, status: res.status };
+        // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
+        return { ok: res.ok, status: res.status };
+      } catch (e) {
+        const timedOut = e instanceof DOMException && e.name === "TimeoutError";
+        console.error(
+          `dispatch: ${fn} の呼び出しが${timedOut ? "時間切れ" : "失敗"}: ` +
+            `${e instanceof Error ? e.message : String(e)}`,
+        );
+        // **0 は「返事が無かった」**。HTTP の状態コードと衝突しない値にしてある
+        return { ok: false, status: 0 };
+      }
+    },
+
+    /**
+     * 会社ごとの行を `pending` で先に書く（発注 ⑥J-4）。**冪等。**
+     *
+     * 00043 の一意索引 `(dispatch, run_key, company_id)` があるので、
+     * 同じ実行を何度叩いても行は増えない。`ignoreDuplicates` で
+     * **既にある行を pending へ戻さない**——終わった会社をやり直させない
+     */
+    reservePending: async (runKey: string, companyIds: string[]) => {
+      if (companyIds.length === 0) return { ok: true };
+      const error = await takeError(
+        supabase.from("dispatch_runs").upsert(
+          companyIds.map((companyId) => ({
+            kind: "company",
+            dispatch: kindOf(),
+            company_id: companyId,
+            outcome: "pending",
+            run_key: runKey,
+          })),
+          { onConflict: "dispatch,run_key,company_id", ignoreDuplicates: true },
+        ),
+        "dispatch: pending の予約",
+      );
+      return error ? { ok: false, error: error.message } : { ok: true };
+    },
+
+    /** 1社の結末をその場で確定する（発注 ⑥J-4） */
+    finishCompany: async (
+      runKey: string,
+      companyId: string,
+      outcome: string,
+      reason?: string,
+      finished = true,
+    ) => {
+      const error = await takeError(
+        supabase
+          .from("dispatch_runs")
+          .update({
+            outcome,
+            reason: reason ?? null,
+            // **時間切れは終わっていない。** `finished_at` を入れると再開が拾えない
+            finished_at: finished ? new Date().toISOString() : null,
+          })
+          .eq("kind", "company")
+          .eq("dispatch", kindOf())
+          .eq("run_key", runKey)
+          .eq("company_id", companyId),
+        "dispatch: 結末の確定",
+      );
+      return error ? { ok: false, error: error.message } : { ok: true };
+    },
+
+    /**
+     * まだ終わっていない会社を引く（発注 ⑥J-4）。
+     *
+     * **引けなければ `null`。** 「全部終わっている」と「引けなかった」を
+     * 同じ顔にすると、再開が黙って何もしなくなる
+     */
+    listUnfinished: async (runKey: string) => {
+      try {
+        const rows = await mustData(
+          supabase
+            .from("dispatch_runs")
+            .select("company_id, outcome, finished_at")
+            .eq("kind", "company")
+            .eq("dispatch", kindOf())
+            .eq("run_key", runKey),
+          "dispatch: 未処理の会社",
+        );
+        return planResume((rows ?? []) as unknown as ResumeRow[]);
+      } catch (e) {
+        console.error("dispatch: 未処理の会社を引けなかった:", e instanceof Error ? e.message : e);
+        return null;
+      }
     },
 
     /**

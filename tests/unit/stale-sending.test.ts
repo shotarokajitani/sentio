@@ -93,7 +93,9 @@ describe("配る前に掃除が走る", () => {
 
   it("掃除は会社を回す前にある（倒した行がこの実行の再送対象になる）", () => {
     const sweepAt = dispatch.indexOf("deps.sweepStaleSending");
-    const loopAt = dispatch.indexOf("for (const target of targets)");
+    // **2026-09-10（発注 ⑥J-4）で対象が `targets` から `pending` に変わった。**
+    // 再開のときは、まだ終わっていない会社だけを回す
+    const loopAt = dispatch.indexOf("for (const target of pending)");
     expect(sweepAt).toBeGreaterThan(-1);
     expect(loopAt).toBeGreaterThan(-1);
     expect(sweepAt).toBeLessThan(loopAt);

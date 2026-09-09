@@ -16,6 +16,7 @@ import { requestCompetitorSuggestion } from "@/lib/competitors/suggest";
 // 連打の抑止も遷移も、ここからは直接書かない
 import { checkoutFailureMessage, startCheckout } from "@/lib/billing/checkout";
 import { billingDisplay, type BillingDisplay } from "@/lib/billing/subscription-state";
+import { SENTIO_PRICE_JPY_TAX_INCLUDED, SENTIO_TRIAL_DAYS } from "@/lib/pricing";
 // 解約・支払い方法の変更・請求書は Stripe 側で完結する（④-b）。ここが持つのは入口だけ
 import { openBillingPortal } from "@/lib/billing/portal";
 
@@ -74,6 +75,7 @@ export function ConnectClient({
   accountEmail,
   siteUrl,
   subscriptionStatus,
+  legalNoticeAvailable = false,
 }: {
   failureMessage: string | null;
   // null はサーバ側で読み取りに失敗したことを表す。0件（空）とは別物
@@ -90,6 +92,14 @@ export function ConnectClient({
    * 購読が一度も無ければ null。
    */
   subscriptionStatus: string | null;
+  /**
+   * 特商法の表記（`/legal`）が出せる状態か。**既定は false（出さない）。**
+   *
+   * 窓口のアドレスが未設定なら `/legal` は 404 を返すので、
+   * **リンクだけ先に出すと 404 へ送ることになる。** 出す判断はサーバ側でしか決まらない
+   * （`process.env` はクライアントに無い）ので、真偽値だけを渡してもらう。
+   */
+  legalNoticeAvailable?: boolean;
 }) {
   const [connections, setConnections] = useState<ConnectionRow[]>(
     initialOverview?.connections ?? [],
@@ -541,8 +551,52 @@ export function ConnectClient({
               <p className="row-name">{t.billing.standardName}</p>
               <p className="row-desc">{t.billing.standardDesc}</p>
               <div className="row-meta">
-                <span>{t.billing.standardPrice}</span>
+                <span>{t.billing.standardPrice(SENTIO_PRICE_JPY_TAX_INCLUDED)}</span>
               </div>
+
+              {/* 申込前の最終確認（特商法・2026-09-09）。**購読していない人にだけ出す。**
+                  文言は `/legal` と同じ辞書から取る——**別の言い方をしない。**
+                  法定の最終確認画面は「表示した内容で申し込ませる」ための面なので、
+                  表記と1文字でも食い違うと、確認させた意味が無くなる */}
+              {display === "none" && (
+                <div className="notice" style={{ marginTop: 16 }}>
+                  <p className="row-name">{t.checkoutNotice.title}</p>
+                  <p className="row-desc">{t.checkoutNotice.lead}</p>
+
+                  <p className="row-name">{t.legalNotice.contentLabel}</p>
+                  <p className="row-desc">{t.legalNotice.content1}</p>
+                  <p className="row-desc">{t.legalNotice.content2}</p>
+
+                  <p className="row-name">{t.legalNotice.priceLabel}</p>
+                  <p className="row-desc">{t.legalNotice.price(SENTIO_PRICE_JPY_TAX_INCLUDED)}</p>
+                  <p className="row-desc">{t.legalNotice.priceTrial(SENTIO_TRIAL_DAYS)}</p>
+                  <p className="row-desc">{t.legalNotice.priceTrialNote}</p>
+
+                  <p className="row-name">{t.legalNotice.paymentTimingLabel}</p>
+                  <p className="row-desc">{t.legalNotice.paymentTiming(SENTIO_TRIAL_DAYS)}</p>
+                  <p className="row-desc">{t.legalNotice.paymentTimingNote}</p>
+                  <p className="row-desc">{t.legalNotice.paymentMethod1}</p>
+                  <p className="row-desc">{t.legalNotice.paymentMethod2}</p>
+                  <p className="row-desc">{t.legalNotice.paymentMethod3}</p>
+
+                  <p className="row-name">{t.legalNotice.deliveryLabel}</p>
+                  <p className="row-desc">{t.legalNotice.delivery}</p>
+
+                  <p className="row-name">{t.legalNotice.applicationPeriodLabel}</p>
+                  <p className="row-desc">{t.legalNotice.applicationPeriod}</p>
+
+                  <p className="row-name">{t.legalNotice.cancelLabel}</p>
+                  <p className="row-desc">{t.legalNotice.cancel1}</p>
+                  <p className="row-desc">{t.legalNotice.cancel2}</p>
+                  <p className="row-desc">{t.legalNotice.cancel3}</p>
+
+                  {legalNoticeAvailable && (
+                    <p className="row-side-note field-hint">
+                      <a href="/legal">{t.checkoutNotice.toLegal}</a>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {billingError && (
                 <div className="failure" role="alert" style={{ marginTop: 16 }}>

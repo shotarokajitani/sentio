@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { hasStripeSubscription } from "@/lib/billing/subscription-state";
+import { SENTIO_TRIAL_DAYS } from "@/lib/pricing";
 
 /**
  * 標準プランの購読を始める（Stripe Checkout のセッションを作る）。
@@ -61,6 +62,14 @@ export async function POST() {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      // 無料期間はここで付ける（2026-09-09 決定）。**本番 Stripe の price には触らない。**
+      // price 側に付けると、その価格を使う全員に効き、変えるには本番の価格オブジェクトを
+      // 書き換えることになる。**セッション側なら、コードの定数1つで決まる。**
+      //
+      // `trial_settings.end_behavior.missing_payment_method` は**渡さない**。
+      // 既定は `create_invoice`（支払い方法が無ければ請求書を出す）で、
+      // ここを変えると無料期間の終わり方が変わる。**変える判断はしていない。**
+      subscription_data: { trial_period_days: SENTIO_TRIAL_DAYS },
       // 購読を会社に結び付ける唯一の鍵。webhook 側はこれで会社を引く
       client_reference_id: ctx.companyId,
       ...(ctx.email ? { customer_email: ctx.email } : {}),

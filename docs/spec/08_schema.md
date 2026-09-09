@@ -21,4 +21,22 @@ known_explanations(id, company_id NULL, kind, period, source, auto bool)
 misjudgments(id, company_id, finding_id, kind, detail, created_at) -- 誤判定追跡
 delivery_log(id, company_id, frame CHECK(day0/pulse/alert/weekly/radar), finding_ids, sent_at, opened, acted)
 budget_usage(company_id, date, full_runs int, light_runs int)
+billing_webhook_events(stripe_event_id text PK, event_type text, processed_at timestamptz)
+-- 処理済み webhook の台帳（00034）。**会社に紐づかない**。RLS 有効・ポリシー0本・service_role のみ
+
 全テーブルRLS必須。events.event_id UNIQUE。index基本形 (company_id, occurred_at)。
+
+## 権限（GRANT）の方針（00036・2026-09-09）
+
+**RLS は「どの行か」を絞るだけで、「書いてよいか」は GRANT が決める。**
+2026-09-09 の実測では `authenticated` が12表すべてに INSERT / UPDATE / DELETE を持っており、
+**顧客が自社の `budget_usage` や `findings` を書き換えられた。**
+
+- **読むだけ**（authenticated は SELECT のみ）:
+  budget_usage / findings / misjudgments / baselines / narratives / company_summary /
+  delivery_log / connection_events
+- **書き込みを残す**（RLS クライアント経由の書き込みが実在する）:
+  events / entities / connections
+- **anon は公開スキーマの表に何も持たない**（未ログインに会社のデータは要らない）
+- service_role のみ: billing_webhook_events / billing_webhook_unresolved /
+  dispatch_runs / retention_purge_runs

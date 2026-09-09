@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  planCompany,
   runDispatch,
   type BillingCounts,
   type CompanyTarget,
@@ -32,6 +33,8 @@ function target(overrides: Partial<CompanyTarget> = {}): CompanyTarget {
     connectionState: "active",
     lastReconnectNoticeAt: null,
     detectedAt: null,
+    // 既定は「購読している」。**購読で止めるのは `enforceEntitlement` が true のときだけ**
+    subscriptionStatus: "active",
     ...overrides,
   };
 }
@@ -556,5 +559,70 @@ describe("④-a: 未解決の課金 webhook に気づく経路", () => {
 
     expect(body).not.toContain("@");
     expect(body).not.toContain("cus_");
+  });
+});
+
+/**
+ * 購読で配信を止める（発注 B-4）。**既定では止めない。**
+ *
+ * 止める判断を入れる前に、**止めた記録が正しく残ること**を確かめたい。
+ * したがって既定は false で、環境変数 `SENTIO_ENFORCE_ENTITLEMENT` が true のときだけ止まる。
+ */
+describe("購読が無い会社に配らない（B-4）", () => {
+  it("**既定では止めない**（フラグを渡さない従来の呼び出しが壊れない）", () => {
+    const plan = planCompany(target({ subscriptionStatus: null }), "daily", new Date());
+
+    expect(plan.action).toBe("deliver");
+  });
+
+  it("フラグが true なら、購読が無い会社は skipped_not_entitled で落ちる", () => {
+    const plan = planCompany(target({ subscriptionStatus: null }), "daily", new Date(), true);
+
+    expect(plan).toEqual({ action: "skip", outcome: "skipped_not_entitled" });
+  });
+
+  it("**陰性**: 連携が無いのと混ぜない（打つ手が違う）", () => {
+    const noConnection = planCompany(
+      target({ connectionState: "none", subscriptionStatus: "active" }),
+      "daily",
+      new Date(),
+      true,
+    );
+
+    expect(noConnection).toEqual({ action: "skip", outcome: "skipped_no_connection" });
+  });
+
+  it("active と trialing は通る（無料期間中も製品は動く）", () => {
+    for (const status of ["active", "trialing"]) {
+      const plan = planCompany(target({ subscriptionStatus: status }), "daily", new Date(), true);
+      expect(plan.action, status).toBe("deliver");
+    }
+  });
+
+  it("**陰性**: past_due / canceled / paused は止まる", () => {
+    for (const status of ["past_due", "canceled", "paused", "unpaid", "incomplete"]) {
+      const plan = planCompany(target({ subscriptionStatus: status }), "daily", new Date(), true);
+      expect(plan, status).toEqual({ action: "skip", outcome: "skipped_not_entitled" });
+    }
+  });
+
+  it("止めた会社は記録に残り、summary に数として出る", async () => {
+    const d = { ...deps([target({ subscriptionStatus: null })]), enforceEntitlement: true };
+    const result = await runDispatch("daily", { kind: "internal" }, d);
+
+    expect(result.body).toMatchObject({ skipped_not_entitled: 1, delivered: 0 });
+    expect(
+      d.recorded.some((r) => r.kind === "company" && r.outcome === "skipped_not_entitled"),
+    ).toBe(true);
+    // **配信そのものを呼んでいない**（止めたのだから呼ばない）
+    expect(d.calls.some((c) => c.fn === "deliver-pulse")).toBe(false);
+  });
+
+  it("会社の一覧を取り切れなかった日は non-2xx（**一部だけ配って 200 にしない**）", async () => {
+    const d = { ...deps([target()]), targetsTruncated: true };
+    const result = await runDispatch("daily", { kind: "internal" }, d);
+
+    expect(result.status).toBe(502);
+    expect(result.body).toMatchObject({ truncated: true });
   });
 });

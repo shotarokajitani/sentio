@@ -9,6 +9,7 @@
  * `billing-checkout-guard.test.ts` と同じ作法）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import { SENTIO_TRIAL_DAYS } from "@/lib/pricing";
 import { hasStripeSubscription } from "@/lib/billing/subscription-state";
@@ -17,6 +18,14 @@ import { hasStripeSubscription } from "@/lib/billing/subscription-state";
 const created: Record<string, unknown>[] = [];
 
 const session = { subscriptionStatus: null as string | null };
+
+/** webhook 側が取り直す Subscription。**status の正本はこちら**（BS-1-2） */
+const retrieve = vi.fn(async () => ({
+  id: "sub_trial",
+  status: "trialing",
+  customer: "cus_trial",
+  trial_end: 1789000000,
+}));
 
 vi.mock("stripe", () => ({
   default: class FakeStripe {
@@ -28,7 +37,23 @@ vi.mock("stripe", () => ({
         },
       },
     };
+    subscriptions = { retrieve };
   },
+}));
+
+/** webhook は service_role のクライアントを自分で作る。**台帳も更新も偽物で受ける** */
+const updateUserById = vi.fn(async (_id: string, _attrs: unknown) => ({ error: null }));
+const ledgerInsert = vi.fn(async () => ({ error: null }));
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: () => ({
+    auth: { admin: { updateUserById, getUserById: async () => ({ data: null, error: null }) } },
+    rpc: async () => ({ data: null, error: null }),
+    from: () => ({
+      insert: ledgerInsert,
+      upsert: async () => ({ error: null }),
+      update: () => ({ eq: () => ({ is: async () => ({ error: null }) }) }),
+    }),
+  }),
 }));
 
 vi.mock("@/lib/auth/company", () => ({
@@ -68,7 +93,12 @@ describe("無料期間をセッションに付ける", () => {
 
     expect(res.status).toBe(200);
     expect(created).toHaveLength(1);
-    expect(created[0].subscription_data).toEqual({ trial_period_days: SENTIO_TRIAL_DAYS });
+    expect(created[0].subscription_data).toEqual({
+      trial_period_days: SENTIO_TRIAL_DAYS,
+      // **会社を Subscription 自身にも持たせる**（A-3）。
+      // `customer.subscription.*` の webhook は `client_reference_id` を持たない
+      metadata: { company_id: "00000000-0000-0000-0000-000000000000" },
+    });
   });
 
   it("**陰性**: 新しい price を作らない（既存の price の id を渡すだけ）", async () => {
@@ -123,5 +153,60 @@ describe("409ガードを壊していない（否定リストのまま）", () =
 
     expect(res.status).toBe(409);
     expect(created).toHaveLength(0);
+  });
+});
+
+describe("無料期間つきの申し込みが記録される（A-2）", () => {
+  // 実在しない値。**鍵の形をした文字列を置かない**（gitleaks と秘密の作法）
+  const SIGNING = "stub-signing-value";
+
+  function sign(payload: string): string {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const sig = createHmac("sha256", SIGNING).update(`${timestamp}.${payload}`).digest("hex");
+    return `t=${timestamp},v1=${sig}`;
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", SIGNING);
+    vi.stubEnv("STRIPE_SECRET_KEY", "stub-not-a-key");
+    vi.stubEnv("SUPABASE_URL", "https://example.invalid");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "stub-not-a-key");
+    updateUserById.mockClear();
+  });
+
+  it("**trial 付きセッションの completed で status が trialing になる**", async () => {
+    // 無料期間つきは合計0円なので `payment_status` は `no_payment_required` になる。
+    // ここを弾くと、招待や無料期間からの申し込みが**1件も記録されない**
+    const body = JSON.stringify({
+      id: "evt_trial_1",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_trial",
+          object: "checkout.session",
+          payment_status: "no_payment_required",
+          status: "complete",
+          client_reference_id: "00000000-0000-0000-0000-000000000000",
+          customer: "cus_trial",
+          subscription: "sub_trial",
+        },
+      },
+    });
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(
+      new Request("https://example.invalid/api/billing/webhook", {
+        method: "POST",
+        headers: { "stripe-signature": sign(body) },
+        body,
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateUserById).toHaveBeenCalledTimes(1);
+    const payload = (updateUserById.mock.calls[0] as unknown[])[1] as {
+      user_metadata: { subscription: { status: string } };
+    };
+    expect(payload.user_metadata.subscription.status).toBe("trialing");
   });
 });

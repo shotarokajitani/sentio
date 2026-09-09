@@ -15,13 +15,25 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
+ * 署名の許容時間（秒）。**Stripe の既定と同じ 5 分。**
+ *
+ * 署名だけを見て時刻を見ないと、**一度盗まれた本文を何日後でも再生できる。**
+ * 署名は本文と `t` から作られるので、本文が同じなら署名も同じである。
+ */
+export const STRIPE_TOLERANCE_SECONDS = 300;
+
+/**
  * Verify Stripe webhook signature (HMAC-SHA256 with timestamp).
  * Header format: t=<timestamp>,v1=<hex_signature>
+ *
+ * **`v1=` は複数あることがある**（Stripe が鍵を回している最中は新旧2つ来る）。
+ * 最初の1つだけを見ると、鍵の入れ替え中に正しい署名を落とす。**全件を走査する。**
  */
 export function verifyStripeSignature(
   payload: string,
   signatureHeader: string,
   secret: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
 ): VerifyResult {
   if (!signatureHeader) {
     return { valid: false, error: "Missing signature header" };
@@ -29,21 +41,34 @@ export function verifyStripeSignature(
 
   const parts = signatureHeader.split(",");
   const tPart = parts.find((p) => p.startsWith("t="));
-  const v1Part = parts.find((p) => p.startsWith("v1="));
+  const v1Parts = parts.filter((p) => p.startsWith("v1=")).map((p) => p.slice(3));
 
-  if (!tPart || !v1Part) {
+  if (!tPart || v1Parts.length === 0) {
     return { valid: false, error: "Invalid signature format" };
   }
 
   const timestamp = tPart.slice(2);
-  const receivedSig = v1Part.slice(3);
+
+  // **時刻が読めない署名は通さない。** 数値でなければ再生かどうかを判定できない
+  const sentAt = Number(timestamp);
+  if (!Number.isFinite(sentAt)) {
+    return { valid: false, error: "Invalid timestamp" };
+  }
+  if (Math.abs(nowSeconds - sentAt) > STRIPE_TOLERANCE_SECONDS) {
+    return { valid: false, error: "Timestamp outside tolerance" };
+  }
 
   const signedPayload = `${timestamp}.${payload}`;
   const expectedSig = createHmac("sha256", secret).update(signedPayload).digest("hex");
 
-  if (safeCompare(receivedSig, expectedSig)) {
-    return { valid: true };
+  // **1つでも一致すれば有効。** 早期 return をしないのは、比較回数を署名の数で
+  // 揺らさないため（timingSafeEqual を使っている理由と同じ）
+  let matched = false;
+  for (const received of v1Parts) {
+    if (safeCompare(received, expectedSig)) matched = true;
   }
+
+  if (matched) return { valid: true };
   return { valid: false, error: "Signature mismatch" };
 }
 

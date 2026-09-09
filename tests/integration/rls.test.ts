@@ -323,5 +323,82 @@ if (mode === "run") {
 
       expect(error).not.toBeNull();
     });
+
+    /**
+     * 権限の締め直し（発注 C・マイグレーション `00036`）。
+     *
+     * **RLS は「どの行か」を絞るだけで、「書いてよいか」は GRANT が決めている。**
+     * 2026-09-09 の実測では `authenticated` が12表すべてに INSERT / UPDATE / DELETE を
+     * 持っており、**顧客が自分の状態を書き換えられた**（自社の行なので RLS は通る）。
+     */
+    describe("C: 顧客が自分の製品の状態を書き換えられない", () => {
+      it("**自社の budget_usage.full_runs を UPDATE できない**（調査枠を自分で増やせない）", async () => {
+        // 行が無いと 0件更新で成功に見えるので、先に service_role で1行作る
+        const today = new Date().toISOString().slice(0, 10);
+        await admin
+          .from("budget_usage")
+          .upsert(
+            { company_id: tenantA.id, date: today, full_runs: 3, light_runs: 0 },
+            { onConflict: "company_id,date" },
+          );
+
+        const { error } = await tenantA.client
+          .from("budget_usage")
+          .update({ full_runs: 0 })
+          .eq("company_id", tenantA.id)
+          .eq("date", today);
+
+        expect(error).not.toBeNull();
+
+        // **実物で確かめる。** エラーが出ても値が変わっていたら意味が無い
+        const { data } = await admin
+          .from("budget_usage")
+          .select("full_runs")
+          .eq("company_id", tenantA.id)
+          .eq("date", today)
+          .maybeSingle();
+        expect(data?.full_runs).toBe(3);
+
+        await admin.from("budget_usage").delete().eq("company_id", tenantA.id);
+      });
+
+      it("**findings に INSERT できない**（「Sentio が言った」ことにできない）", async () => {
+        const { error } = await tenantA.client.from("findings").insert({
+          company_id: tenantA.id,
+          status: "open",
+          urgency: "weekly",
+          what: "自分で書いた Finding",
+          confidence: 1,
+        });
+
+        expect(error).not.toBeNull();
+
+        const { count } = await admin
+          .from("findings")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", tenantA.id);
+        expect(count).toBe(0);
+      });
+
+      it("**connections.status に不正値を書けない**（切れていないことにできない）", async () => {
+        // 書き込みそのものは残してある表なので、止めるのは CHECK である
+        const { error } = await tenantA.client.from("connections").insert({
+          company_id: tenantA.id,
+          provider: "rls_check",
+          status: "definitely_connected",
+        });
+
+        expect(error).not.toBeNull();
+        expect(String(error?.message ?? "")).toMatch(/check|constraint/i);
+
+        await admin.from("connections").delete().eq("provider", "rls_check");
+      });
+
+      it("読むのは残す（**止めたいのは書き込みだけ**）", async () => {
+        const { error } = await tenantA.client.from("findings").select("id").limit(1);
+
+        expect(error).toBeNull();
+      });
+    });
   });
 }

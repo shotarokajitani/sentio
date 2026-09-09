@@ -13,6 +13,7 @@
  */
 
 import type { CallerKind } from "./caller.ts";
+import { isEntitledStatus } from "./budget.ts";
 
 export type DispatchKind = "daily" | "weekly";
 
@@ -30,6 +31,8 @@ export type CompanyOutcome =
   | "reconnect_suppressed"
   | "skipped_no_connection"
   | "skipped_no_email"
+  /** 購読が無いので送らなかった（B-4）。**`00035` の CHECK と同じ集合** */
+  | "skipped_not_entitled"
   | "failed_state"
   | "failed_sense"
   | "failed_deliver";
@@ -60,6 +63,13 @@ export interface CompanyTarget {
    * **無ければ送らない**——「(不明) から取り込めていません」を顧客に出さない
    */
   detectedAt: string | null;
+  /**
+   * 購読の状態（`user_metadata.subscription.status`）。**引けなければ null。**
+   *
+   * 判定に使うのは `isEntitledStatus`（`active` / `trialing`）で、
+   * 実際に配信を止めるかどうかは `enforceEntitlement` が決める（発注 B-4）。
+   */
+  subscriptionStatus: string | null;
 }
 
 /** 1社ぶんの判断。**実行はしない** */
@@ -67,7 +77,10 @@ export type CompanyPlan =
   | { action: "deliver" }
   | { action: "reconnect" }
   | { action: "suppress"; outcome: "reconnect_suppressed"; reason: string }
-  | { action: "skip"; outcome: "skipped_no_connection" | "skipped_no_email" };
+  | {
+      action: "skip";
+      outcome: "skipped_no_connection" | "skipped_no_email" | "skipped_not_entitled";
+    };
 
 /**
  * その会社に何をするかを決める。**判断をここに閉じる**（画面の `cardActions` と同じ作法）。
@@ -81,7 +94,25 @@ export type CompanyPlan =
  * **weekly では再連携のお願いを送らない**（PS-9 は毎朝の経路である）。
  * 週次でも送ると、同じ内容が週2回届く。
  */
-export function planCompany(target: CompanyTarget, kind: DispatchKind, now: Date): CompanyPlan {
+export function planCompany(
+  target: CompanyTarget,
+  kind: DispatchKind,
+  now: Date,
+  /**
+   * 購読で配信を止めるか（発注 B-4）。**既定は false。**
+   *
+   * 既定を false にしてあるのは、**止める判断を入れる前に、止めた記録が
+   * 正しく残ることを確かめたい**からである。環境変数
+   * `SENTIO_ENFORCE_ENTITLEMENT` が `true` のときだけ止まる。
+   */
+  enforceEntitlement = false,
+): CompanyPlan {
+  // **購読が無い会社に配らない**（フラグが立っているときだけ）。
+  // 連携が無いのとは別の値にする。打つ手が違う（前者は連携の導線、後者はお申し込み）
+  if (enforceEntitlement && !isEntitledStatus(target.subscriptionStatus)) {
+    return { action: "skip", outcome: "skipped_not_entitled" };
+  }
+
   const needsReconnect =
     target.connectionState === "revoked" || target.connectionState === "reauth_required";
 
@@ -142,6 +173,10 @@ export interface OpsNotifyResult {
 
 export interface DispatchDeps {
   listTargets(): Promise<CompanyTarget[]>;
+  /** 会社の一覧を取り切れなかったか（B-5）。取り切れていれば false */
+  targetsTruncated?: boolean;
+  /** 購読で配信を止めるか（B-4）。**既定は false**（環境変数の裏） */
+  enforceEntitlement?: boolean;
   invoke(fn: string, body: Record<string, unknown>): Promise<InvokeResult>;
   /**
    * 会社を引けなかった課金 webhook の件数（④-a）。
@@ -192,6 +227,13 @@ export interface DispatchSummary {
   reconnect_notice: number;
   /** **送らなかった**会社数（7日以内に送っている。PS-9e/f） */
   reconnect_suppressed: number;
+  /** 購読が無いので送らなかった会社数（B-4）。**0件でも必ず出す** */
+  skipped_not_entitled: number;
+  /**
+   * 会社の一覧を取り切れたか（B-5）。**取り切れていないなら non-2xx。**
+   * 一部だけ配って 200 を返すと、届かなかった会社が記録にも残らない
+   */
+  truncated?: boolean;
   /**
    * 実行の記録を書けたか（PS-8）。**書けなかったことを黙らせない。**
    * `failed` は配信の失敗数なので、ここは別に持つ
@@ -250,6 +292,9 @@ export async function runDispatch(
   }
 
   const targets = await deps.listTargets();
+  // **取り切れていないなら、配ったぶんを数えても意味が無い**（B-5）。
+  // 一部だけ配って 200 を返すと、届かなかった会社が記録にも残らない
+  const truncated = deps.targetsTruncated === true;
   const summary: DispatchSummary = {
     kind,
     companies: targets.length,
@@ -261,19 +306,25 @@ export async function runDispatch(
     state_failed: 0,
     reconnect_notice: 0,
     reconnect_suppressed: 0,
+    skipped_not_entitled: 0,
     recorded: false,
+    ...(truncated ? { truncated: true } : {}),
   };
 
   const records: DispatchRecord[] = [];
   const now = new Date();
 
+  // 環境変数はここで1回だけ読む。**分岐の材料を関数の外に置かない**
+  const enforceEntitlement = deps.enforceEntitlement === true;
+
   for (const target of targets) {
-    const plan = planCompany(target, kind, now);
+    const plan = planCompany(target, kind, now, enforceEntitlement);
 
     // 連携ゼロの会社に空のパルスを送らない（CD-1-2）／宛先が無ければ呼ばない（CD-1-3）。
     // **落とした事実は記録に残す**（PS-8）
     if (plan.action === "skip") {
       if (plan.outcome === "skipped_no_connection") summary.skipped_no_connection++;
+      else if (plan.outcome === "skipped_not_entitled") summary.skipped_not_entitled++;
       else summary.skipped_no_email++;
       records.push({
         kind: "company",
@@ -449,6 +500,8 @@ export async function runDispatch(
   // 課金の未解決は `failed` に足さない（あちらは配信・Sense・State の失敗数である）。
   // **数え方を混ぜずに、non-2xx にだけ効かせる。**
   // 記録できなかった実行も non-2xx にする。**記録が無いと、後から何も辿れない**
-  const failed = summary.failed > 0 || billingProblem || !summary.recorded;
+  // **取り切れなかった日も non-2xx にする**（B-5）。
+  // 配れたぶんだけ数えて 200 を返すと、届かなかった会社が誰にも見えない
+  const failed = summary.failed > 0 || billingProblem || !summary.recorded || truncated;
   return { status: failed ? 502 : 200, body: { ...summary } };
 }

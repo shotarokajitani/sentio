@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { verifyStripeSignature } from "@/security/webhook-verify";
+import { renderTrialEndingNotice } from "@/lib/billing/trial-ending";
+import { resolveNextMailConfig, sendNextEmail } from "@/lib/mail/send";
 import { STANDARD_PLAN } from "@edge/_shared/budget.ts";
 
 /**
@@ -88,12 +90,32 @@ export async function POST(req: NextRequest) {
   }
 
   // 決済が済んでいないセッション。**払っていない人を購読中にしない**（BS-D2）。
-  // 会社を引く前に落とす。異常ではないので記録もしない
-  if (eventType === "checkout.session.completed" && object.payment_status !== "paid") {
+  // 会社を引く前に落とす。異常ではないので記録もしない。
+  //
+  // **`no_payment_required` は「払っていない」ではない。** 無料期間つきの Checkout は
+  // 合計0円になるので Stripe がこの値を返す（2026-09-09 の決定で受け入れる側に移した）。
+  // `unpaid` と `processing` は従来どおり弾く
+  if (
+    eventType === "checkout.session.completed" &&
+    !PAID_STATUSES.has(String(object.payment_status))
+  ) {
     return NextResponse.json({ status: "ignored", reason: "unpaid" });
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
+
+  // **同じイベントを2回処理しない**（A-5）。署名を検証した直後・会社を引く前に置く。
+  // 引けなかったイベントも「受け取った」ことは事実であり、再送のたびに
+  // `billing_webhook_unresolved` へ同じ行を積み直す必要は無い
+  const ledger = await recordProcessed(admin, event, eventType);
+  if (ledger === "duplicate") {
+    return NextResponse.json({ status: "ignored", reason: "duplicate" });
+  }
+  if (ledger === "failed") {
+    // 台帳に書けないまま進むと、**2回目を弾けない状態で副作用が出る**。
+    // 再送が来れば次の機会がある
+    return NextResponse.json({ error: "ledger failed" }, { status: 500 });
+  }
   const customerId = typeof object.customer === "string" ? object.customer : null;
 
   const lookup = await resolveCompanyFromStripe(admin, object, customerId);
@@ -131,6 +153,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "update failed" }, { status: 500 });
   }
 
+  // 無料期間の終わりを知らせる（A-7）。**購読の更新とは別の経路**なので、
+  // ここで失敗しても購読の記録は巻き戻さない（送れなかった事実はログに残す）
+  if (eventType === "customer.subscription.trial_will_end") {
+    await sendTrialEndingMail(admin, companyId, resolved);
+  }
+
   // **再送で直ったら、残した行を解決済みにする。**
   // ここが無いと、再送で直っても行が残り続け、毎朝のメールが鳴りっぱなしになる。
   // **鳴りっぱなしの警報は、その日から無視される対象になる。**
@@ -146,11 +174,22 @@ export async function POST(req: NextRequest) {
  * 購読が作られた場合に取りこぼさないため。`invoice.*` は入れない
  * （Invoice の `status` は購読の状態ではない）。
  */
+/**
+ * 決済が済んだと見なす `payment_status`。
+ *
+ * **`no_payment_required` は無料期間つき Checkout の正常値である。**
+ * 合計0円なので Stripe は決済を行わず、この値を返す（Stripe の仕様）。
+ * ここに `unpaid` と `processing` を入れない——前者は未払い、後者は結果が出ていない。
+ */
+const PAID_STATUSES = new Set(["paid", "no_payment_required"]);
+
 const HANDLED_TYPES = new Set([
   "checkout.session.completed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
+  // 無料期間の終わり（3日前）。**お金の話は黙って始めない**（A-7）
+  "customer.subscription.trial_will_end",
 ]);
 
 /**
@@ -171,6 +210,16 @@ async function resolveCompanyFromStripe(
   if (typeof object.client_reference_id === "string" && object.client_reference_id) {
     return { companyId: object.client_reference_id };
   }
+
+  // **Subscription 自身の metadata**（A-3）。checkout が `subscription_data.metadata` で
+  // 入れた値がここに来る。`customer.subscription.*` には `client_reference_id` が無いので、
+  // 逆引き（Stripe 側の状態に依存する）より前にこちらを見る
+  const metadata = object.metadata as Record<string, unknown> | null | undefined;
+  const fromMetadata = metadata?.company_id;
+  if (typeof fromMetadata === "string" && fromMetadata) {
+    return { companyId: fromMetadata };
+  }
+
   if (!customerId) return { reason: "not_found" };
 
   const { data, error } = await admin.rpc("company_id_by_stripe_customer", {
@@ -210,6 +259,8 @@ interface ResolvedSubscription {
   status: string;
   customerId: string;
   subscriptionId: string;
+  /** 無料期間の終了時刻（UNIX 秒）。無料期間が無ければ null */
+  trialEnd: number | null;
 }
 
 /**
@@ -244,6 +295,7 @@ async function resolveSubscription(
         status: sub.status,
         customerId: typeof sub.customer === "string" ? sub.customer : fallbackCustomer,
         subscriptionId: sub.id,
+        trialEnd: typeof sub.trial_end === "number" ? sub.trial_end : null,
       };
     } catch (e) {
       // 秘密を含みうるので例外そのものは載せない
@@ -256,6 +308,7 @@ async function resolveSubscription(
       status: "canceled",
       customerId: fallbackCustomer,
       subscriptionId: subscriptionId ?? "",
+      trialEnd: null,
     };
   }
 
@@ -328,15 +381,62 @@ async function markResolved(
   eventType: string,
   customerId: string | null,
 ): Promise<void> {
+  const resolvedAt = new Date().toISOString();
+
   const { error } = await admin
     .from("billing_webhook_unresolved")
-    .update({ resolved_at: new Date().toISOString() })
+    .update({ resolved_at: resolvedAt })
     .eq("stripe_event_id", unresolvedKey(event, eventType, customerId))
     .is("resolved_at", null);
 
   if (error) {
     console.error("billing_webhook_unresolved resolve failed:", error.message);
   }
+
+  // **同じ customer の未解決行も閉じる**（A-6）。
+  //
+  // 引けなかった原因は「その customer から会社を引けないこと」であって、
+  // イベント1件の事情ではない。会社が引けるようになった時点で、
+  // **同じ customer で溜まっていた行はすべて解決している。**
+  // 閉じないと、直ったあとも表が鳴り続け、**その日から無視される対象になる。**
+  if (!customerId) return;
+
+  const { error: byCustomer } = await admin
+    .from("billing_webhook_unresolved")
+    .update({ resolved_at: resolvedAt })
+    .eq("stripe_customer_id", customerId)
+    .is("resolved_at", null);
+
+  if (byCustomer) {
+    console.error("billing_webhook_unresolved resolve by customer failed:", byCustomer.message);
+  }
+}
+
+/**
+ * 処理済みの台帳に1行残す（A-5・マイグレーション `00034`）。
+ *
+ * 戻り値は `"new"`（初めて）／`"duplicate"`（2回目以降）／`"failed"`（書けなかった）。
+ * **一意制約違反は正常な分岐である**（Stripe は同じイベントを何度も送る）。
+ */
+async function recordProcessed(
+  admin: SupabaseClient,
+  event: { id?: string },
+  eventType: string,
+): Promise<"new" | "duplicate" | "failed"> {
+  // イベントIDが無い本文は Stripe からは来ない。来たときに黙って通さない
+  const id = typeof event.id === "string" && event.id ? event.id : null;
+  if (!id) return "failed";
+
+  const { error } = await admin
+    .from("billing_webhook_events")
+    .insert({ stripe_event_id: id, event_type: eventType });
+
+  if (!error) return "new";
+  // 23505 = 一意制約違反。**2回目である**
+  if (error.code === "23505") return "duplicate";
+
+  console.error("billing_webhook_events insert failed:", error.message);
+  return "failed";
 }
 
 /**
@@ -374,4 +474,106 @@ async function recordUnresolved(
   // ログにも残す（受入 5-3 の「ログとレコードの両方」。表は気づく経路、ログは追跡用）
   console.error(`billing webhook unresolved: type=${eventType} reason=${reason}`);
   return true;
+}
+
+/**
+ * 無料期間の終わりを1通出す（A-7）。**2通目を出さない。**
+ *
+ * 順序は配信の正規形と同じ「予約 → 送信 → 結果で UPDATE」（契約 S-2-7）。
+ * 逆にすると、送信後の DB 書き込みが落ちたときに痕跡が残らず、再送が2通目を出す。
+ *
+ * **失敗しても購読の記録は巻き戻さない。** ここは購読の更新の後にある別の経路である。
+ * 送れなかったことはログと `delivery_log`（status='failed'）に残る。
+ */
+async function sendTrialEndingMail(
+  admin: SupabaseClient,
+  companyId: string,
+  resolved: ResolvedSubscription,
+): Promise<void> {
+  const origin = process.env.NEXT_PUBLIC_SITE_ORIGIN?.trim().replace(/\/$/, "") ?? "";
+
+  // **差し込みが欠けたら送らない。** 「（不明）に終了します」を顧客に出さない
+  const notice = renderTrialEndingNotice({
+    trialEndUnix: resolved.trialEnd,
+    manageUrl: origin ? `${origin}/connect` : "",
+  });
+  if (!notice) {
+    console.error(
+      `trial_will_end: 文面を組めないので送らない company_id=${companyId} ` +
+        `trial_end=${resolved.trialEnd ?? "なし"} origin=${origin ? "あり" : "なし"}`,
+    );
+    return;
+  }
+
+  const mail = resolveNextMailConfig();
+  if (!mail.ok) {
+    console.error(`trial_will_end: 送信設定が無いので送らない missing=${mail.missing.join(",")}`);
+    return;
+  }
+
+  // 宛先は**アカウントのメールアドレス**。Stripe 側の値は使わない
+  const { data: user, error: userErr } = await admin.auth.admin.getUserById(companyId);
+  const to = user?.user?.email ?? "";
+  if (userErr || !to) {
+    console.error(`trial_will_end: 宛先が取れないので送らない company_id=${companyId}`);
+    return;
+  }
+
+  const key = `trial_ending:${companyId}:${resolved.subscriptionId}`;
+  const rowId = crypto.randomUUID();
+
+  // 予約。**一意制約違反は正常な分岐**（すでに1通出している）
+  const { error: reserveErr } = await admin.from("delivery_log").insert({
+    id: rowId,
+    company_id: companyId,
+    channel: "email",
+    delivery_type: "trial_ending",
+    content: { notice: "trial_ending", subject: notice.subject, lines: notice.body.split("\n") },
+    status: "sending",
+    attempts: 1,
+    idempotency_key: key,
+    created_at: new Date().toISOString(),
+  });
+
+  if (reserveErr) {
+    if (reserveErr.code === "23505") return; // すでに送っている
+    console.error("trial_will_end: 予約に失敗:", reserveErr.message);
+    return;
+  }
+
+  const sent = await sendNextEmail(mail.config, {
+    to,
+    subject: notice.subject,
+    html: `<pre style="font-family:sans-serif;white-space:pre-wrap">${escapeForMailBody(notice.body)}</pre>`,
+    text: notice.body,
+  });
+
+  const { error: updateErr } = await admin
+    .from("delivery_log")
+    .update(
+      sent.ok
+        ? { status: "sent", sent_at: new Date().toISOString() }
+        : { status: "failed", content: { notice: "trial_ending", send_error: sent.error } },
+    )
+    .eq("id", rowId);
+
+  if (updateErr) {
+    // **送信は済んでいる。** 記録の失敗で 5xx にしない（S-2-6 と同じ判断）
+    console.error("trial_will_end: 記録の更新に失敗:", updateErr.message);
+  }
+}
+
+/**
+ * メール本文をそのまま HTML に入れるための最小限の逃がし。
+ *
+ * **名前を具体的にしてある。** `_shared/email-html.ts` にも同名の関数があり、
+ * 同名のまま置くと `check:dual-impl` が二重実装として拾う。
+ * 別物（あちらは配信テンプレート用）なので、宣言台帳に載せずに名前で避ける。
+ */
+function escapeForMailBody(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

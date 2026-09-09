@@ -1,0 +1,57 @@
+# public スキーマの表に、`anon` / `authenticated` が何を持ってよいかの宣言
+# （`check:table-grants` の正本。発注 ①-1.5）
+#
+# ## なぜ宣言ファイルが要るか
+#
+# 00036 が同じ形で失敗している。**本文には「読むだけにする」と書き、
+# `GRANT SELECT` も書いてあるのに、`REVOKE ALL` の相手が `anon` だけだった。**
+# `connector_limits` と `known_explanations` は元の書き込み権限を保ったまま残り、
+# 自表検証（4-1）の一覧にもこの2表が入っていなかったので、migration は緑で通った。
+#
+# **一覧を人が2か所（migration の本文と、検証の配列）に書き写す形にすると必ずずれる。**
+# ここを1か所の正本にして、migration の配列も検査器もここから突き合わせる。
+#
+# ## 分類
+#
+# read_only  … `authenticated` は SELECT だけ。書き込みは service_role が持つ
+# writable   … `authenticated` の SELECT/INSERT/UPDATE/DELETE を残す表。
+#              **それでも TRUNCATE / REFERENCES / TRIGGER は渡さない**
+#
+# `TRUNCATE` を全表で外すのは、**RLS を素通しするから**である。
+# `connections` の DELETE は RLS のポリシーで自社の行に絞られるが、
+# `TRUNCATE connections` にはポリシーが一切掛からない。全社の行が消える。
+#
+# `REFERENCES` は他人の表に外部キーを張れる権限、`TRIGGER` は他人の表に
+# トリガを仕掛けられる権限で、どちらも顧客が持つ理由が無い。
+#
+# ## anon
+#
+# **1つも持たせない。** 未ログインに会社のデータの用は無い（00036 で落とし済み）。
+
+# `authenticated` が SELECT だけを持つ表
+read_only:
+  - baselines
+  - budget_usage
+  - company_summary
+  - connection_events
+  - connector_limits # 00036 の実装漏れ。全社共通の枠を顧客が書き換えられてよい理由が無い
+  - delivery_log
+  - findings
+  - known_explanations # 00036 の実装漏れ。共有行（company_id IS NULL）を持つ表である
+  - misjudgments
+  - narratives
+
+# `authenticated` の書き込みを残す表（実際に画面・API から書いている）
+#   events        api/csv/ingest（upsert）/ api/connections/disconnect（delete）
+#   entities      api/competitors/suggest（insert）
+#   connections   api/connections/disconnect（delete）
+writable:
+  - connections
+  - entities
+  - events
+
+# どの表でも `authenticated` に渡さない権限
+never_granted:
+  - TRUNCATE
+  - REFERENCES
+  - TRIGGER

@@ -67,7 +67,7 @@ const SERIES_KEYS: Record<string, readonly string[]> = {
   transaction: ["order_client", "description"],
 };
 
-function seriesKeyOf(event: ScanEvent): string | null {
+export function seriesKeyOf(event: ScanEvent): string | null {
   const candidates = SERIES_KEYS[event.event_type];
   if (!candidates) return null;
   const metrics = event.metrics as Record<string, unknown> | null;

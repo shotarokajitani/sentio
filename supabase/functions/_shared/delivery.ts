@@ -130,6 +130,11 @@ export type DeliveryKeyInput =
    * キーを共有すると「片方を送ったせいでもう片方が予約できない」形になる
    */
   | { kind: "reconnect"; companyId: string; period: string }
+  /**
+   * 状態パケット（発注書 ①-a・11-4）。**`pulse` とも `reconnect` とも衝突させない。**
+   * 3つは同じ日に同時に出うるので、キーを共有すると片方が予約できなくなる
+   */
+  | { kind: "packet"; companyId: string; period: string }
   | { kind: "weekly"; companyId: string; period: string }
   | { kind: "alert"; companyId: string; eventId: string }
   | { kind: "day0"; companyId: string }
@@ -147,6 +152,7 @@ export function deliveryKey(input: DeliveryKeyInput): string {
     case "pulse":
     case "weekly":
     case "reconnect":
+    case "packet":
       return `${input.kind}:${input.companyId}:${input.period}`;
     case "alert":
       return `alert:${input.companyId}:${input.eventId}`;

@@ -26,6 +26,9 @@ import {
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import { jstDateKey } from "../_shared/jst.ts";
+import { buildStatePacket, renderPacketText } from "../_shared/state-packet.ts";
+import { loadPacketInput, PacketSourceError } from "../_shared/state-packet-source.ts";
+import { takeError } from "../_shared/db.ts";
 import { reconnectDeliveryContent, renderReconnectNotice } from "../_shared/reconnect-notice.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
@@ -77,6 +80,83 @@ Deno.serve(async (req: Request) => {
     // ディスパッチャ側も取り消し中の会社には `run-sense` を呼ばない。
     // **呼ばないことが担保である。**
     // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 状態パケット（発注書 ①-a）。**LLM を1度も呼ばない。**
+    //
+    // 組むのは `_shared/state-packet.ts`（純粋）で、材料を読むのは
+    // `_shared/state-packet-source.ts`。ここは**繋ぐだけ**である。
+    //
+    // **既存のパルスの本文は置き換えない。** 3行のパルスはそのまま動く。
+    // 置き換えるかどうかは、検収者が実物を読んでから決める（11-3）。
+    // ------------------------------------------------------------------
+    if (requestedKind === "packet") {
+      const period = jstDateKey(now);
+      const mailConfig = resolveMailConfig();
+      if (!mailConfig.ok) {
+        await recordPacketRun(supabase, companyId, "packet_build_failed", "mail_not_configured");
+        return json(500, { error: `mail not configured: ${mailConfig.missing.join(", ")}` });
+      }
+
+      let packetText: string;
+      try {
+        const input = await loadPacketInput(supabase, companyId, now);
+        packetText = renderPacketText(buildStatePacket(input));
+      } catch (e) {
+        // **組めなかった日は、組めなかった理由を残す**（12-2）。200 で終わらせない
+        const reason = e instanceof PacketSourceError ? e.reason : "source_error";
+        await recordPacketRun(supabase, companyId, "packet_build_failed", reason);
+        console.error(
+          `[sentio:packet] パケットを組めなかった company_id=${companyId} reason=${reason}`,
+        );
+        return json(500, { error: "packet not buildable", reason });
+      }
+
+      const result = await deliverOnce(
+        asDeliveryDb(supabase),
+        {
+          companyId,
+          channel: "email",
+          // **pulse とも reconnect とも分ける**（11-4）。数え分けられなくなる
+          deliveryType: "packet",
+          idempotencyKey: deliveryKey({ kind: "packet", companyId, period }),
+          // 送った本文をそのまま残す（reconnect と同じ作法）。
+          // `llm_calls` は**0であることを記録から確認できるようにする**ため（10-3）
+          content: { packet: "state", period, lines: packetText.split("\n"), llm_calls: 0 },
+          now,
+        },
+        () =>
+          sendEmail(mailConfig.config, {
+            to: email,
+            subject: `【Sentio】状態パケット（${period}）`,
+            html: renderAlertHtml(`状態パケット（${period}）`, packetText, NOTICE_HEADING),
+            text: packetText,
+          }),
+      );
+
+      // **送らなかった日と送り損ねた日を区別する**（12-3）
+      const outcome =
+        result.outcome === "sent" || result.outcome === "sent-but-unrecorded"
+          ? "packet_delivered"
+          : result.outcome === "skipped" || result.outcome === "deferred"
+            ? "packet_not_sent"
+            : "failed_deliver";
+      await recordPacketRun(supabase, companyId, outcome, resultReason(result));
+
+      console.log(
+        `[sentio:packet] 状態パケット company_id=${companyId} period=${period} ` +
+          `outcome=${outcome} llm_calls=0`,
+      );
+
+      return deliveryResponse(result, {
+        company_id: companyId,
+        kind: "packet",
+        period,
+        // **LLM を1度も呼んでいないことを応答からも確認できるようにする**（10-3）
+        llm_calls: 0,
+        packet: packetText,
+      });
+    }
+
     if (requestedKind === "reconnect") {
       const period = jstDateKey(now);
       const mailConfig = resolveMailConfig();
@@ -223,3 +303,52 @@ Deno.serve(async (req: Request) => {
     return errorResponse(error, corsHeaders);
   }
 });
+
+/**
+ * 状態パケットの実行記録（12-1〜12-3・マイグレーション `00033`）。
+ *
+ * **毎日1行残す。** 実行そのものの行（`kind='run'`）と、会社ごとの結末（`kind='company'`）を
+ * `dispatch_runs` の形に合わせて書く。**記録の失敗で配信を 5xx にしない**
+ * （`_shared/dispatch-runtime.ts` の `recordDispatch` と同じ理由）。
+ */
+async function recordPacketRun(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+  outcome: string,
+  reason: string | null,
+): Promise<void> {
+  const error = await takeError(
+    supabase.from("dispatch_runs").insert([
+      {
+        kind: "run",
+        dispatch: "packet",
+        company_id: null,
+        outcome: null,
+        companies: 1,
+        reason: null,
+      },
+      {
+        kind: "company",
+        dispatch: "packet",
+        company_id: companyId,
+        outcome,
+        companies: null,
+        reason,
+      },
+    ]),
+    "packet: dispatch_runs",
+  );
+
+  if (error) {
+    console.error(`[sentio:packet] 実行記録の書き込みに失敗: ${error.message}`);
+  }
+}
+
+/** 送らなかった理由・送り損ねた理由を1語で残す（自由記述にしない） */
+function resultReason(result: { outcome: string; reason?: string; error?: string }): string | null {
+  if (result.outcome === "skipped") return result.reason ?? "skipped";
+  if (result.outcome === "send-failed") return "send_failed";
+  if (result.outcome === "attempts-exhausted") return "attempts_exhausted";
+  if (result.outcome === "sent-but-unrecorded") return "sent_but_unrecorded";
+  return null;
+}

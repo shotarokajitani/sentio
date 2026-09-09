@@ -96,7 +96,9 @@ if (mode === "run") {
     async function readConnection() {
       const { data, error } = await admin
         .from("connections")
-        .select("id, status, revoked_at, vault_secret_id, expires_at, provider")
+        .select(
+          "id, status, revoked_at, vault_secret_id, expires_at, provider, consecutive_failures",
+        )
         .eq("company_id", COMPANY_ID)
         .eq("provider", GOOGLE_CALENDAR_PROVIDER)
         .single();
@@ -193,7 +195,11 @@ if (mode === "run") {
       expect(tokenEndpointCalls).toBe(1);
 
       const row = await readConnection();
-      expect(row.status).toBe("reauth_required");
+      // **①-2（2026-09-09）で題どおりの挙動になった。**
+      // それまでは 5xx が1回返るだけで `reauth_required` になっており、
+      // 「status も動かない」という題と実装が食い違っていた
+      expect(row.status).toBe("active");
+      expect(row.consecutive_failures).toBe(1);
       expect(row.revoked_at).toBeNull();
       // 一時障害で秘密を捨てない。再認証すら要らずに復旧できる余地を残す
       expect(row.vault_secret_id).toBe(vaultId);

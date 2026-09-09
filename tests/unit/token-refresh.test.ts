@@ -101,19 +101,23 @@ describe("classifyTokenFailure — 失敗応答を取り消しと一時的失敗
     }
   });
 
-  it("陰性: 5xx / 429 は本文が invalid_grant でも reauth_required（D-2-5）", () => {
+  it("陰性: 5xx / 429 は本文が invalid_grant でも revoked にしない（D-2-5）", () => {
+    // **2026-09-09（①-2）で行き先が変わった。** それまでは `reauth_required` で、
+    // ネットワークの瞬断1回で連携が切れた扱いになっていた。いまは `transient`——
+    // 状態を変えず、3回続いたときだけ倒す。**revoked に丸めない点は変わらない**
     const body = JSON.stringify({ error: "invalid_grant" });
     for (const status of [429, 500, 502, 503, 504]) {
-      expect(classifyTokenFailure(status, body)).toBe("reauth_required");
+      expect(classifyTokenFailure(status, body), String(status)).toBe("transient");
     }
   });
 
-  it("陰性: 401 / 403 も reauth_required。invalid_grant 以外を revoked に丸めない", () => {
-    for (const status of [401, 403]) {
-      expect(classifyTokenFailure(status, JSON.stringify({ error: "invalid_grant" }))).toBe(
-        "reauth_required",
-      );
-    }
+  it("陰性: 401 / 403 も revoked に丸めない（行き先は種別で分かれる）", () => {
+    // 401 は認可の失敗として読める → `reauth_required`
+    expect(classifyTokenFailure(401, JSON.stringify({ error: "invalid_grant" }))).toBe(
+      "reauth_required",
+    );
+    // 403 は相手側の設定やプロキシでも出る → 断定せず `transient`（①-2）
+    expect(classifyTokenFailure(403, JSON.stringify({ error: "invalid_grant" }))).toBe("transient");
   });
 
   it("陰性: 本文が JSON として読めないときは reauth_required（判別できない側に倒す）", () => {
@@ -206,7 +210,10 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
 
   // ---- 陰性コントロール（誤削除の入口を塞ぐ）--------------------------------
 
-  it("D-2-3 陰性: fetch が throw（通信断）なら reauth_required。revoked_at を書かない", async () => {
+  it("D-2-3 陰性: fetch が throw（通信断）でも連携を切らない。revoked_at も書かない", async () => {
+    // **2026-09-09（①-2）で挙動が変わった。** それまでは1回の通信断で
+    // `reauth_required` になり、その行は sync の対象から外れて二度と試されなかった。
+    // いまは回数を数えるだけで、状態は変えない
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("network down"))) as never;
     const { client, rpcCalls, updates } = createSupabaseStub(okDelete);
 
@@ -214,7 +221,8 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
 
     expect(result.ok).toBe(false);
     expect(updates).toHaveLength(1);
-    expect(updates[0]).toEqual({ status: "reauth_required" });
+    expect(updates[0]).toMatchObject({ consecutive_failures: 1 });
+    expect(updates[0]).not.toHaveProperty("status");
     expect(updates[0]).not.toHaveProperty("revoked_at");
     // 通信断で秘密を破棄したら、繋がった瞬間に復旧できるはずの連携が壊れる
     expect(rpcCalls.map((c) => c.fn)).not.toContain("delete_vault_secret");
@@ -233,7 +241,7 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     expect(rpcCalls.map((c) => c.fn)).not.toContain("delete_vault_secret");
   });
 
-  it("D-2-5 陰性: 5xx / 429 は reauth_required。Google 側の一時障害を解除と読まない", async () => {
+  it("D-2-5 陰性: 5xx / 429 で連携を切らない。Google 側の一時障害を解除とも切断とも読まない", async () => {
     for (const status of [429, 500, 503]) {
       globalThis.fetch = vi.fn(() =>
         Promise.resolve(respond(status, JSON.stringify({ error: "invalid_grant" }))),
@@ -243,7 +251,9 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
       const result = await refreshToken(CONNECTION, client, getEnv);
 
       expect(result.ok, `status=${status}`).toBe(false);
-      expect(updates[0], `status=${status}`).toEqual({ status: "reauth_required" });
+      // **①-2 で行き先が変わった。** 状態は変えず、失敗の回数だけを数える
+      expect(updates[0], `status=${status}`).toMatchObject({ consecutive_failures: 1 });
+      expect(updates[0], `status=${status}`).not.toHaveProperty("status");
       expect(
         rpcCalls.map((c) => c.fn),
         `status=${status}`,
@@ -251,7 +261,7 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     }
   });
 
-  it("陰性: Vault の読み出しに失敗した経路も reauth_required のまま", async () => {
+  it("陰性: Vault の読み出しに失敗しても、1回では連携を切らない（①-2）", async () => {
     const rpcCalls: Array<string> = [];
     const updates: Array<Record<string, unknown>> = [];
     const client = {
@@ -275,7 +285,9 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     const result = await refreshToken(CONNECTION, client, getEnv);
 
     expect(result.ok).toBe(false);
-    expect(updates[0]).toEqual({ status: "reauth_required" });
+    // **①-2**: Vault が読めないのは基盤の失敗。1回では状態を変えない
+    expect(updates[0]).toMatchObject({ consecutive_failures: 1 });
+    expect(updates[0]).not.toHaveProperty("status");
     expect(rpcCalls).not.toContain("delete_vault_secret");
   });
 
@@ -301,11 +313,21 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     });
   });
 
-  it("PS-9（陰性コントロール）: reauth_required でも遷移が残る。**理由は取り消しと分ける**", async () => {
+  it("PS-9（陰性コントロール）: **1回の 5xx では遷移を残さない**（①-2 で変わった）", async () => {
     const { client, events } = createSupabaseStub(okDelete);
     globalThis.fetch = vi.fn(async () => respond(500, "boom")) as never;
 
     await refreshToken(CONNECTION, client, getEnv);
+
+    // 状態が変わっていないので、遷移も無い。**平常を遷移として書かない**
+    expect(events).toEqual([]);
+  });
+
+  it("PS-9: **3回目で倒れたときは遷移が残る。理由は取り消しと分ける**", async () => {
+    const { client, events } = createSupabaseStub(okDelete);
+    globalThis.fetch = vi.fn(async () => respond(500, "boom")) as never;
+
+    await refreshToken({ ...CONNECTION, consecutive_failures: 2 }, client, getEnv);
 
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ to_status: "reauth_required", reason: "refresh_failed" });
@@ -315,7 +337,11 @@ describe("refreshToken の失敗4経路 — revoked と reauth_required の書�
     const { client, events } = createSupabaseStub(okDelete);
     globalThis.fetch = vi.fn(async () => respond(500, "boom")) as never;
 
-    await refreshToken({ ...CONNECTION, status: "reauth_required" }, client, getEnv);
+    await refreshToken(
+      { ...CONNECTION, status: "reauth_required", consecutive_failures: 2 },
+      client,
+      getEnv,
+    );
 
     // 6時間おきに同じ行が積み上がると、**本物の遷移が埋もれる**
     expect(events).toEqual([]);

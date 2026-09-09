@@ -10,7 +10,13 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller } from "../_shared/caller.ts";
 import { errorResponse, mustData, mustOk } from "../_shared/db.ts";
-import { isTokenExpired, refreshToken } from "../_shared/token-refresh.ts";
+import {
+  isTokenExpired,
+  planSyncRecovery,
+  refreshToken,
+  shouldRetryReauth,
+} from "../_shared/token-refresh.ts";
+import { recordConnectionEvent } from "../_shared/connection-events.ts";
 import { generateEventId } from "../_shared/event-id.ts";
 
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -34,6 +40,10 @@ interface Connection {
   expires_at: string | null;
   /** 遷移を残すために引く（PS-9）。「どこから」が無いと本物の遷移を見分けられない */
   status: string | null;
+  /** 一時的な失敗の連続回数（00037・発注 ①-2） */
+  consecutive_failures?: number | null;
+  /** 最後に失敗した時刻（00037）。`reauth_required` の再試行を1日1回に絞る */
+  last_failure_at?: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -51,25 +61,49 @@ Deno.serve(async (req: Request) => {
   const results: SyncResult[] = [];
 
   try {
-    // 1. 全アクティブ接続を取得
-    const connections = await mustData(
+    // 1. 同期の対象を取る（発注 ①-2 で `reauth_required` も含めた）。
+    //
+    // **倒れた行を二度と触らない形をやめる。** 以前は `status = 'active'` だけを拾っており、
+    // ネットワークの瞬断で `reauth_required` になった行は、顧客が手で再連携するまで
+    // cron から一度も試されなかった。7日ごとに「連携が切れています」が届き続ける。
+    //
+    // ただし `reauth_required` は**1日1回だけ**にする。本当に切れている行を
+    // 6時間ごとに叩くと、相手側に無駄な負荷をかけ、こちらのログも埋まる。
+    const now = new Date();
+    const candidates = await mustData(
       supabase
         .from("connections")
-        .select("id, company_id, provider, vault_secret_id, expires_at, status")
-        .eq("status", "active"),
-      "sync-connections: active connections",
+        .select(
+          "id, company_id, provider, vault_secret_id, expires_at, status, " +
+            "consecutive_failures, last_failure_at",
+        )
+        .in("status", ["active", "reauth_required"]),
+      "sync-connections: sync targets",
+    );
+
+    const connections = (candidates as unknown as Connection[]).filter(
+      (c) => c.status !== "reauth_required" || shouldRetryReauth(c.last_failure_at ?? null, now),
     );
 
     if (connections.length === 0) {
-      return new Response(JSON.stringify({ results: [], message: "no active connections" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          results: [],
+          message: "no connections to sync",
+          // **0件の理由を区別できるようにする。** 「対象が無い」と「全部待ち時間の中」は別
+          candidates: candidates.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // 2. 各接続を処理
     for (const conn of connections as Connection[]) {
       try {
         let accessToken: string;
+        // **リフレッシュを通ったかを覚える。** 通っていれば復旧は `refreshToken` が済ませている。
+        // ここでもう一度書くと `connection_events` に同じ遷移が2行残る
+        let recoveredByRefresh = false;
 
         // 2a. トークン期限チェック & リフレッシュ
         if (isTokenExpired(conn.expires_at)) {
@@ -90,6 +124,7 @@ Deno.serve(async (req: Request) => {
           }
 
           accessToken = refreshResult.accessToken;
+          recoveredByRefresh = true;
         } else {
           // トークンまだ有効 → Vaultから読み出し
           const { data: vaultData, error: vaultError } = await supabase.rpc("read_vault_secret", {
@@ -141,14 +176,40 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        // 2f. last_refresh を更新
+        // 2f. last_refresh を更新し、**成功したら失敗の記録を消す**（発注 ①-2）。
+        //
+        // **トークンが有効なまま同期できた経路がここに来る。** リフレッシュを通らないので
+        // `refreshToken` の復旧処理が走らず、`reauth_required` のまま残っていた
+        // （2026-09-09 の検収で指摘）。取り込めているのに「切れています」と出続ける
+        const { restoreActive, recordEvent } = planSyncRecovery({
+          status: conn.status,
+          recoveredByRefresh,
+        });
+
         await mustOk(
           supabase
             .from("connections")
-            .update({ last_refresh: new Date().toISOString() })
+            .update({
+              last_refresh: new Date().toISOString(),
+              consecutive_failures: 0,
+              last_failure_at: null,
+              ...(restoreActive ? { status: "active" } : {}),
+            })
             .eq("id", conn.id),
           "sync-connections: last_refresh",
         );
+
+        if (recordEvent) {
+          // **勝手に直ったことを残す**（`reconnected` とは別の理由）
+          const recorded = await recordConnectionEvent(supabase, {
+            companyId: conn.company_id,
+            provider: conn.provider,
+            fromStatus: "reauth_required",
+            toStatus: "active",
+            reason: "recovered",
+          });
+          if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
+        }
 
         results.push({
           provider: conn.provider,

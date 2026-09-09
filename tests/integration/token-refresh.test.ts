@@ -202,3 +202,173 @@ describe("token-refresh", () => {
     });
   });
 });
+
+/**
+ * 一時的な失敗を、連携が切れたことと混ぜない（発注 ①-2・2026-09-09）。
+ *
+ * **直す前は、503 が1回返っただけで `reauth_required` になっていた。**
+ * その行は `sync-connections` の対象から外れ（`status = 'active'` で絞っている）、
+ * 顧客が手で再連携するまで直らない。7日ごとに「連携が切れています」が届き続ける。
+ */
+describe("①-2: 一時的な失敗（transient）", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  const failing = (status: number) =>
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      text: async () => "Service Unavailable",
+    });
+
+  /** `connections.update` に渡した中身を取り出す */
+  const updates = (calls: Array<{ method: string; args: any }>) =>
+    calls.filter((c) => c.method === "from:connections.update").map((c) => c.args.data);
+
+  it("**503 を1回返しても active のまま。** consecutive_failures だけが 1 になる", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal("fetch", failing(503));
+
+    const result = await refreshToken(
+      { ...EXPIRED_CONNECTION, consecutive_failures: 0 },
+      client,
+      getEnv,
+    );
+
+    expect(result.ok).toBe(false);
+
+    const patches = updates(calls);
+    expect(patches).toHaveLength(1);
+    expect(patches[0]).toMatchObject({ consecutive_failures: 1 });
+    // **状態を変えていない**。ここが要件の芯である
+    expect(patches[0]).not.toHaveProperty("status");
+    // 遷移の記録も残さない（何も遷移していない）
+    expect(calls.some((c) => c.method === "from:connection_events.insert")).toBe(false);
+  });
+
+  it("**503 が3回続くと reauth_required に倒れる**", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal("fetch", failing(503));
+
+    // 3回目の呼び出し（それまでに2回失敗している行）
+    await refreshToken({ ...EXPIRED_CONNECTION, consecutive_failures: 2 }, client, getEnv);
+
+    const patches = updates(calls);
+    expect(patches.some((p) => p.consecutive_failures === 3)).toBe(true);
+    expect(patches.some((p) => p.status === "reauth_required")).toBe(true);
+
+    // **倒したことは記録に残す**（PS-9）
+    const event = calls.find((c) => c.method === "from:connection_events.insert");
+    expect(event?.args.data).toMatchObject({ to_status: "reauth_required" });
+  });
+
+  it("**陰性**: ネットワークの例外も1回では倒れない", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unreachable")));
+
+    await refreshToken({ ...EXPIRED_CONNECTION, consecutive_failures: 0 }, client, getEnv);
+
+    const patches = updates(calls);
+    expect(patches[0]).toMatchObject({ consecutive_failures: 1 });
+    expect(patches[0]).not.toHaveProperty("status");
+  });
+
+  it("**invalid_grant は従来どおり即 revoked**（数えない）", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    // 取り消しの経路は Vault の破棄を通る。既定のモックは未知の rpc を失敗にするので足す
+    const baseRpc = client.rpc;
+    client.rpc = vi.fn((fn: string, args: any) => {
+      if (fn === "delete_vault_secret") {
+        calls.push({ method: "rpc:delete_vault_secret", args });
+        return Promise.resolve({ data: true, error: null });
+      }
+      return baseRpc(fn, args);
+    }) as never;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({ error: "invalid_grant" }),
+      }),
+    );
+
+    await refreshToken({ ...EXPIRED_CONNECTION, consecutive_failures: 0 }, client, getEnv);
+
+    const patches = updates(calls);
+    expect(patches.some((p) => p.status === "revoked")).toBe(true);
+    // **一時的な失敗として数えない。** 取り消しは1回で確定する
+    expect(patches.some((p) => p.consecutive_failures !== undefined)).toBe(false);
+  });
+
+  it("成功したら失敗の記録を消す（間隔をあけた失敗が積み上がらない）", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: "new", expires_in: 3600 }),
+      }),
+    );
+
+    await refreshToken({ ...EXPIRED_CONNECTION, consecutive_failures: 2 }, client, getEnv);
+
+    const patches = updates(calls);
+    expect(patches[0]).toMatchObject({
+      status: "active",
+      consecutive_failures: 0,
+      last_failure_at: null,
+    });
+  });
+
+  it("**reauth_required の行が成功したら active に戻り、recovered が残る**", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: "new", expires_in: 3600 }),
+      }),
+    );
+
+    const result = await refreshToken(
+      { ...EXPIRED_CONNECTION, status: "reauth_required", consecutive_failures: 3 },
+      client,
+      getEnv,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(updates(calls)[0]).toMatchObject({ status: "active", consecutive_failures: 0 });
+
+    // **「人が繋ぎ直した」と「勝手に直った」を別の理由にする**
+    const event = calls.find((c) => c.method === "from:connection_events.insert");
+    expect(event?.args.data).toMatchObject({
+      from_status: "reauth_required",
+      to_status: "active",
+      reason: "recovered",
+    });
+  });
+
+  it("**陰性**: もともと active だった行に recovered を書かない（平常を遷移にしない）", async () => {
+    const { client, calls } = createMockSupabase(VAULT_PAYLOAD);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: "new", expires_in: 3600 }),
+      }),
+    );
+
+    await refreshToken(EXPIRED_CONNECTION, client, getEnv);
+
+    expect(calls.some((c) => c.method === "from:connection_events.insert")).toBe(false);
+  });
+});

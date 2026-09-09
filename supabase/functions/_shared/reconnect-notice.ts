@@ -34,6 +34,28 @@ export interface ReconnectNotice {
   body: string;
 }
 
+/**
+ * `delivery_log.content` に残す内容（2026-09-09 決定・検収者）。
+ *
+ * **「この日、何と書いて送ったか」を辿れないと記録として不十分である。**
+ * 文面を後で変えると、過去に送った版が復元できなくなる。
+ * 形は pulse（`{ lines, period }`）に揃え、**種別と対象期間は従来どおり残す**
+ * （既存の照会を壊さない）。
+ *
+ * **組み立てはここに置く。** 呼び出し側で書くと、送った本文と記録が割れる。
+ */
+export function reconnectDeliveryContent(
+  period: string,
+  notice: ReconnectNotice,
+): Record<string, unknown> {
+  return {
+    notice: "reconnect",
+    period,
+    subject: notice.subject,
+    lines: notice.body.split("\n"),
+  };
+}
+
 /** provider の**内部表記を顧客に見せない**。`google_calendar` ではなく「Googleカレンダー」 */
 const PROVIDER_LABEL = "Googleカレンダー";
 

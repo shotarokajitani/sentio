@@ -2520,3 +2520,48 @@ mdc-diseno.com  MX preference = 1, mail exchanger = smtp.google.com
 
 **台帳・通知の実装（DR-S1）。** 窓口の到達確認が済むまで着手しない。
 上の順番の 2 が終わるまで、この項目は動かない。
+
+## 冪等キーの日付は pulse と reconnect で揃えない（2026-09-09 決定）
+
+**`pulse:` と `reconnect:` の日付の規則は違う。**
+`pulse` は**報告対象日（前日）**、`reconnect` は**送信日（当日）**。
+**意味が違うため揃えない。**
+
+- `pulse` は「いつの状態を報告したか」なので前日
+  （`_shared/delivery.ts` の `resolvePulsePeriod` が JST の前日を返す）
+- `reconnect` は「いつ送ったか」なので当日
+  （`deliver-pulse/index.ts` の再連携の分岐が `jstDateKey(now)` を使う）
+
+**7日ごとの抑制も送信日基準のほうが自然である。** 揃えると、送った日とキーの日付が
+1日ずれ、抑制の7日を数えるときに混乱する（抑制の判定は `delivery_log.created_at` を見る。
+`_shared/dispatch-runtime.ts` の `lastNotice`）。
+
+実測（2026-09-09・検収者）では `reconnect:197f2c0e-…:2026-09-09` が 07:00 JST に
+`sent` で入り、同じ日の `pulse:` は 09-07 のままだった。**この2つは同じ日付にならない。**
+
+## 顧客の会社は3つある。うち1社は連携が一度もない（2026-09-09 実測）
+
+**「顧客は自社2社」は `connections` を見た判断だった。会社（`auth.users`）は3つある。**
+`daily` の `dispatch_runs` が `companies=3` を出したのは正しい。
+
+読み取り照会（本番・2026-09-09）で確かめた3社目 `a5d2adc7-6310-4202-818d-50ca9175839b`:
+
+| 項目                                                 | 実測                              |
+| ---------------------------------------------------- | --------------------------------- |
+| 作成                                                 | 2026-04-08 11:05 JST              |
+| 最終サインイン                                       | 2026-09-02 10:55 JST              |
+| 認証の種類                                           | メール／パスワード（`email`）     |
+| `connections` / `connection_events`                  | 0件 / 0件（**一度も連携が無い**） |
+| `events` / `delivery_log`                            | 0件 / 0件                         |
+| `baselines` / `narratives` / `findings` / `entities` | すべて0件                         |
+| 課金メタデータ（`user_metadata.subscription`）       | 無し                              |
+
+**検収者本人の最も古いアカウントで、顧客ではない**（アドレスは検収者のもの。ここには書かない）。
+`dispatch_runs` の1行（`skipped_no_connection`・09-09 07:00）だけが唯一の記録である。
+
+**したがって毎朝の `companies=3` は「顧客3社」ではない。**
+`skipped_no_connection` が1件出続けるのが正常な状態であり、**0件に減ったら**
+この口が連携された（＝誰かが繋いだ）ことを意味する。
+
+**このアカウントをどう扱うか（残す／消す／試験用と明示する）は未判断。**
+検収者の判断待ちであり、勝手に消さない。

@@ -104,17 +104,14 @@ export async function POST(req: NextRequest) {
 
   const admin = createClient(supabaseUrl, serviceKey);
 
-  // **同じイベントを2回処理しない**（A-5）。署名を検証した直後・会社を引く前に置く。
-  // 引けなかったイベントも「受け取った」ことは事実であり、再送のたびに
-  // `billing_webhook_unresolved` へ同じ行を積み直す必要は無い
-  const ledger = await recordProcessed(admin, event, eventType);
-  if (ledger === "duplicate") {
+  // **同じイベントを2回処理しない**（A-5）。判定は処理の**前**、記録は処理の**後**である。
+  //
+  // 記録を先頭でやると、**503 や 500 を返した経路でも「処理済み」になる。**
+  // Stripe が再送しても `duplicate` で捨てられ、購読状態が永久に反映されない——
+  // 「再送が来れば次の機会がある」と書いてあるすべての経路で、次の機会が来なくなる
+  // （2026-09-09 の検収で指摘。**位置が要件である**）
+  if (await alreadyProcessed(admin, event)) {
     return NextResponse.json({ status: "ignored", reason: "duplicate" });
-  }
-  if (ledger === "failed") {
-    // 台帳に書けないまま進むと、**2回目を弾けない状態で副作用が出る**。
-    // 再送が来れば次の機会がある
-    return NextResponse.json({ error: "ledger failed" }, { status: 500 });
   }
   const customerId = typeof object.customer === "string" ? object.customer : null;
 
@@ -158,6 +155,10 @@ export async function POST(req: NextRequest) {
   if (eventType === "customer.subscription.trial_will_end") {
     await sendTrialEndingMail(admin, companyId, resolved);
   }
+
+  // **処理が済んでから台帳に書く**（A-5・2026-09-09 に位置を直した）。
+  // ここまで来た時点で、購読の更新は成功している
+  await recordProcessed(admin, event, eventType);
 
   // **再送で直ったら、残した行を解決済みにする。**
   // ここが無いと、再送で直っても行が残り続け、毎朝のメールが鳴りっぱなしになる。
@@ -413,30 +414,60 @@ async function markResolved(
 }
 
 /**
- * 処理済みの台帳に1行残す（A-5・マイグレーション `00034`）。
+ * すでに**処理を終えた**イベントか（A-5・マイグレーション `00034`）。
  *
- * 戻り値は `"new"`（初めて）／`"duplicate"`（2回目以降）／`"failed"`（書けなかった）。
- * **一意制約違反は正常な分岐である**（Stripe は同じイベントを何度も送る）。
+ * **台帳に行があるのは「最後まで処理できた」ときだけ**である（記録は末尾で行う）。
+ * したがって、ここで真になるのは本当の二度目だけで、
+ * 503 / 500 を返した回の再送は**通る**。
+ *
+ * **読めなかったときは false に倒す。** 台帳が読めないことを理由に処理を止めると、
+ * 購読の反映が台帳の可用性に人質を取られる。二重処理の害
+ * （`updateUserById` は同じ値を書くだけ・メールは `delivery_log` の冪等キーで止まる）より、
+ * 反映されないことの害のほうが大きい。
+ */
+async function alreadyProcessed(admin: SupabaseClient, event: { id?: string }): Promise<boolean> {
+  const id = typeof event.id === "string" && event.id ? event.id : null;
+  // イベントIDが無い本文は Stripe からは来ない。**弾かずに通す**（記録もできないだけ）
+  if (!id) return false;
+
+  const { data, error } = await admin
+    .from("billing_webhook_events")
+    .select("stripe_event_id")
+    .eq("stripe_event_id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("billing_webhook_events select failed:", error.message);
+    return false;
+  }
+  return data !== null;
+}
+
+/**
+ * 処理済みの台帳に1行残す（A-5）。**処理が終わってから呼ぶ。**
+ *
+ * 一意制約違反（23505）は**正常な分岐**である。同じイベントを並行に受けたとき、
+ * 先に終わったほうが書いているだけで、こちらの処理も正しく終わっている。
+ *
+ * **書けなくても 5xx にしない。** `updateUserById` は同じ値を書く冪等な操作なので、
+ * 再送が来てもう一度処理されても害が無い。無料期間の終わりのメールは
+ * `delivery_log` の冪等キー（`trial_ending:<company_id>:<subscription_id>`）で二重送信が止まる。
  */
 async function recordProcessed(
   admin: SupabaseClient,
   event: { id?: string },
   eventType: string,
-): Promise<"new" | "duplicate" | "failed"> {
-  // イベントIDが無い本文は Stripe からは来ない。来たときに黙って通さない
+): Promise<void> {
   const id = typeof event.id === "string" && event.id ? event.id : null;
-  if (!id) return "failed";
+  if (!id) return;
 
   const { error } = await admin
     .from("billing_webhook_events")
     .insert({ stripe_event_id: id, event_type: eventType });
 
-  if (!error) return "new";
-  // 23505 = 一意制約違反。**2回目である**
-  if (error.code === "23505") return "duplicate";
-
-  console.error("billing_webhook_events insert failed:", error.message);
-  return "failed";
+  if (error && error.code !== "23505") {
+    console.error("billing_webhook_events insert failed:", error.message);
+  }
 }
 
 /**

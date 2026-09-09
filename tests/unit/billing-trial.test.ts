@@ -50,6 +50,8 @@ vi.mock("@supabase/supabase-js", () => ({
     rpc: async () => ({ data: null, error: null }),
     from: () => ({
       insert: ledgerInsert,
+      // 台帳の存在確認（`00034`）。**既定は「初めて」** を返す
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
       upsert: async () => ({ error: null }),
       update: () => ({ eq: () => ({ is: async () => ({ error: null }) }) }),
     }),

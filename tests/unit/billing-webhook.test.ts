@@ -57,9 +57,18 @@ const upsert = vi.fn();
 const resolveUpdate = vi.fn();
 const resolvedCalls: Array<{ values: Record<string, unknown>; eventId: unknown }> = [];
 /**
- * 処理済みの台帳（`00034`）。**2回目を弾く経路**なので、既定は「初めて」を返す。
- * 重複の試験だけが `ledgerInsert` を 23505 に差し替える。
+ * 処理済みの台帳（`00034`）。**判定は処理の前、記録は処理の後**である。
+ *
+ * `ledgerSelect` が「行がある」を返したときだけ2回目として弾く。
+ * `ledgerInsert` は末尾で呼ばれる（**503 / 500 の経路では呼ばれない**のが要件）。
  */
+const ledgerSelect = vi.fn(
+  async (): Promise<{
+    data: { stripe_event_id: string } | null;
+    error: { code: string; message: string } | null;
+  }> => ({ data: null, error: null }),
+);
+
 const ledgerInsert = vi.fn(
   async (): Promise<{ error: { code: string; message: string } | null }> => ({
     error: null,
@@ -71,7 +80,10 @@ const resolvedByCustomer: Array<{ values: Record<string, unknown>; customerId: u
 
 const from = vi.fn((table: string) => {
   if (table === "billing_webhook_events") {
-    return { insert: ledgerInsert } as never;
+    return {
+      insert: ledgerInsert,
+      select: () => ({ eq: () => ({ maybeSingle: ledgerSelect }) }),
+    } as never;
   }
   return {
     upsert,
@@ -178,6 +190,7 @@ function resetMocks() {
   resolvedCalls.length = 0;
   resolvedByCustomer.length = 0;
   ledgerInsert.mockReset().mockResolvedValue({ error: null });
+  ledgerSelect.mockReset().mockResolvedValue({ data: null, error: null });
   from.mockClear();
   retrieve
     .mockReset()
@@ -733,8 +746,9 @@ describe("同じイベントを2回処理しない（A-5）", () => {
     vi.unstubAllEnvs();
   });
 
-  it("2回目は ignored / duplicate で 200（**何も書かない**）", async () => {
-    ledgerInsert.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+  it("**成功した後の2回目**は ignored / duplicate で 200（何も書かない）", async () => {
+    // 台帳に行があるのは「最後まで処理できた」ときだけである
+    ledgerSelect.mockResolvedValue({ data: { stripe_event_id: "evt_test_1" }, error: null });
 
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
@@ -744,22 +758,92 @@ describe("同じイベントを2回処理しない（A-5）", () => {
     expect(updateUserById).not.toHaveBeenCalled();
   });
 
-  it("**台帳に書けなければ 500**（2回目を弾けない状態で副作用を出さない）", async () => {
-    ledgerInsert.mockResolvedValue({ error: { code: "XX000", message: "boom" } });
-
-    const { POST } = await import("@/app/api/billing/webhook/route");
-    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
-
-    expect(res.status).toBe(500);
-    expect(updateUserById).not.toHaveBeenCalled();
-  });
-
-  it("初めてのイベントは通る（**台帳が門番になっていない**）", async () => {
+  it("初めてのイベントは通り、**処理が終わってから**台帳に記録される", async () => {
     const { POST } = await import("@/app/api/billing/webhook/route");
     const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
 
     expect(res.status).toBe(200);
     expect(updateUserById).toHaveBeenCalledTimes(1);
+    expect(ledgerInsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("台帳に書けなくても 200 のまま（**再送が来ても `updateUserById` は同じ値を書くだけ**）", async () => {
+    ledgerInsert.mockResolvedValue({ error: { code: "XX000", message: "boom" } });
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    expect(res.status).toBe(200);
+    expect(updateUserById).toHaveBeenCalledTimes(1);
+  });
+
+  it("並行して処理されて 23505 になっても、こちらの結果は 200（**競合は正常な分岐**）", async () => {
+    ledgerInsert.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: "ok" });
+  });
+
+  it("台帳が読めないときは通す（**反映を台帳の可用性に人質に取らせない**）", async () => {
+    ledgerSelect.mockResolvedValue({ data: null, error: { code: "XX000", message: "boom" } });
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const res = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+    expect(res.status).toBe(200);
+    expect(updateUserById).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * **位置が要件である**（2026-09-09 の検収）。
+   *
+   * 記録を先頭でやると、503 / 500 を返した経路でも「処理済み」になり、
+   * **Stripe の再送が `duplicate` で捨てられて購読が永久に反映されない。**
+   * 下の2本は、その形に戻したときに赤くなる。
+   */
+  describe("**陰性コントロール**: 失敗した回は「処理済み」にしない", () => {
+    it("(a) retrieve_failed で 503 を返したあと、同じ event.id の再送で status が書かれる", async () => {
+      // **`customer.subscription.*` を使う。** 503 を返すのはこの種別だけで、
+      // `checkout.session.*` は再送しても直らないので 200 のまま（`shouldRetry`）
+      const body = subscriptionEvent("customer.subscription.updated", "active", "evt_retry_a");
+
+      // 1回目: Stripe から取り直せず 503
+      retrieve.mockRejectedValueOnce(new Error("stripe down"));
+
+      const { POST } = await import("@/app/api/billing/webhook/route");
+      const first = await POST(post(body, sign(body)));
+
+      expect(first.status).toBe(503);
+      expect(updateUserById).not.toHaveBeenCalled();
+      // **台帳に書いていない**。ここが書かれていると再送が捨てられる
+      expect(ledgerInsert).not.toHaveBeenCalled();
+
+      // 2回目（再送）: 台帳に行が無いので通る
+      const second = await POST(post(body, sign(body)));
+
+      expect(second.status).toBe(200);
+      expect(updateUserById).toHaveBeenCalledTimes(1);
+    });
+
+    it("(b) updateUserById が失敗して 500 を返したあと、同じ event.id の再送で status が書かれる", async () => {
+      updateUserById.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+
+      const { POST } = await import("@/app/api/billing/webhook/route");
+      const first = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+      expect(first.status).toBe(500);
+      expect(ledgerInsert).not.toHaveBeenCalled();
+
+      const second = await POST(post(PAYLOAD, sign(PAYLOAD)));
+
+      expect(second.status).toBe(200);
+      // 1回目（失敗）と2回目（成功）で2回呼ばれ、**2回目は成功している**
+      expect(updateUserById).toHaveBeenCalledTimes(2);
+      expect(ledgerInsert).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

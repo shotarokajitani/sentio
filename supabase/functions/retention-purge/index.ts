@@ -170,7 +170,7 @@ Deno.serve(async (req: Request) => {
 
       const plan = planPurge({ companyId, counted, max: MAX_DELETE_ROWS, dryRun });
 
-      if (plan.decision === "deleted") {
+      if (plan.decision === "deleted" || plan.decision === "dry_run") {
         await mustOk(
           supabase.from("events").delete().eq("company_id", companyId).in("source", sources),
           "retention-purge: revoked delete",

@@ -161,6 +161,12 @@ jobs:
           echo "接続先: $API_URL"
           echo "psql: $(psql --version 2>&1 || echo '見つからない')"
 
+      # 【一時】発注 ①-1.5 の実測。**締める前に、いま何が通るのかを実物で出す。**
+      # 次のコミットで検査器（check:table-grants）に置き換える
+      - name: "probe: authenticated が実際にできること（締める前の実測）"
+        if: ${{ !cancelled() }}
+        run: pnpm exec tsx scripts/probe-table-grants.ts
+
       # 実DBに当たる検査。ここに置くのは Supabase が起きているのがこのジョブだけのため。
       - name: "check:allowlist — S2 allowlist を実DBの列と突合する"
         if: ${{ !cancelled() }}

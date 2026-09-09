@@ -39,6 +39,23 @@ checks:
       cron.schedule は同名ジョブを上書きするため、将来の migration が
       名前を再利用すると静かに置き換わる。実DB照会なので verify には載せない。
 
+  - id: check-edge-functions
+    script: "check:edge-functions"
+    file: "check-edge-functions.ts"
+    command: "pnpm run check:edge-functions"
+    contract: "発注 F"
+    requires: []
+    must_run_in: ["ci.verify"]
+    must_not_run_in: []
+    note: >-
+      Edge Function の「配る」「CI 専用」「消す」を宣言と突き合わせる。
+      本番の一覧との突合（知らない関数が居ないか）は deploy ジョブが
+      SUPABASE_FUNCTIONS_LIVE を渡したときだけ走るので、ここでは
+      supabase/functions 配下と deploy.yml の Deploy 段だけを見る。
+      2026-09-10 に、リポジトリに無い関数が本番に20本 ACTIVE で残っているのが
+      見つかったことから作った。deploy.yml は配るしかしておらず、
+      配っていない関数が本番に残っていても誰も見ていなかった。
+
   - id: check-deletion-coverage
     script: "check:deletion-coverage"
     file: "check-deletion-coverage.ts"

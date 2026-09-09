@@ -21,7 +21,8 @@
     "check:edge-types": "tsx scripts/check-edge-types.ts",
     "check:ci-coverage": "tsx scripts/check-ci-coverage.ts",
     "check:endpoint-callers": "tsx scripts/check-endpoint-callers.ts",
-    "check:dual-impl": "tsx scripts/check-dual-impl.ts"
+    "check:dual-impl": "tsx scripts/check-dual-impl.ts",
+    "check:edge-functions": "tsx scripts/check-edge-functions.ts"
   },
   "keywords": [],
   "author": "",

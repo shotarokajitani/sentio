@@ -8,7 +8,7 @@
  * 検証に使う一覧だけが古かった。
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   compareDeclarationToMigration,
@@ -71,5 +71,38 @@ describe("宣言の中身", () => {
   it("00036 の実装漏れ2表が、読むだけの側に入っている", () => {
     expect(decl.read_only).toContain("connector_limits");
     expect(decl.read_only).toContain("known_explanations");
+  });
+});
+
+/**
+ * 許可側（`writable_privileges`）を宣言に持つ（2026-09-10 の発注 5）。
+ *
+ * **「残す約束」も宣言に書く。** 検査器の中に配列を書くと、
+ * 宣言と実装の2か所を人が書き写すことになり、00036 と同じずれ方をする。
+ */
+describe("authenticated に残す書き込みを、許可側として宣言に持つ", () => {
+  it("events / entities / connections の4権限が明記されている", () => {
+    expect(decl.writable).toEqual(["connections", "entities", "events"]);
+    expect(decl.writable_privileges).toEqual(["SELECT", "INSERT", "UPDATE", "DELETE"]);
+  });
+
+  it("**陰性**: 許可側が空なら、0件成功ではなく例外にする", () => {
+    // **無い一覧を「一致した」と読ませない。** fail-closed
+    const broken = readFileSync(
+      path.join(root, "docs/checklists/table-grants.yml"),
+      "utf8",
+    ).replace(/^writable_privileges:\n(  - \w+\n)+/m, "writable_privileges: []\n");
+    const tmp = path.join(root, "node_modules/.tmp-table-grants.yml");
+    writeFileSync(tmp, broken);
+    expect(() => loadDeclaration(tmp)).toThrow(/writable_privileges/);
+    rmSync(tmp);
+  });
+
+  it("なぜ残すのかが宣言に書いてある（消すと本番の取り込みが止まる）", () => {
+    const yml = readFileSync(path.join(root, "docs/checklists/table-grants.yml"), "utf8");
+    expect(yml).toContain("createRouteClient");
+    expect(yml).toContain("csv/ingest");
+    expect(yml).toContain("connections/disconnect");
+    expect(yml).toContain("competitors/suggest");
   });
 });

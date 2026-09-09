@@ -1,10 +1,10 @@
 /// <reference types="node" />
 
 /**
- * `authenticated` / `anon` の表権限を、宣言・migration・実DB の3方向で突き合わせる
+ * `authenticated` / `anon` の表権限を、宣言・migration・実DB の4方向で突き合わせる
  * （発注 ①-1.5）。
  *
- * ## なぜ3方向か
+ * ## なぜ4方向か
  *
  * 00036 は **本文と GRANT は正しく、REVOKE の相手と自表検証の一覧だけがずれていた。**
  * 「migration が緑になったか」では捕まらない形なので、
@@ -12,10 +12,12 @@
  *
  *   1. 宣言（`docs/checklists/table-grants.yml`） × migration 00038 の配列
  *   2. 宣言 × 実DBの `information_schema.role_table_grants`
- *   3. 実DBで **実際に叩いて**断られること（`scripts/probe-table-grants.ts`）
+ *   3. 実DBで **実際に叩いて** 42501 で断られること（`scripts/probe-table-grants.ts`）
+ *   4. その 42501 が **GRANT の層**であること（`permission denied for table`）
  *
  * 3 が要るのは、GRANT の一覧が「最終的に何が通るか」を見せないためである。
- * RLS と合わせた結果だけが実物になる。
+ * RLS と合わせた結果だけが実物になる。4 が要るのは、**RLS だけが止めている状態を
+ * 「締まっている」と読まない**ためで、2026-09-09 に `connector_limits` が実際にそうだった。
  *
  * ## 守れない範囲（設計上の限界。これは仕様であって不具合ではない）
  *
@@ -52,13 +54,23 @@ const DENIED_BY_GRANT = /permission denied for table/;
 interface Declaration {
   read_only: string[];
   writable: string[];
+  /** `writable` の表で `authenticated` に**残す**権限。許可を明示側に持つ */
+  writable_privileges: string[];
   never_granted: string[];
 }
 
 export function loadDeclaration(path = CHECKLIST): Declaration {
   const doc = parse(readFileSync(path, "utf8")) as Partial<Declaration>;
-  if (!doc.read_only?.length || !doc.writable?.length || !doc.never_granted?.length) {
-    throw new Error(`${path}: read_only / writable / never_granted のいずれかが空である`);
+  if (
+    !doc.read_only?.length ||
+    !doc.writable?.length ||
+    !doc.writable_privileges?.length ||
+    !doc.never_granted?.length
+  ) {
+    // **空の一覧を「一致した」と読ませない。** fail-closed
+    throw new Error(
+      `${path}: read_only / writable / writable_privileges / never_granted のいずれかが空である`,
+    );
   }
   return doc as Declaration;
 }
@@ -130,7 +142,8 @@ function compareDeclarationToLive(decl: Declaration, grants: Map<string, Set<str
 
   for (const t of decl.writable) {
     const held = grants.get(`authenticated:${t}`) ?? new Set<string>();
-    for (const p of ["SELECT", ...writes]) {
+    // **許可側の一覧から引く。** 「残す約束」を人が2か所に書き写さない
+    for (const p of decl.writable_privileges) {
       if (!held.has(p))
         findings.push(`[missing] authenticated が ${t} に ${p} できない（残す約束）`);
     }

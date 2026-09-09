@@ -41,14 +41,33 @@ read_only:
   - misjudgments
   - narratives
 
-# `authenticated` の書き込みを残す表（実際に画面・API から書いている）
-#   events        api/csv/ingest（upsert）/ api/connections/disconnect（delete）
-#   entities      api/competitors/suggest（insert）
-#   connections   api/connections/disconnect（delete）
+# `authenticated` の書き込みを残す表。**ここは「漏れ」ではなく明示的な許可である。**
+#
+# この3表を書いているのは Next 側の Route Handler で、いずれも `createRouteClient`
+# （`ANON_KEY` ＋ 利用者のセッション）を通す。つまり **service_role ではなく
+# `authenticated` の権限で書いている。**
+#
+#   events        src/app/api/csv/ingest         取り込んだ明細の upsert
+#   events        src/app/api/connections/disconnect  解除時の delete
+#   entities      src/app/api/competitors/suggest     競合候補の insert
+#   connections   src/app/api/connections/disconnect  解除時の delete
+#
+# **この3表の INSERT / UPDATE / DELETE を REVOKE すると、本番の CSV 取り込みと
+# 連携の解除がその場で止まる。** 締めるなら、先に上記の経路を service_role
+# （Edge Function 側）に寄せること。順序を逆にしない。
+#   → 寄せるかどうかは未判断（`docs/spec/07_open_items.md` に登録済み）
 writable:
   - connections
   - entities
   - events
+
+# `writable` の表で `authenticated` に**残す**権限。検査器はこの一覧を
+# 「持っていなければならないもの」として突き合わせる（欠けたら missing で赤くなる）
+writable_privileges:
+  - SELECT
+  - INSERT
+  - UPDATE
+  - DELETE
 
 # どの表でも `authenticated` に渡さない権限
 never_granted:

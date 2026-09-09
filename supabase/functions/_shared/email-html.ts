@@ -8,6 +8,7 @@ const TEXT = "#333333";
 const MUTED = "#888888";
 const BORDER = "#e0ddd8";
 const BLOCK_BG = "#ffffff";
+const ALERT_RED = "#c0392b";
 const FONT = "Helvetica, Arial, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif";
 
 function escapeHtml(s: string): string {
@@ -194,7 +195,32 @@ export function renderDay0Text(companyName: string, blocks: Day0Block[]): string
 // Alert email
 // ──────────────────────────────────────────────────────
 
-export function renderAlertHtml(subject: string, body: string): string {
+/**
+ * 見出しブロックの文言と色（2026-09-09 決定・検収者）。
+ *
+ * **異なるものを同じに見せない。** 即時アラートは赤い「アラート」、
+ * 再連携のお知らせは pulse / weekly と同じ色の「お知らせ」。
+ * 連携が切れているのは**異常ではなく状態**なので、赤で出すと過剰である
+ * （7日ごとに赤い通知が届く形にもなる）。
+ *
+ * ワードマーク「Sentio」は `renderHeader()` が真上に出すので、**ここに Sentio を入れない。**
+ */
+export interface EmailHeading {
+  label: string;
+  color: string;
+}
+
+/** 既定。**引数を渡さない呼び出し（deliver-alert）は従来どおり赤いまま。** */
+export const ALERT_HEADING: EmailHeading = { label: "アラート", color: ALERT_RED };
+
+/** 状態のお知らせ。色は pulse / weekly の見出しと同じ `ACCENT`。**新しい色を増やさない。** */
+export const NOTICE_HEADING: EmailHeading = { label: "お知らせ", color: ACCENT };
+
+export function renderAlertHtml(
+  subject: string,
+  body: string,
+  heading: EmailHeading = ALERT_HEADING,
+): string {
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapeHtml(subject)}</title></head>
@@ -205,7 +231,7 @@ export function renderAlertHtml(subject: string, body: string): string {
 ${renderHeader()}
 <tr><td style="padding:0 24px 12px 24px;">
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${BLOCK_BG};border:1px solid ${BORDER};border-radius:4px;">
-<tr><td style="padding:12px 16px;background-color:#c0392b;font-family:${FONT};font-size:15px;font-weight:bold;color:#ffffff;">Alert</td></tr>
+<tr><td style="padding:12px 16px;background-color:${heading.color};font-family:${FONT};font-size:15px;font-weight:bold;color:#ffffff;">${escapeHtml(heading.label)}</td></tr>
 <tr><td style="padding:16px;font-family:${FONT};font-size:14px;line-height:1.7;color:${TEXT};white-space:pre-wrap;">${escapeHtml(body)}</td></tr>
 </table>
 </td></tr>

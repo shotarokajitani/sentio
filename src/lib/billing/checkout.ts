@@ -21,6 +21,11 @@ export type CheckoutOutcome =
   | { ok: true; url: string }
   /** **前の1回がまだ終わっていない。** 何も送っていない（BU-2-3） */
   | { ok: false; reason: "in_flight" }
+  /**
+   * すでに購読がある（409・2026-09-08）。**失敗ではなく、行き先が違う。**
+   * 画面はこの状態でボタンを出さないので、通常は起きない（二重の関門の外側）
+   */
+  | { ok: false; reason: "already_subscribed"; status: number }
   /** それ以外の失敗。**理由は画面で切り分けない**（BU-D5） */
   | { ok: false; reason: "failed"; status: number | null };
 
@@ -59,6 +64,7 @@ export async function startCheckout(input?: {
       return { ok: false, reason: "failed", status: null };
     }
 
+    if (res.status === 409) return { ok: false, reason: "already_subscribed", status: 409 };
     if (!res.ok) return { ok: false, reason: "failed", status: res.status };
 
     let body: unknown = null;
@@ -93,6 +99,8 @@ export function checkoutFailureMessage(outcome: CheckoutOutcome): string | null 
   if (outcome.ok) return null;
   // 連打は失敗ではない。前の1回がまだ動いているだけなので、何も言わない
   if (outcome.reason === "in_flight") return null;
+  // **すでに購読がある**のは失敗ではない。行き先が違うので、そう言う
+  if (outcome.reason === "already_subscribed") return ja.billing.alreadySubscribed;
   return ja.billing.startFailed;
 }
 

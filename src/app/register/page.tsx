@@ -1,42 +1,37 @@
-import { Masthead } from "@/components/Masthead";
-import { t, errorMessage } from "@/i18n";
-import { getCompanyId } from "@/lib/auth/company";
+import { permanentRedirect } from "next/navigation";
+import { loginMode } from "@/lib/auth/login-view";
 
-export const metadata = { title: t.brand };
-
+/**
+ * `/register` は**登録の入口ではない**（2026-09-08 決定）。
+ *
+ * 登録は `#101` で `/login?mode=signup` に一本化した。
+ * この画面は**フォームを1つも持たない着地ページ**で、リポジトリ内からのリンクも0件だった。
+ *
+ * **消さずに転送するのは、外部のブックマークや検索流入に 404 を出さないため。**
+ * 手間は消すのとほぼ同じで、失うものが無い。
+ *
+ * **`/register/complete` は別物で、生きている。** Google 連携の完了後に
+ * `auth/callback/google/route.ts` が `?events=N` 付きで飛ばし、
+ * `middleware.ts` の保護対象にも入っている。**ここでその経路を巻き込まないよう、
+ * 転送は `/register` ちょうどのときだけ効く**（Next.js のルーティング上、
+ * このファイルは `/register` にしか対応しない）。
+ */
 type Search = Promise<Record<string, string | string[] | undefined>>;
+
+function first(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 export default async function RegisterPage({ searchParams }: { searchParams: Search }) {
   const params = await searchParams;
-  const raw = params.e;
-  const failure = errorMessage(Array.isArray(raw) ? raw[0] : raw);
-  const companyId = await getCompanyId();
 
-  return (
-    <main className="page">
-      <Masthead signedIn={Boolean(companyId)} />
+  // 受け取った `next` は引き継ぐ（連携の途中で来た人を落とさない）。
+  // **`?mode=` は素通しにしない。** `loginMode` を通して知らない値を login に倒す
+  const next = first(params.next) ?? "/connect";
+  const mode = loginMode(first(params.mode) ?? "signup");
+  const query = new URLSearchParams(mode === "signup" ? { mode: "signup", next } : { next });
 
-      <h1>{t.register.title}</h1>
-      <p className="lead">{t.register.lead}</p>
-      <p className="lead" style={{ marginTop: 0 }}>
-        {t.register.lead2}
-      </p>
-
-      {failure && (
-        <div className="failure" role="alert" style={{ marginTop: 24 }}>
-          <p className="failure-title">{failure}</p>
-        </div>
-      )}
-
-      <div className="actions" style={{ marginTop: 40 }}>
-        <a className="btn" href={companyId ? "/connect" : "/login?next=%2Fconnect"}>
-          {t.register.toConnect}
-        </a>
-      </div>
-
-      <p className="footnote">
-        <a href="/terms">{t.login.terms}</a> ・ <a href="/privacy">{t.login.privacy}</a>
-      </p>
-    </main>
-  );
+  // **恒久転送。** 一時転送だと、外部のブックマークがいつまでも古い URL を指し続ける
+  permanentRedirect(`/login?${query.toString()}`);
 }

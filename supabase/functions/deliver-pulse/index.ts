@@ -7,6 +7,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import {
+  NOTICE_HEADING,
   renderAlertHtml,
   renderAlertText,
   renderPulseHtml,
@@ -25,7 +26,7 @@ import {
 } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import { jstDateKey } from "../_shared/jst.ts";
-import { renderReconnectNotice } from "../_shared/reconnect-notice.ts";
+import { reconnectDeliveryContent, renderReconnectNotice } from "../_shared/reconnect-notice.ts";
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), {
@@ -109,14 +110,17 @@ Deno.serve(async (req: Request) => {
           // **pulse と分ける**（PS-9d）。同じ種別に混ぜると、後から数え分けられない
           deliveryType: "reconnect",
           idempotencyKey: deliveryKey({ kind: "reconnect", companyId, period }),
-          content: { notice: "reconnect", period },
+          // **送った本文を残す**（2026-09-09）。種別と期間だけでは、
+          // 後から「この日、何と書いて送ったか」を辿れない
+          content: reconnectDeliveryContent(period, notice),
           now,
         },
         () =>
           sendEmail(mailConfig.config, {
             to: email,
             subject: notice.subject,
-            html: renderAlertHtml(notice.subject, notice.body),
+            // **赤い「アラート」にしない**（2026-09-09）。連携切れは異常ではなく状態である
+            html: renderAlertHtml(notice.subject, notice.body, NOTICE_HEADING),
             text: renderAlertText(notice.subject, notice.body),
           }),
       );

@@ -32,6 +32,15 @@ export interface AuthedContext {
    * ここに出すのは**画面が出し分けに使う1つの値**だけである。
    */
   subscriptionStatus: string | null;
+  /**
+   * Stripe の customer id（④-b）。**カスタマーポータルを開くのに要る。**
+   *
+   * webhook が書いた `user_metadata.subscription.stripe_customer_id` をそのまま読む。
+   * **Stripe に問い合わせて引き当てない**——メールで引くと、
+   * Stripe 側で変えられる値が会社の鍵になる（`billing/webhook` と同じ理由）。
+   * 購読が一度も無ければ null。
+   */
+  stripeCustomerId: string | null;
   /** RLSが効くクライアント。越境はDB側でも止まる */
   supabase: SupabaseClient;
 }
@@ -51,11 +60,15 @@ export async function getAuthedContext(): Promise<AuthedContext | null> {
   const siteUrl = data.user.user_metadata?.site_url;
   // 購読の状態。**webhook が書いた形をそのまま読む**（契約 スライスBU・BU-D2）
   const status = data.user.user_metadata?.subscription?.status;
+  // ポータルを開く鍵（④-b）。**webhook が書いた値だけを見る**
+  const customerId = data.user.user_metadata?.subscription?.stripe_customer_id;
   return {
     companyId: data.user.id,
     email: data.user.email ?? null,
     siteUrl: typeof siteUrl === "string" && siteUrl.trim() !== "" ? siteUrl.trim() : null,
     subscriptionStatus: typeof status === "string" ? status : null,
+    stripeCustomerId:
+      typeof customerId === "string" && customerId.trim() !== "" ? customerId.trim() : null,
     supabase,
   };
 }

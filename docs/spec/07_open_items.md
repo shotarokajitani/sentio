@@ -38,7 +38,9 @@
   時点で必須**になり、事業者名・住所・電話番号・代表者・販売価格・支払方法・
   提供時期・返品/解約条件の掲示が要る。プライバシーポリシー §8 で
   「住所・代表者氏名はお求めに応じて回答」としている扱いも、有償化時には
-  常時掲示へ切り替える必要がある。**課金スライスの着手条件として扱うこと**
+  常時掲示へ切り替える必要がある。**課金スライスの着手条件として扱うこと**。
+  → **2026-09-08 に中身を起こした。** 広告表示だけでは足りず、最終確認画面の表示義務が
+  別にあることが分かったので、下の「有料販売を始める前に要ること」に詳細と判断待ちを置いた
 
 ## 申請キュー（リードタイム＝クリティカルパス）
 
@@ -522,8 +524,9 @@ S-2-9 で `resolveCaller` を17本すべてに入れたことで、
 
 **未判断の点（勝手に確定させない）:**
 
-- 画面から自分で消せるようにするか、`support@` 経由の申請のままにするか。
-  自分で消せる形は、誤操作と第三者による乗っ取り時の破壊が増える
+- ~~画面から自分で消せるようにするか、`support@` 経由の申請のままにするか~~
+  → **DR-C として「API 化はしない」と決めた（2026-09-08）。** メールでの受付のままにする。
+  **必要になった時点で改めて判断する**（下の「契約DR」を見よ）
 - 削除を**即時**にするか、**猶予期間**（例: 7日間の取り消し可能期間）を置くか。
   ポリシーは「30日以内」としか書いていないので、どちらでも約束は守れる
 - `auth.users` の削除を Sentio 側から行うか、Supabase の管理API に委ねるか
@@ -1212,12 +1215,12 @@ from auth.users;
 **入ったのは「解約の通知が届いたときに反映される」ところまでである。**
 利用者が Sentio の画面から解約する導線は**まだ無い**（方式が未判断のため。下の1）。
 
-| 何を                                      | どこに                                                                                                                                  |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 会社の逆引き（`customer` → `company_id`） | `00029` の SECURITY DEFINER RPC `company_id_by_stripe_customer`。**新しいテーブルは作らない**（正本は `auth.users.raw_user_meta_data`） |
-| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない・**なぜ引けなかったかを4値で持つ**: `not_found` / `ambiguous` / `lookup_failed` / `retrieve_failed`）                                                      |
-| 気づく経路                                | `dispatch-daily` が毎日数え、1件以上なら運用宛に1通。**0件でも summary に0件と書く**                                                    |
-| 状態の正本                                | **Stripe から取り直した Subscription**（下記のとおり BS-D4 を撤回した）                                                                 |
+| 何を                                      | どこに                                                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 会社の逆引き（`customer` → `company_id`） | `00029` の SECURITY DEFINER RPC `company_id_by_stripe_customer`。**新しいテーブルは作らない**（正本は `auth.users.raw_user_meta_data`）                                                |
+| 引けなかったイベント                      | `billing_webhook_unresolved`（イベントID主キーで冪等・ペイロード本体は保存しない・**なぜ引けなかったかを4値で持つ**: `not_found` / `ambiguous` / `lookup_failed` / `retrieve_failed`） |
+| 気づく経路                                | `dispatch-daily` が毎日数え、1件以上なら運用宛に1通。**0件でも summary に0件と書く**                                                                                                   |
+| 状態の正本                                | **Stripe から取り直した Subscription**（下記のとおり BS-D4 を撤回した）                                                                                                                |
 
 **BS-D4「Stripe API を呼ばない。webhook の本文だけで決める」は撤回した。**
 ペイロードの `status` はイベントごとに意味が違い、実際に本番で `"complete"` が書かれた。
@@ -1286,6 +1289,23 @@ from auth.users;
 **最初の1社が購読したとき。** 購読者が居ない間は、止める導線が無くても誰も困らない。
 逆に1社でも入ったら、**止められないことは約束の問題になる。**
 
+## `metric_key='revenue'` の中身は入金であって売上ではない（2026-09-08 登録）
+
+**表示は「入金」、内部の鍵は `revenue` のまま**と決まった（2026-09-08・検収者）。
+移行を挟むと①の着手が遅れるため、`metric_key` は据え置く。
+
+**したがって、コードを読む人が誤解する余地が残っている。**
+
+- `_shared/baseline-stats.ts:139` は `metricKey: "revenue"` を固定している
+- `_shared/scan.ts:134-150` は `metrics.revenue` を読み、
+  外れ値の説明に `Revenue ... outside [...]` と英語で書く
+- 実データの出所は `csv:accounting` の `metrics.amount`（銀行の入出金明細）で、
+  **着金日ベースの入金額**である。発生主義の売上ではない
+  （会計仕訳を仕訳として解釈する経路が無いため、いまの取り込みでは作れない）
+
+**パルス本文では「入金」と呼び、「売上」とは書かない。**
+名前を揃えるかどうかは、①が動いてから判断する。
+
 ## 会社名の出所が無い（**未判断・2026-09-08 登録**）
 
 **`companies` に相当するテーブルが無く、会社名を持つ列も無い**（検収者の本番実測・2026-09-08）。
@@ -1353,6 +1373,7 @@ PS-9 で入れたのは**利用者に届ける経路**（取り消し中の会�
    ```
 
    `_shared/token-refresh.ts:262` の経路で **2社とも `status='revoked'`** に落ちた
+
 3. **以後 `sync-connections` の対象から外れる。** `sync-connections/index.ts:57` は
    `.eq("status", "active")` で引くので、`revoked` の行は**二度と読まれない**。
    カレンダーのイベントも取り込まれない
@@ -1413,11 +1434,11 @@ $ pnpm exec vitest run tests/unit/login-entry.test.ts   → 同じく exit 134 �
 
 **一時的ではなく、続いている状態である。実測は3点ある。**
 
-| いつ | 何が起きたか | 出所 |
-| --- | --- | --- |
-| 2026-08-18 | **物理 7.8GB に対し空き 0.6GB**、コミット上限 22.5GB に対し空き 0.8GB。Stop hook が `uv_spawn` で失敗（hooks ではなく**プロセス生成の失敗**）。主因は chrome 47プロセス 7.7GB ＋ claude 13プロセス 3.7GB | セッション記録（リポジトリ外・`~/.claude` のメモリ） |
-| 2026-08-20 | 「CC の環境注意: **メモリ枯渇（空き 0.3GB）が継続中**。コマンドが散発的に落ちる可能性がある」 | `claude/2026-08-20_OAuth審査_進行中.md`（**リポジトリ外**・プロジェクト側の文書） |
-| 2026-09-08 | 上の実測（**空き 300 MB / 8017 MB**）。`tsc` も `vitest` もフックの node も落ちる | このセッション（リポジトリ内の本項目） |
+| いつ       | 何が起きたか                                                                                                                                                                                             | 出所                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 2026-08-18 | **物理 7.8GB に対し空き 0.6GB**、コミット上限 22.5GB に対し空き 0.8GB。Stop hook が `uv_spawn` で失敗（hooks ではなく**プロセス生成の失敗**）。主因は chrome 47プロセス 7.7GB ＋ claude 13プロセス 3.7GB | セッション記録（リポジトリ外・`~/.claude` のメモリ）                              |
+| 2026-08-20 | 「CC の環境注意: **メモリ枯渇（空き 0.3GB）が継続中**。コマンドが散発的に落ちる可能性がある」                                                                                                            | `claude/2026-08-20_OAuth審査_進行中.md`（**リポジトリ外**・プロジェクト側の文書） |
+| 2026-09-08 | 上の実測（**空き 300 MB / 8017 MB**）。`tsc` も `vitest` もフックの node も落ちる                                                                                                                        | このセッション（リポジトリ内の本項目）                                            |
 
 > **出所が2種類あることに注意。** 2026-08-20 の記述は**プロジェクト側の文書にあり、
 > リポジトリには無い**。リポジトリにも同名の `docs/reports/2026-08-20_OAuth審査_進行中.md` が
@@ -1522,10 +1543,10 @@ Google が **`redirect_uri_mismatch`（エラー 400）** で弾いた。
 
 ## 再連携の現況（2026-09-07 夜に完了）
 
-| 会社 | status | revoked_at | last_refresh |
-| --- | --- | --- | --- |
-| `197f2c0e…`（+sentio） | `active` | NULL | 2026-09-07 15:35:43 UTC |
-| `ab73e516…`（+google-review） | `active` | NULL | 2026-09-07 14:09:40 UTC |
+| 会社                          | status   | revoked_at | last_refresh            |
+| ----------------------------- | -------- | ---------- | ----------------------- |
+| `197f2c0e…`（+sentio）        | `active` | NULL       | 2026-09-07 15:35:43 UTC |
+| `ab73e516…`（+google-review） | `active` | NULL       | 2026-09-07 14:09:40 UTC |
 
 **2社とも接続済みである。** これにより契約D の停止点
 （`revoked` の実例を人間が確認するまで D-3 を有効にしない）の前提が変わった。
@@ -1680,18 +1701,17 @@ webhook が着く前にこの画面を描くと、状態の正本はまだ空で
 
 **merge しない。** 落ちたまま入れると、次に赤が出たときに「元から赤い」と読み流される。
 
-> **落ち方そのものの事実は下の「integration の 401 陰性コントロールが、3回のうち3回目だけ
-> 5秒でタイムアウトする」に集約した。** 同じ形が #54 でも出ており、事実を2か所に
+> **落ち方そのものの事実は下の「integration で Edge Function への呼び出しが5秒以内に返らず、401 の陰性コントロールが落ちることがある」に集約した。** 同じ形が #54 でも出ており、事実を2か所に
 > 散らすと片方だけ見て判断されるため。ここには #80 固有のこと（merge しない判断と
 > 依存7本の内訳）だけを残す。
 
-| 項目 | 値 |
-| --- | --- |
-| PR | [#80](https://github.com/shotarokajitani/sentio/pull/80) `chore(deps-dev): bump the dev-dependencies group across 1 directory with 7 updates` |
-| 落ちている job | **`integration`**（5m49s） |
-| run | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100150574107 |
-| 他の5チェック | `verify` / `edge-functions` / `gitleaks` / Vercel 2件 — すべて pass |
-| 最終更新 | 2026-09-02（レビュー0件・人間コメント0件） |
+| 項目           | 値                                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR             | [#80](https://github.com/shotarokajitani/sentio/pull/80) `chore(deps-dev): bump the dev-dependencies group across 1 directory with 7 updates` |
+| 落ちている job | **`integration`**（5m49s）                                                                                                                    |
+| run            | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100150574107                                                           |
+| 他の5チェック  | `verify` / `edge-functions` / `gitleaks` / Vercel 2件 — すべて pass                                                                           |
+| 最終更新       | 2026-09-02（レビュー0件・人間コメント0件）                                                                                                    |
 
 落ちているのは**1テストだけ**である。
 
@@ -1708,7 +1728,7 @@ Error: Test timed out in 5000ms.
 **アサーションの失敗ではなく、5秒のタイムアウトである。** `invoke("deliver-pulse", …)` の
 応答を待ちきれずに落ちている。
 
-**`integration` は同じスイートを3回走らせる。3回のうち落ちたのは3回目だけである。**
+**`integration` は同じスイートを3回走らせる。この回に落ちたのは3回目である**（#104 では2回目だった）。
 
 ```
 1379行  Test Files  13 passed (13)      ← run 1
@@ -1726,15 +1746,15 @@ Error: Test timed out in 5000ms.
   （production-dependencies）は**全6チェック pass** している
 - **7本の更新のうちどれが効いたか。** 切り分けていない。7本は次のとおり。
 
-  | Package | From | To |
-  | --- | --- | --- |
-  | `@types/node` | 26.2.0 | 26.4.0 |
-  | `@types/react-dom` | 19.2.4 | 19.2.5 |
-  | `@vitejs/plugin-react` | 6.0.5 | 6.1.1 |
-  | `eslint-config-next` | 16.3.1 | 16.3.3 |
-  | `supabase` | 2.114.0 | 2.116.0 |
-  | `tsx` | 4.23.12 | 4.23.13 |
-  | `vitest` | 4.1.10 | 4.1.11 |
+  | Package                | From    | To      |
+  | ---------------------- | ------- | ------- |
+  | `@types/node`          | 26.2.0  | 26.4.0  |
+  | `@types/react-dom`     | 19.2.4  | 19.2.5  |
+  | `@vitejs/plugin-react` | 6.0.5   | 6.1.1   |
+  | `eslint-config-next`   | 16.3.1  | 16.3.3  |
+  | `supabase`             | 2.114.0 | 2.116.0 |
+  | `tsx`                  | 4.23.12 | 4.23.13 |
+  | `vitest`               | 4.1.10  | 4.1.11  |
 
   登録時（2026-09-03 午前）は「タイミングに触りうるのは `vitest` と `supabase` CLI
   の2本」と書いたが、**実測で否定された。**
@@ -1761,6 +1781,7 @@ Error: Test timed out in 5000ms.
   **2026-09-07 に一段強まった。** 根拠は2件 —— **#54（依存差分0）** と
   **#92（`vitest` 据え置き）** である。**#80 側で寄与した可能性は否定していない。**
   詳細は下記「integration の 401 陰性コントロールが〜」に集約した
+
 - CI の 503 フレークは過去にも観測がある
   （`docs/reports/2026-08-21_CI_503フレークの実測.md`）。同じ経路かは**未確認**
 
@@ -1768,12 +1789,12 @@ Error: Test timed out in 5000ms.
 
 **attempt 2 は緑になった。同一コミットで結果が変わった。**
 
-| 項目 | 値 |
-| --- | --- |
-| run | https://github.com/shotarokajitani/sentio/actions/runs/33599722941 （attempt 2） |
-| 結論 | `conclusion=success` |
+| 項目              | 値                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| run               | https://github.com/shotarokajitani/sentio/actions/runs/33599722941 （attempt 2）              |
+| 結論              | `conclusion=success`                                                                          |
 | `integration` job | https://github.com/shotarokajitani/sentio/actions/runs/33599722941/job/100600569373 → success |
-| 3回の内訳 | ステップ `Run integration suite 3 times` で3回とも `Test Files 13 passed (13)` |
+| 3回の内訳         | ステップ `Run integration suite 3 times` で3回とも `Test Files 13 passed (13)`                |
 
 **落ち方は `Test timed out in 5000ms.` であり、アサーションの失敗ではない**（attempt 1）。
 
@@ -1815,18 +1836,31 @@ $ ls node_modules/@sentry            → No such file or directory
 
 これは ④-a の範囲ではない。**ローンチ前の項目である。** 判断は書かない。
 
-## integration の 401 陰性コントロールが、3回のうち3回目だけ5秒でタイムアウトする（未判断・2026-09-03 登録）
+## integration で Edge Function への呼び出しが5秒以内に返らず、401 の陰性コントロールが落ちることがある（原因未特定・2026-09-03 登録）
 
 **事実をここ1か所に集める。散らさない。** 上の「dependabot の PR #80 で `integration` が
 落ちている」と、PR #54 の CI 記録は、どちらもこの項目を指す。
 
 ### 観測（実測。1件ずつ足す）
 
-| PR | run ID | attempt | ファイル:行 | 3回中 | 落ち方 | 再実行 |
-| --- | --- | --- | --- | --- | --- | --- |
-| #80 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2 | `tests/integration/pipeline-db.test.ts:281` | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed） |
-| #54 | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2 | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑** |
-| #92 | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | — |
+| PR   | run ID                                                                            | attempt       | ファイル:行                                          | 3回中     | 落ち方                      | 再実行                       |
+| ---- | --------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | --------- | --------------------------- | ---------------------------- |
+| #80  | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed）  |
+| #54  | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                       |
+| #92  | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                            |
+| #104 | [34297092859](https://github.com/shotarokajitani/sentio/actions/runs/34297092859) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **2回目** | `Test timed out in 5000ms.` | **緑**（3回とも 111 passed） |
+
+**通算4回目（#104・2026-09-09）。現セットで落ちたのは2回目である**
+（run 1 は 15 files / 111 passed で緑、run 2 で `pipeline-db.test.ts:281` が 5秒でタイムアウト）。
+再実行（attempt 2）は3回とも 111 passed・skip 0件で緑だった。
+
+**この4件目を受けて、2026-09-09 に検収者の判断で見出しから「3回目だけ」を外した**（PS §16）。
+**見出しを直したことは、原因を特定したことではない。** 何が5秒を超えさせているかは分かっていない。
+**再実行したものは、いずれも緑になっている**（#92 だけ再実行していない）。
+
+**落ちる位置も固定されていない。** #80 と #104 は `pipeline-db.test.ts:281`、
+#54 と #92 は `delivery-idempotency.test.ts:168`。**共通しているのは
+「Edge Function への呼び出しが5秒で返らない」ことだけ**である。
 
 **「赤 → 再実行 → 緑」にした回数は、この表に1行ずつ残す。**
 数えないと「たまに落ちる」が「問題ない」に変わる。2026-09-03 に踏んだ形と同じである。
@@ -1875,14 +1909,14 @@ skip され、黙って緑になっていた**のを止めることだった。
 draft PR **#93**（`chore/investigate-integration-timeout`・**merge しない**）で5実験を回した。
 run: https://github.com/shotarokajitani/sentio/actions/runs/34090554382/job/101643011074
 
-| 実験 | 内容 | 回数 | 結果 |
-| --- | --- | --- | --- |
-| 基準 | `Run integration suite 3 times` そのまま | 3 | **3回とも 13 passed** |
-| C | `--testTimeout=30000` | 3 | 3回とも 13 passed / exit=0 |
-| B | リセットなしで5回 | 5 | 5回とも 13 passed / exit=0 |
-| A | 各回の前に `supabase db reset` | 3 | 3回とも 13 passed / exit=0 |
-| 1-5 | `delivery-idempotency.test.ts` だけ | 3 | 3回とも 1 passed / exit=0 |
-| 1-6 | ファイル順を逆に | 3 | 3回とも 13 passed / exit=0 |
+| 実験 | 内容                                     | 回数 | 結果                       |
+| ---- | ---------------------------------------- | ---- | -------------------------- |
+| 基準 | `Run integration suite 3 times` そのまま | 3    | **3回とも 13 passed**      |
+| C    | `--testTimeout=30000`                    | 3    | 3回とも 13 passed / exit=0 |
+| B    | リセットなしで5回                        | 5    | 5回とも 13 passed / exit=0 |
+| A    | 各回の前に `supabase db reset`           | 3    | 3回とも 13 passed / exit=0 |
+| 1-5  | `delivery-idempotency.test.ts` だけ      | 3    | 3回とも 1 passed / exit=0  |
+| 1-6  | ファイル順を逆に                         | 3    | 3回とも 13 passed / exit=0 |
 
 **20回すべて緑。症状が再現しなかった。**
 
@@ -1904,13 +1938,13 @@ integration ジョブの実行回数: 46
 
 **failure 5件のうち、この症状は3件だけ**である。残り2件は別原因だった。
 
-| run | 分類 |
-| --- | --- |
-| [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378)（#92） | **401 タイムアウト** |
-| [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) att.1（#54） | **401 タイムアウト** |
-| [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト** |
-| [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634) | 別原因（`SUPABASE_DB_URL` 未設定） |
-| [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1 | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
+| run                                                                                            | 分類                                                             |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378)（#92）       | **401 タイムアウト**                                             |
+| [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) att.1（#54） | **401 タイムアウト**                                             |
+| [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) att.1（#80） | **401 タイムアウト**                                             |
+| [33742520634](https://github.com/shotarokajitani/sentio/actions/runs/33742520634)              | 別原因（`SUPABASE_DB_URL` 未設定）                               |
+| [33673741490](https://github.com/shotarokajitani/sentio/actions/runs/33673741490) att.1        | 別原因（`Apply all migrations from scratch` が落ち、以降が全滅） |
 
 **2026-09-08 追記（1件増えた）。** PR #99 の
 [run 34140416123](https://github.com/shotarokajitani/sentio/actions/runs/34140416123) で
@@ -1939,81 +1973,81 @@ integration ジョブの実行回数: 46
 1-5（単独ファイル3回）と 1-6（逆順3回）も同じ形で並べてあった。
 
 ```yaml
-      - name: "調査C — testTimeout 30s で3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== C run $i/3 (testTimeout=30000) ====="
-            pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
-            echo "----- C run $i exit=${PIPESTATUS[0]} -----"
-          done
+- name: "調査C — testTimeout 30s で3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== C run $i/3 (testTimeout=30000) ====="
+      pnpm exec vitest run tests/integration/ --testTimeout=30000               --reporter=verbose 2>&1 | tail -20
+      echo "----- C run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # ------------------------------------------------------------
-      # 実験B: リセットなしで5回。単調に悪化しているかを見る。
-      #   3回目だけ落ちる      → 3回目に固有の何かがある
-      #   4回目・5回目も落ちる → 蓄積で単調に悪化している
-      # **各回を継続させ、全回の結果を採る**（set -e を使わない）。
-      # ------------------------------------------------------------
-      - name: "調査B — リセットなしで5回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3 4 5; do
-            echo "===== B run $i/5 ====="
-            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
-            echo "----- B run $i exit=${PIPESTATUS[0]} -----"
-          done
+# ------------------------------------------------------------
+# 実験B: リセットなしで5回。単調に悪化しているかを見る。
+#   3回目だけ落ちる      → 3回目に固有の何かがある
+#   4回目・5回目も落ちる → 蓄積で単調に悪化している
+# **各回を継続させ、全回の結果を採る**（set -e を使わない）。
+# ------------------------------------------------------------
+- name: "調査B — リセットなしで5回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3 4 5; do
+      echo "===== B run $i/5 ====="
+      pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+      echo "----- B run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # ------------------------------------------------------------
-      # 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
-      #   落ちなければ、蓄積が効いている強い証拠になる。
-      # リセット経路は「Apply all migrations from scratch」で実在が確認できている。
-      # ------------------------------------------------------------
-      - name: "調査A — 各回の前に db reset して3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== A run $i/3 (db reset 済み) ====="
-            supabase db reset
-            pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
-            echo "----- A run $i exit=${PIPESTATUS[0]} -----"
-          done
+# ------------------------------------------------------------
+# 実験A: 各回の前に supabase db reset で初期状態へ戻して3回。
+#   落ちなければ、蓄積が効いている強い証拠になる。
+# リセット経路は「Apply all migrations from scratch」で実在が確認できている。
+# ------------------------------------------------------------
+- name: "調査A — 各回の前に db reset して3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== A run $i/3 (db reset 済み) ====="
+      supabase db reset
+      pnpm exec vitest run tests/integration/ --reporter=verbose 2>&1 | tail -20
+      echo "----- A run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # 1-5: 当該ファイルだけを3回走らせる。
-      # 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
-      # 積み上がった状態の問題である。
-      - name: "調査 1-5 — delivery-idempotency だけを3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          for i in 1 2 3; do
-            echo "===== 1-5 run $i/3 (single file) ====="
-            pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
-            echo "----- run $i exit=${PIPESTATUS[0]} -----"
-          done
+# 1-5: 当該ファイルだけを3回走らせる。
+# 落ちるなら、そのテスト単独の問題。落ちないなら他ファイルとの相互作用か
+# 積み上がった状態の問題である。
+- name: "調査 1-5 — delivery-idempotency だけを3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    for i in 1 2 3; do
+      echo "===== 1-5 run $i/3 (single file) ====="
+      pnpm exec vitest run tests/integration/delivery-idempotency.test.ts               --reporter=verbose 2>&1 | tail -25
+      echo "----- run $i exit=${PIPESTATUS[0]} -----"
+    done
 
-      # 1-6: ファイルの並びを逆にして3回走らせる。
-      # 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
-      # 動かないなら「3回目」という位置そのものに原因がある。
-      - name: "調査 1-6 — ファイル順を逆にして3回"
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
-          FILES=$(ls tests/integration/*.test.ts | sort -r)
-          echo "順序: $FILES"
-          for i in 1 2 3; do
-            echo "===== 1-6 run $i/3 (reversed order) ====="
-            pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
-            echo "----- run $i exit=${PIPESTATUS[0]} -----"
-          done
+# 1-6: ファイルの並びを逆にして3回走らせる。
+# 落ちる位置が「3回目」から動くなら順序・積み上がりの問題、
+# 動かないなら「3回目」という位置そのものに原因がある。
+- name: "調査 1-6 — ファイル順を逆にして3回"
+  if: ${{ !cancelled() }}
+  continue-on-error: true
+  run: |
+    set -uo pipefail
+    # 改行区切りのまま渡す。$FILES を引用符なしで展開して単語分割させる
+    FILES=$(ls tests/integration/*.test.ts | sort -r)
+    echo "順序: $FILES"
+    for i in 1 2 3; do
+      echo "===== 1-6 run $i/3 (reversed order) ====="
+      pnpm exec vitest run $FILES --reporter=verbose 2>&1 | tail -25
+      echo "----- run $i exit=${PIPESTATUS[0]} -----"
+    done
 ```
 
 **実験どうしが汚染していたことも書いておく。** 実験Aは各回の前に `supabase db reset`
@@ -2098,7 +2132,7 @@ integration ジョブの実行回数: 46
 
 ```ts
 // scripts/check-endpoint-callers.ts
-function collectSources(root = "src"): SourceFile[]   // ← src/ しか走査しない
+function collectSources(root = "src"): SourceFile[]; // ← src/ しか走査しない
 ```
 
 ```ts
@@ -2139,10 +2173,10 @@ CI（run 33733352340・`ci.integration`）でも同じで、
 陰性コントロールは効いている（宣言したジョブが DB から消えれば `missing`、
 宣言外のジョブが DB に居れば `undeclared`）。**射程が違うだけで、検査器は間違っていない。**
 
-| 今日踏んだ形 | `check:cron-jobs` | `check:endpoint-callers` | `check:caller-guard` |
-| --- | --- | --- | --- |
-| `state-baselines` — 実装はあるが呼び出し元が無い | 射程外（cron の話ではない） | 射程外（`src/` しか走査しない） | 射程外（呼ばれ方の検査） |
-| `retention-purge` — 実装はあるが cron が張られていない | **射程外**（両側に居ないので一致） | 射程外 | 射程外 |
+| 今日踏んだ形                                           | `check:cron-jobs`                  | `check:endpoint-callers`        | `check:caller-guard`     |
+| ------------------------------------------------------ | ---------------------------------- | ------------------------------- | ------------------------ |
+| `state-baselines` — 実装はあるが呼び出し元が無い       | 射程外（cron の話ではない）        | 射程外（`src/` しか走査しない） | 射程外（呼ばれ方の検査） |
+| `retention-purge` — 実装はあるが cron が張られていない | **射程外**（両側に居ないので一致） | 射程外                          | 射程外                   |
 
 **つまり「デプロイされているのに起動経路を持たない Function」を見る検査器は、
 いまリポジトリに1本も無い。** 上の「判断が要ること」は、cron 経路も対象に含めて決める。
@@ -2167,3 +2201,403 @@ CI（run 33733352340・`ci.integration`）でも同じで、
 
 **次に Edge Function を1本足すとき。** そのとき呼び出し元を書き忘れても、
 いまは誰も気づかない。SB と同じ事故がもう一度起きる。
+
+## 有料販売を始める前に要ること — 特商法と分割払い（2026-09-08 登録・**判断待ち6件**）
+
+**検収者は弁護士ではない。以下は公的資料と公式ドキュメントに書かれている内容であって、
+法的助言ではない。有料販売を始める前に専門家の確認を受ける。**
+
+出所は `claude/Sentio_特商法と分割払い_20260908.md`（**リポジトリ外**）と、
+そこに引いてある公的資料・公式ドキュメントの URL である。
+
+### 1. カードの分割払いは、月額サブスクには使えない
+
+Stripe 公式ドキュメント（`docs.stripe.com/payments/jp-installments`）に
+**Recurring payments: No** と明記され、「定期支払いやオフセッションの支払いには
+使わないこと」と書かれている。**顧客が支払いのときに分割回数を自分で選ぶ形**でないと
+成立しない。
+
+したがって分割払いを提供するなら、**一回払いの商品**（年額一括・初期費用・複数年一括など）が要る。
+**これは実装の話ではなく料金設計の話である。**
+
+制約（同ドキュメント）:
+
+- 日本発行のクレジットカードのみ。**デビット・プリペイドは不可**
+- 通貨は JPY のみ
+- Visa / Mastercard は最大60回、JCB は最大24回
+- **American Express は分割不可**（2022年12月以降）
+- **Diners Club は分割不可**（リボ・ボーナスは可）
+- ボーナス払いは 夏 12/16〜6/15、冬 7/16〜11/15 のみ。**期間外は決済が失敗する**
+- 事業者側に追加手数料は無い。利息は顧客負担
+
+使う API は **Payment Intents / Payment Methods** であって、**Subscriptions ではない。**
+いまの `api/billing/checkout` は `mode: "subscription"` なので、**この経路には載らない。**
+
+### 2. 特定商取引法 — 義務は2種類ある
+
+SaaS の月額販売は**通信販売**に当たる。
+
+**(a) 広告表示（「特定商取引法に基づく表記」）**
+事業者名・代表者名・住所・電話番号・メールアドレス・販売価格・対価以外の費用・
+支払方法と時期・役務の提供時期・解約や返金の条件・動作環境。
+
+**(b) 最終確認画面の表示義務（2022年6月施行）**
+消費者庁の資料により**6項目**:
+
+1. 分量（定期は**各回の分量も**）
+2. 販売価格・対価（**支払総額と、2回目以降の代金も**）
+3. 支払の時期・方法
+4. 引渡・提供時期（定期は**次回分の提供時期も**）
+5. 申込期間（期間限定なら申込期限）
+6. 撤回・解除（**解約の連絡方法・連絡先・条件を、顧客が見つけやすい位置に**）
+
+サブスク特有の追加として、**無料期間があるなら有料切替の時期と金額**、
+キャンセルの方法・申出期限・違約金などの**不利益情報**。
+
+**Stripe Checkout の画面が最終確認画面に当たる。** Stripe の既定画面だけでは
+(1)(4)(6) を満たせない可能性が高いので、**自社側の画面（購読ボタンの手前）に
+最終確認を置くのが確実**である。
+
+**④-b で決めたポータルの解約は `at_period_end`（期間終了時）**である。
+「いつ止まるか」を自社側でも明示する必要があり、**これが (6) に当たる。**
+
+### 3. いまの実測（2026-09-08）
+
+**特商法表記のページは存在しない。**
+
+```
+$ for p in / /tokushoho /tokusho /law /legal /commerce            /specified-commercial-transactions /sctl /terms /privacy /sitemap.xml /robots.txt; do
+    curl -s -o /dev/null -w "%{http_code}  $p
+" "https://www.sentio-ai.jp$p"; done
+200  /
+404  /tokushoho
+404  /tokusho
+404  /law
+404  /legal
+404  /commerce
+404  /specified-commercial-transactions
+404  /sctl
+200  /terms
+200  /privacy
+404  /sitemap.xml
+404  /robots.txt
+```
+
+- 本番の `/`・`/terms`・`/privacy` の HTML に「特定商取引」「特商法」は**0件だった**
+- トップページの内部リンクは `/login`・`/terms`・`/privacy` の**3本だけだった**
+  （残りは `_next/static` の資産）。検収者のフッター実測（2026-09-08）と一致する
+- **候補URLを12本しか叩いていない。** 別の名前で存在する可能性は**未検証**である
+  （`/sitemap.xml` が 404 なので、機械で全ページを列挙する手段が無い）
+- リポジトリの grep（`特商法|特定商取引|tokushoho|tokusho|commercial-transactions|commerce-law`）は
+  **ページ・コンポーネントは0件だった。** 当たったのは文書3件のみ
+  （`docs/runbooks/2026-08-18_slice-a-cutover.md:204`、この 07 の2箇所）
+- `src/app` 配下の `page.tsx` は8本で、該当するものは無い
+
+### 判断が要ること（**勝手に確定させない。決めるのは検収者**）
+
+- **L-1** 最終確認画面を**自社側に置く**か、Stripe Checkout の `custom_text` で賄うか
+- **L-2** 特商法表記を**誰の名義・どの住所・どの電話番号**で出すか
+- **L-3** **無料期間を設けるか**（設けるなら有料切替の時期と金額の表示が要る）
+- **L-4** 解約の効力を `at_period_end` のままにするか、**即時も選べるようにするか**
+- **L-5** **一回払いの商品を作るか**（作らないなら分割払いは提供できない）
+- **L-6** 作る場合、Checkout を **Stripe ホスト型にするか**
+
+### 着手の合図
+
+**有料販売を始めると決めたとき。** いま `/api/billing/checkout` は動くので、
+**決める前に押せてしまう**——上の (b) を満たさないまま最終確認画面が出る。
+`trialing` の項目と同じで、**始めた日に未判断ではなく違反に変わる。**
+
+## ④-b / 二重購読ガードで分かった4点（2026-09-08 登録・**判断は書かない**）
+
+**#104 の作業中に分かった事実だけを置く。**
+
+1. **webhook は `user_metadata.subscription` を「まるごと」上書きする。**
+   `src/app/api/billing/webhook/route.ts` は購読の情報を丸ごと差し替えるので、
+   **2本目の購読ができた瞬間、1本目は Sentio 側から辿れなくなる。**
+   `stripe_customer_id` も上書きされるため、**ポータルも新しい方しか開かない。**
+   これが「押せない画面」だけでは足りず、サーバ側で 409 を返す理由である
+2. **Stripe が同じメールで Customer を再利用しないことは、文献ベースであって未実測。**
+   `checkout.sessions.create` に `customer` を渡していないので、
+   毎回新しい Customer ができるはず——だが**本番でもテストでも実測していない**
+   （本番の Stripe に書き込まない、という制約のため）。**未検証**
+3. **ポータルの `default_return_url` は未設定だが、実害は無い。**
+   `src/app/api/billing/portal/route.ts:50` が
+   `return_url: ${origin}/connect` を**セッション作成のたびに渡している**ので、
+   Stripe 側の既定に依存していない（実物を確認済み）
+4. **ポータルの解約は `at_period_end`（期間終了時）である。**
+   検収者が Stripe の設定画面で読んだ値（2026-09-08）。
+   **押した瞬間には止まらない。** 特商法の (6) と直結する（上の項目を見よ）
+
+### 併せて残す — 関門を列挙式から否定リストに変えた（**2026-09-08 決定・解決済み**）
+
+**最初の実装は `active` / `past_due` / `trialing` の3つを列挙していた。**
+その形で `unpaid` を足すかどうかで迷ったこと自体が、**列挙式が壊れている証拠**だった——
+**列挙漏れがそのまま穴になる。**
+
+これは `status = 'active'` の行だけを読んでいたために起きた
+2026-09-03〜09-06 の4日間の沈黙（「パルスが4日間出ず…」）と**同じ構造**である。
+
+**決定（検収者・2026-09-08）**: 関門は「`canceled` と `incomplete_expired` 以外はすべて止める」。
+否定リストにすれば、**Stripe が将来新しい状態を足しても既定で止まる。**
+
+Stripe の購読の状態は8つで、**購読が存在しないのは2つだけ**である。
+
+| status               | 関門   | 画面                   |
+| -------------------- | ------ | ---------------------- |
+| `incomplete`         | 止める | 購読ボタンを出さない   |
+| `incomplete_expired` | 通す   | 購読ボタン             |
+| `trialing`           | 止める | ポータル               |
+| `active`             | 止める | ポータル（購読中）     |
+| `past_due`           | 止める | ポータル（支払い方法） |
+| `canceled`           | 通す   | 購読ボタン             |
+| `unpaid`             | 止める | ポータル（支払い方法） |
+| `paused`             | 止める | 購読ボタンを出さない   |
+| 記録が無い（null）   | 通す   | 購読ボタン             |
+
+正本は `src/lib/billing/subscription-state.ts` の1か所で、
+**画面（`connect-client.tsx`）とサーバ（`api/billing/checkout`）が同じ関数を見る。**
+`tests/unit/billing-checkout-guard.test.ts` に**陰性コントロール**を置いた——
+「Stripe がまだ持っていない状態も既定で止める」。
+**列挙式に戻すと6件が赤くなることを実測済み**（2026-09-08）。
+
+**枠の判定（`src/lib/billing/plan.ts` の `ENTITLED_STATUSES`）とは別物である。**
+あちらは `active` / `trialing` の2つだけ。集合が違うのは意図で、片方を代用しない。
+
+### 文言も否定リストで組んだ（**2026-09-08 決定・解決済み**）
+
+**知らない状態を「試用中」に落とすのは、知らないものを既知として表示することである。**
+関門を列挙式にしていたのと同じ誤りなので、文言にも同じ発想を通した。
+
+| 区分            | 状態の表示                         | 補足の1行                                |
+| --------------- | ---------------------------------- | ---------------------------------------- |
+| `subscribed`    | 標準プラン・購読中                 | 解約もこちらから行えます。               |
+| `trial`         | 試用中                             | 解約もこちらから行えます。               |
+| `payment_issue` | お支払いを確認できていません       | お支払い方法の更新もこちらから行えます。 |
+| `incomplete`    | お支払いの手続きが完了していません | お支払い方法の更新もこちらから行えます。 |
+| `paused`        | 一時停止中です                     | **なし**                                 |
+| `unknown`       | ご契約の状態を確認しています。     | **なし**                                 |
+
+**知らない状態は `unknown` に落ちる**（`billingDisplay` の既定）。
+中立の表示だけを出し、**解約も支払いも補足しない**——
+できるかどうかを確かめていないことを、できると書かない。情緒的な語も使わない。
+
+区分は `Record<Exclude<BillingDisplay, "none">, string>` で持っているので、
+**区分が増えたときは型検査で止まる。** 既定値で埋める形に戻すと、
+知らない状態が「試用中」に落ちる形に戻る。
+
+`tests/unit/billing-section.test.ts` に**陰性コントロール**を置いた——
+「知らない状態では『試用中』と表示しない」「解約も支払いも補足しない」。
+**`incomplete` / `paused` / `unknown` を `trialState` に戻すと8件が赤くなることを実測済み**
+（2026-09-08）。
+
+## 契約DR（削除依頼の運用）— **判断4件を確定した**（2026-09-08）
+
+出所は `claude/Sentio_契約DR_20260908.md`（**リポジトリ外**）。
+
+> **本文は未取得である。** 2026-09-08 に本マシンを探したが、この文書は**見つからなかった（0件だった）**。
+> したがって以下に写したのは、**検収者のメッセージに書かれた分だけ**である。
+> **要件 DR-1〜DR-7 の本文は、ここには無い。** 必要なら本文を渡してもらってから追記する。
+> 空欄を推測で埋めていない。
+
+### 確定した判断（2026-09-08・検収者）
+
+- **DR-A 受付窓口** … **専用窓口を作る。個人アドレスは公開しない。**
+  特商法表記の問い合わせ先と**同じアドレス**にする。
+  **アドレスは `support@sentio-ai.jp` に決めた（2026-09-09）。
+  ただし、いまは1通も受信できない**（下の「受付窓口の切り替え」を見よ）
+- **DR-B 本人確認** … **メールの往復で成立させる。**
+  登録アドレスからの送信を確認し、確認メールへの返信で成立とする。
+  公開済みの「メールで受け付ける」と整合し、**新しい画面を作らない。**
+  **メールアカウントが乗っ取られていた場合は通る。これは受け入れたリスクである**
+  （だから DR-S2 でもう一段の関門を置く）
+- **DR-C API 化** … **しない。** 未判断項目から外した（上の「アカウント削除の約束を…」参照）。
+  **必要になった時点で改めて判断する**
+- **DR-D 期限の通知** … **受付から23日目（期限の7日前）に運用宛へ通知。**
+  7日あれば本人確認の往復と削除作業が入る
+
+### 停止点
+
+- **DR-S1** … **窓口の到達確認が済むまで、台帳や通知の実装に着手しない**
+- **DR-S2** … 削除は取り返しがつかないので、**本人確認のあとにもう一段の関門を置く**
+  （中身は DR 文書側。**未取得**）
+
+### 実測（2026-09-08 / 2026-09-09）
+
+**privacy §6「アカウントを削除する場合」の原文**（`src/app/privacy/page.tsx:184-190`。
+本番 `https://www.sentio-ai.jp/privacy` の配信内容と一致することを確認した）:
+
+> アカウントの削除は support@mdc-diseno.com へのご連絡で承ります。ご本人であることを
+> 確認のうえ、**ご依頼から30日以内に**、当該アカウントに紐づくすべてのデータ
+> （Google ユーザーデータ、認証情報、生成された分析結果を含む）を削除します。
+> 削除の完了はメールでご報告します。
+
+- **削除依頼の受付アドレスは書かれている**: `support@mdc-diseno.com`（§6 と §9 の2箇所）
+- **`/terms` に同種の記述は無い。** 見出しは1〜8で、削除・解約・連絡先の条文は**0件だった**。
+  §7「サービスの変更・終了」は**提供者側が終了する場合**の条文である。
+  本番 `/terms` の HTML にメールアドレスは**0件だった**
+- リポジトリで公開しているアドレス（`mailto:`）は**2箇所だけ**——
+  `src/app/privacy/page.tsx:186` と `:216`、どちらも `support@mdc-diseno.com`。
+  他は文書内の言及と試験フィクスチャ（`tests/fixtures/recipients.ts:24`）で、**公開面には出ない**
+- `@sentio-ai.jp` は**差出人 `notice@sentio-ai.jp` の記録3件のみ**（`docs/reports/` 配下）。
+  受付窓口としては使っていない
+
+**`support@` 宛が人に届くかは、いまも未確認である**（上の「アカウント削除（②）の洗い出し」3 のとおり）。
+**DR-S1 はここに掛かる。**
+
+## 特商法表記のドラフト（2026-09-08 作成・**ページはまだ作らない**）
+
+出所は `claude/Sentio_特商法表記_ドラフト_20260908.md`（**リポジトリ外**）。
+
+> **本文は未取得である。** 2026-09-08 に本マシンを探したが**見つからなかった（0件だった）**。
+> **「埋まった7項目」「決定した3項目」の内訳は、ここには無い。**
+> 以下はメッセージに書かれた分だけである。推測で埋めていない。
+
+### 決定（2026-09-08・検収者）
+
+- **電話番号を載せる。** `070-2834-0672`。
+  **営業メールの署名ですでに公開している番号**であり、新しく公開する情報は無い
+- **解約の条件**（④-b の決定に基づく確定文面）:
+
+  > ご利用中のプランは、いつでも解約できます。
+  > ログイン後の「プランと支払いを管理」から手続きしてください。
+  >
+  > 解約のお手続きをいただいた場合も、お支払いいただいた期間の終了日までは
+  > 引き続きご利用いただけます。期間の途中で利用が停止することはありません。
+
+  **これはポータルの解約が `at_period_end` であることと一致する**（④-b の4点を見よ）
+
+- **問い合わせ先は DR-A と同じアドレスにする**（アドレス自体は未確定）
+
+### 判断待ち（4項目）
+
+**販売価格 / 支払方法 / 支払の時期 / 返金の条件。**
+
+### いま作らない理由
+
+**販売価格が決まっていない。** いま作ると**未定だらけのページが公開される。**
+最終確認画面の義務（L-1）とも直結するので、
+**価格が決まってから、L-1〜L-6 とまとめて着手する。**
+
+## 受付窓口の切り替え — **順番を守る**（2026-09-09 決定）
+
+**受付窓口を `support@sentio-ai.jp` にすると決めた。**
+ただし**いま書き換えると、届かないアドレスを公開することになる。**
+これは **DR-1（受付窓口が届くことを実測する）が防ごうとしている形そのもの**である。
+
+### 実測 — `sentio-ai.jp` に MX が無い（2026-09-09）
+
+検収者が Google Public DNS で確認（Status 0 の正常応答で Answer セクションが空）。
+**同日、こちらでも独立に確かめた。**
+
+```
+$ nslookup -type=MX sentio-ai.jp 8.8.8.8
+sentio-ai.jp
+        primary name server = ns1.vercel-dns.com
+        responsible mail addr = hostmaster.nsone.net
+        ...
+        ← MX の応答は 0件だった（SOA だけが返る＝未設定）
+
+$ nslookup -type=MX mdc-diseno.com 8.8.8.8
+mdc-diseno.com  MX preference = 1, mail exchanger = smtp.google.com
+        ← Google Workspace。1件
+```
+
+**したがって `support@sentio-ai.jp` はいま1通も受信できない。送信側で不達になる。**
+
+### 正しい順番（**飛ばすと削除依頼が消える**）
+
+1. `sentio-ai.jp` に **MX を設定する**（Google Workspace に追加ドメインとして登録するのが早い）。
+   **梶谷さんの作業**
+2. `support@sentio-ai.jp` へ**実際に送って受信できることを確かめる**（**DR-1**）
+3. **確かめてから** `privacy` の §6・§9 を書き換える
+4. **旧 `support@mdc-diseno.com` は残す。** 転送を設定し、旧アドレスへ来た依頼を取りこぼさない
+
+**3 と 4 を飛ばすと、切り替えの間に来た削除依頼が消える。**
+
+### privacy の改定が要る（2026-09-09 実測）
+
+`support@mdc-diseno.com` は**公開済みの約束**なので、変えるなら**改定**になる。
+
+- **改定日を残す欄はある。** `src/app/privacy/page.tsx:6` の `UPDATED_AT = "2026-09-03"` で、
+  画面には「最終更新 2026-09-03」と出る（本番の配信内容でも確認した）。
+  **欄の追加は要らない。書き換えるときに日付も併せて動かすこと**
+- **ただし「最終更新」しか無い。** 制定日と改定履歴は**持っていない**。
+  どの版で何を変えたかを遡れる形にするかは**未判断**
+- **`/terms` に同じアドレスは書かれていない（0件だった）。** メールアドレス自体が0件で、
+  `UPDATED_AT = "2026-08-19"`（`src/app/terms/page.tsx:6`）は据え置きでよい。
+  **書き換えの対象は `privacy` の2行だけ**（`src/app/privacy/page.tsx:186` と `:216`）
+
+### いま着手しないもの
+
+**台帳・通知の実装（DR-S1）。** 窓口の到達確認が済むまで着手しない。
+上の順番の 2 が終わるまで、この項目は動かない。
+
+## 冪等キーの日付は pulse と reconnect で揃えない（2026-09-09 決定）
+
+**`pulse:` と `reconnect:` の日付の規則は違う。**
+`pulse` は**報告対象日（前日）**、`reconnect` は**送信日（当日）**。
+**意味が違うため揃えない。**
+
+- `pulse` は「いつの状態を報告したか」なので前日
+  （`_shared/delivery.ts` の `resolvePulsePeriod` が JST の前日を返す）
+- `reconnect` は「いつ送ったか」なので当日
+  （`deliver-pulse/index.ts` の再連携の分岐が `jstDateKey(now)` を使う）
+
+**7日ごとの抑制も送信日基準のほうが自然である。** 揃えると、送った日とキーの日付が
+1日ずれ、抑制の7日を数えるときに混乱する（抑制の判定は `delivery_log.created_at` を見る。
+`_shared/dispatch-runtime.ts` の `lastNotice`）。
+
+実測（2026-09-09・検収者）では `reconnect:197f2c0e-…:2026-09-09` が 07:00 JST に
+`sent` で入り、同じ日の `pulse:` は 09-07 のままだった。**この2つは同じ日付にならない。**
+
+## 顧客の会社は3つある。うち1社は連携が一度もない（2026-09-09 実測）
+
+**「顧客は自社2社」は `connections` を見た判断だった。会社（`auth.users`）は3つある。**
+`daily` の `dispatch_runs` が `companies=3` を出したのは正しい。
+
+読み取り照会（本番・2026-09-09）で確かめた3社目 `a5d2adc7-6310-4202-818d-50ca9175839b`:
+
+| 項目                                                 | 実測                              |
+| ---------------------------------------------------- | --------------------------------- |
+| 作成                                                 | 2026-04-08 11:05 JST              |
+| 最終サインイン                                       | 2026-09-02 10:55 JST              |
+| 認証の種類                                           | メール／パスワード（`email`）     |
+| `connections` / `connection_events`                  | 0件 / 0件（**一度も連携が無い**） |
+| `events` / `delivery_log`                            | 0件 / 0件                         |
+| `baselines` / `narratives` / `findings` / `entities` | すべて0件                         |
+| 課金メタデータ（`user_metadata.subscription`）       | 無し                              |
+
+**検収者本人の最も古いアカウントで、顧客ではない**（アドレスは検収者のもの。ここには書かない）。
+`dispatch_runs` の1行（`skipped_no_connection`・09-09 07:00）だけが唯一の記録である。
+
+**したがって毎朝の `companies=3` は「顧客3社」ではない。**
+`skipped_no_connection` が1件出続けるのが正常な状態であり、**0件に減ったら**
+この口が連携された（＝誰かが繋いだ）ことを意味する。
+
+### 決定（2026-09-09・検収者。契約PS §16-2）
+
+**`a5d2adc7-6310-4202-818d-50ca9175839b` は検収者（開発者本人）の試験用アカウントである。**
+**明示して残す。データは触らない。削除しない。**
+
+- `connections` に行が無く、**一度も連携していない**
+- `dispatch_runs` に `skipped_no_connection` が**毎日1行積まれる。これは異常ではない**
+- **PS-9（再連携のお知らせ）の対象にならない。** `revoked` にも `reauth_required` にも
+  遷移しないため、**§11-7 の実測には使えない**
+- 識別は `company_id` で行う。**メールアドレスは文書に書かない**
+
+### PS-C: 会社を数えるときは、この1件を除いた数を併記する（契約PS §16-1 で新設）
+
+**「n社」とだけ書かない。** 試験用の1件が混ざったまま数えると、
+**顧客の数と、配信の対象になる会社の数が、どちらも言えなくなる。**
+対象は次の3か所である。
+
+1. **受入基準の「全社」**
+2. **`dispatch_runs` の集計**
+3. **PS-S5 の「全社へ広げる」**
+
+実例。2026-09-09 朝の `daily` は `companies=3` だったが、
+**試験用を除くと2社**であり、その2社はどちらも `reconnect_notice` だった。
+
+**正本は契約PS §16 である**（`claude/Sentio_契約PS_20260903.md`。このリポジトリには無い）。
+ここに書いてあるのは、実装側で参照するための写しである。

@@ -313,8 +313,12 @@ if (mode === "run") {
         .select("event_id")
         .eq("event_id", eventId("a_own"));
 
-      expect(error).toBeNull();
-      expect(data).toHaveLength(0);
+      // **2026-09-09（`00036`）から、断り方が変わった。**
+      // それまでは RLS が行を絞って「0件」を返していた。いまは GRANT が無いので
+      // **表に到達する前に 42501 で断る。** 強くなった側への変化である
+      expect(error).not.toBeNull();
+      expect(error?.code).toBe("42501");
+      expect(data ?? []).toHaveLength(0);
     });
 
     it("陰性: 未認証(anon)はINSERTできない", async () => {

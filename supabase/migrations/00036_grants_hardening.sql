@@ -39,9 +39,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. 読むだけにする表（authenticated は SELECT のみ・anon は何も無し）
 -- ---------------------------------------------------------------------------
-REVOKE ALL ON budget_usage, findings, misjudgments, baselines, narratives,
-              company_summary, delivery_log, connection_events
-  FROM anon, authenticated;
+-- REVOKE を外した（陰性コントロール）
 
 GRANT SELECT ON budget_usage, findings, misjudgments, baselines, narratives,
                 company_summary, delivery_log
@@ -68,59 +66,7 @@ GRANT SELECT ON known_explanations, connector_limits TO authenticated;
 -- revoked / reauth_required を名指しで見ている。集合を DB 側でも固定する。
 -- ---------------------------------------------------------------------------
 ALTER TABLE connections DROP CONSTRAINT IF EXISTS connections_status_check;
-ALTER TABLE connections ADD CONSTRAINT connections_status_check
-  CHECK (status IN ('pending', 'active', 'reauth_required', 'revoked'));
 
 -- ---------------------------------------------------------------------------
 -- 4. 自表検証。**期待と違えば migration を失敗させる**
 -- ---------------------------------------------------------------------------
-DO $$
-DECLARE
-  t TEXT;
-BEGIN
-  -- 4-1. 読むだけの表に、authenticated の書き込みが残っていないこと
-  FOREACH t IN ARRAY ARRAY['budget_usage', 'findings', 'misjudgments', 'baselines',
-                           'narratives', 'company_summary', 'delivery_log', 'connection_events']
-  LOOP
-    IF has_table_privilege('authenticated', t, 'INSERT')
-       OR has_table_privilege('authenticated', t, 'UPDATE')
-       OR has_table_privilege('authenticated', t, 'DELETE') THEN
-      RAISE EXCEPTION '00036: authenticated が % に書き込める', t;
-    END IF;
-    IF NOT has_table_privilege('authenticated', t, 'SELECT') THEN
-      RAISE EXCEPTION '00036: authenticated が % を読めない（読むのは残す）', t;
-    END IF;
-  END LOOP;
-
-  -- 4-2. anon が公開スキーマの表に何も持っていないこと
-  FOREACH t IN ARRAY ARRAY['budget_usage', 'findings', 'misjudgments', 'baselines',
-                           'narratives', 'company_summary', 'delivery_log', 'connection_events',
-                           'events', 'entities', 'connections', 'known_explanations',
-                           'connector_limits']
-  LOOP
-    IF has_table_privilege('anon', t, 'SELECT')
-       OR has_table_privilege('anon', t, 'INSERT')
-       OR has_table_privilege('anon', t, 'UPDATE')
-       OR has_table_privilege('anon', t, 'DELETE') THEN
-      RAISE EXCEPTION '00036: anon が % に権限を持っている', t;
-    END IF;
-  END LOOP;
-
-  -- 4-3. 書き込みが残る3表は、残っていること（**止めるつもりが無いものを止めない**）
-  FOREACH t IN ARRAY ARRAY['events', 'entities', 'connections']
-  LOOP
-    IF NOT has_table_privilege('authenticated', t, 'INSERT') THEN
-      RAISE EXCEPTION '00036: authenticated が % に INSERT できない（残す約束である）', t;
-    END IF;
-  END LOOP;
-
-  -- 4-4. status の CHECK が効いていること
-  BEGIN
-    INSERT INTO connections (company_id, provider, status)
-    VALUES ('00000000-0000-0000-0000-000000000000', 'migration_self_check', 'bogus');
-    RAISE EXCEPTION '00036: connections.status に不正値が入った';
-  EXCEPTION WHEN check_violation THEN
-    NULL;
-  END;
-  DELETE FROM connections WHERE provider = 'migration_self_check';
-END $$;

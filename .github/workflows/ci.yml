@@ -167,6 +167,12 @@ jobs:
           echo "接続先: $API_URL"
           echo "psql: $(psql --version 2>&1 || echo '見つからない')"
 
+      # anon / authenticated の表権限を宣言と突合し、3本を実際に叩いて 42501 を見る。
+      # 実DBが要るので verify には載せられない（発注 ①-1.5）
+      - name: "check:table-grants — 表権限を宣言・実DB・実試行の3方向で突合する"
+        if: ${{ !cancelled() }}
+        run: pnpm run check:table-grants
+
       # 実DBに当たる検査。ここに置くのは Supabase が起きているのがこのジョブだけのため。
       - name: "check:allowlist — S2 allowlist を実DBの列と突合する"
         if: ${{ !cancelled() }}

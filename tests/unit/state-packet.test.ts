@@ -27,6 +27,8 @@ import { sourcesForProvider } from "@edge/_shared/retention";
 import { runScan } from "@edge/_shared/scan";
 
 const NOW = new Date("2026-09-09T05:00:00.000Z"); // JST 14:00
+/** 窓の途中（06:30Z ＝ JST 15:30）。次の窓は 12:00Z ＝ JST 21時 */
+const LATER = new Date("2026-09-09T06:30:00.000Z");
 
 function event(over: Partial<PacketEvent> & { event_id: string }): PacketEvent {
   return {
@@ -108,7 +110,10 @@ describe("PS-2 / 13-1(d): 値が無い項目を省略しない", () => {
     expect(section3).toContain("まだ1件も取り込んでいません");
     expect(text).toContain("予定が1件も入っていません");
     expect(text).toContain("取引の系列は、まだ束ねられていません");
-    expect(text).toContain("連携していません（行がありません）");
+    // 語だけでは provider を取り違える（2つの行に同じ語が出る）。名前まで見る
+    for (const provider of ["freee", "google_calendar"]) {
+      expect(text, provider).toContain(`${provider}: 連携していません（行がありません）`);
+    }
   });
 });
 
@@ -140,7 +145,20 @@ describe("項目2: 連携の生死（直近の取り込みの成否で判定す�
 
     const text = render({ connections: [base] });
     expect(text).toContain("つながっています（最後の取り込み");
-    expect(text).toContain("次の取り込みは 1 時間後");
+    // NOW は 05:00Z。いまの窓は 00:00Z なので、次は 06:00Z ＝ JST 15時
+    expect(text).toContain("次の取り込みは 15時ごろです");
+  });
+
+  it("**陰性コントロール（1-4）**: 起点は「いまの窓の次」であって、最後の取り込みからの6時間ではない", () => {
+    // 本番の再連携がこの形（窓の途中で成功した）。最後の取り込みを起点にすると
+    // 「20時ごろ」になる。**実際の次の取り込みは 12:00Z ＝ JST 21時**である
+    const reconnected = { ...base, last_refresh: "2026-09-09T05:09:22.000Z" };
+    const text = renderPacketText(
+      buildStatePacket({ ...input({ connections: [reconnected] }), generatedAt: LATER }),
+    );
+
+    expect(text).toContain("次の取り込みは 21時ごろです");
+    expect(text).not.toContain("20時ごろ");
   });
 
   it("**陰性コントロール（5-6）**: 期限が切れていても「つながっています」のままである", () => {
@@ -392,7 +410,14 @@ describe("項目8 / 13-1(b): 走査の3値", () => {
     // 途絶（会社全体）は回せる。**回して0件**である
     expect(text).toContain("回して候補0件");
     // 監視は入力が無い。**回せなかった**である
-    expect(text).toContain("入力が無くて回せませんでした");
+    // 語だけでは「どれか1本が回せなかった」しか言えない。**行ごと**に見る
+    const monitor = buildStatePacket(
+      input({
+        baselines: [ESTABLISHED_INTERVAL],
+        events: [event({ event_id: "s1", occurred_at: "2026-09-08T01:00:00.000Z" })],
+      }),
+    ).scans.find((s) => s.id === "monitor");
+    expect(text).toContain(`${monitor?.label}: 入力が無くて回せませんでした`);
   });
 
   it("回せない理由を1本ずつ書く", () => {

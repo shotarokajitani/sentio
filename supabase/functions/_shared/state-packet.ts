@@ -116,8 +116,14 @@ export interface PacketLink {
   revokedAt: string | null;
   /** `stopped` のとき、成功以降に過ぎた取り込みの窓の数 */
   missedWindows: number;
-  /** `connected` のとき、次の取り込みまでの時間（時） */
-  nextInHours: number;
+  /**
+   * 次に取り込む時刻（ISO）。**相対時間で書かない。**
+   *
+   * 「6時間後」と書くと、読み手は**いまから**6時間後と読む。実際の起点は
+   * 直近の窓であり、本番のパルス（22:00 UTC）では**4時間ずれる**
+   * （直前の取り込み 18:00 UTC・次の窓 00:00 UTC・実際の待ちは2時間）。
+   */
+  nextAt: string | null;
 }
 
 export interface PacketFreshness {
@@ -381,9 +387,10 @@ function buildLinks(input: PacketInput): PacketLink[] {
         lastSuccessAt: null,
         revokedAt: null,
         missedWindows: 0,
-        nextInHours: 0,
+        nextAt: null,
       };
     }
+    // **起点は「いまの窓の次」である。** 最後の取り込みからの6時間ではない
     const nextWindow = windowStart(input.generatedAt.getTime()) + INGEST_INTERVAL_HOURS * 3600000;
     return {
       provider,
@@ -391,7 +398,7 @@ function buildLinks(input: PacketInput): PacketLink[] {
       lastSuccessAt: c.last_refresh,
       revokedAt: c.revoked_at,
       missedWindows: c.last_refresh ? missedWindowsSince(c.last_refresh, input.generatedAt) : 0,
-      nextInHours: Math.max(0, Math.ceil((nextWindow - input.generatedAt.getTime()) / 3600000)),
+      nextAt: new Date(nextWindow).toISOString(),
     };
   });
 }
@@ -727,6 +734,20 @@ function jstDateTime(iso: string | null): string {
   return iso ? formatJst(new Date(iso)) : NOT_INGESTED;
 }
 
+/**
+ * JST の「9時」。**相対時間（n 時間後）で書かない**（2026-09-09）。
+ * 起点を取り違えられない形にする。
+ */
+function jstHour(iso: string | null): string {
+  if (!iso) return "時刻が決まりません";
+  const at = new Date(iso);
+  const hour = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "numeric",
+  }).format(at);
+  return hour.endsWith("時") ? hour : `${hour}時`;
+}
+
 /** パケットをそのまま読める行に落とす。**項目を1つも省略しない** */
 export function renderPacketText(packet: StatePacket): string {
   const lines: string[] = [];
@@ -755,7 +776,7 @@ export function renderPacketText(packet: StatePacket): string {
     } else if (link.state === "connected") {
       push(
         `  ${link.provider}: つながっています（最後の取り込み ${jstDateTime(link.lastSuccessAt)}。` +
-          `次の取り込みは ${link.nextInHours} 時間後）`,
+          `次の取り込みは ${jstHour(link.nextAt)}ごろです）`,
       );
     } else {
       // **「失敗した回数」ではなく「過ぎた窓の数」を書く。**

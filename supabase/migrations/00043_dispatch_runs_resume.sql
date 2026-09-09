@@ -68,7 +68,8 @@ ALTER TABLE dispatch_runs ADD CONSTRAINT dispatch_runs_outcome_check
 DO $$
 DECLARE
   c TEXT;
-  v_company UUID := '00000000-0000-0000-0000-000000000000';
+  v_i INT := 0;
+  v_company UUID := '00000000-0000-0000-0000-00000000000f';
 BEGIN
   FOREACH c IN ARRAY ARRAY['run_key', 'started_at', 'finished_at'] LOOP
     IF NOT EXISTS (
@@ -79,17 +80,25 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 新しい3値が通ること
+  -- 新しい3値が通ること。
+  -- **会社を分ける。** 同じ会社で3回入れると、いま張ったばかりの
+  -- `uq_dispatch_runs_company_run` に自分で当たる（2026-09-10 に CI で実測:
+  -- `duplicate key value violates unique constraint` SQLSTATE 23505）
   FOREACH c IN ARRAY ARRAY['pending', 'running', 'timeout'] LOOP
+    v_i := v_i + 1;
     BEGIN
       INSERT INTO dispatch_runs (kind, dispatch, company_id, outcome, run_key)
-      VALUES ('company', 'daily', v_company, c, 'migration_self_check');
+      VALUES ('company', 'daily',
+              ('00000000-0000-0000-0000-00000000000' || v_i::text)::uuid,
+              c, 'migration_self_check');
     EXCEPTION WHEN check_violation THEN
       RAISE EXCEPTION '00043: outcome に % を入れられない', c;
     END;
   END LOOP;
 
   -- **同じ (dispatch, run_key, company_id) は2行入らないこと**（先出しの冪等）
+  INSERT INTO dispatch_runs (kind, dispatch, company_id, outcome, run_key)
+  VALUES ('company', 'daily', v_company, 'pending', 'migration_self_check');
   BEGIN
     INSERT INTO dispatch_runs (kind, dispatch, company_id, outcome, run_key)
     VALUES ('company', 'daily', v_company, 'pending', 'migration_self_check');

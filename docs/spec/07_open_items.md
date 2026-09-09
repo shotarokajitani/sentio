@@ -2612,6 +2612,69 @@ LP に「Sentio について」の節（見出しに平文のアプリ名＋事�
 (a) このままにする。(b) ブロック2か3の見出しにアプリ名を入れる。
 (c) 審査が必要になった時点で戻す。
 
+## 決着: `trialing` は「購読している」側である（2026-09-09）
+
+**枠と配信を与えてよい状態は `active` と `trialing` の2つ**である。
+無料期間中は製品が全部使える。**誠実さの機構を課金壁に入れない**（禁じ手9）以前に、
+無料期間は「売る前に価値を見せる」ための期間であり、絞る意味が無い。
+
+実体は `supabase/functions/_shared/budget.ts` の `ENTITLED_STATUSES` に1つだけ置き、
+Next 側（`src/lib/billing/plan.ts`）はそれを呼ぶ。**二重に持たない。**
+
+`subscription-state.ts` の否定リスト（「購読の実体があるか」）とは**別物**である。
+あちらは Checkout を2本作らせないための門で、こちらは枠と配信の判定。
+**片方をもう片方で代用しない。**
+
+## 既定プランを試用に倒した（2026-09-09・実測つき）
+
+`DEFAULT_PLAN` を `STANDARD_PLAN` から `TRIAL_PLAN` に倒した（10 → 5）。
+
+- **未購読のアカウントに標準枠で LLM 費用が出る**形をやめた
+- **体験は変わらない。** `investigate` は候補を `scanType` でまとめるので、
+  走査が5種の現状では起動は1日最大5回である
+- **走査が6種以上に増えたら前提が崩れる。** `tests/unit/edge-budget.test.ts` が
+  `_shared/scan.ts` の実物から `scanType` を数え、枠と突き合わせている。増えたら赤くなる
+
+適用したプランは `investigate` の応答（`budget.plan_id` / `budget.limit`）と
+`findings.eval_log` に残る。**「枠のせいで見えなかった」を後から判別できる。**
+
+## `events` / `entities` / `connections` の書き込みを service_role に寄せるか（**未判断**・2026-09-09）
+
+`00036` で12表の権限を締めたが、**この3表だけは `authenticated` の書き込みを残した。**
+RLS クライアント経由の書き込みが実際にあるためである（2026-09-09 の実測）。
+
+| 箇所                                  | 表                   |
+| ------------------------------------- | -------------------- |
+| `api/csv/ingest/route.ts`             | events               |
+| `api/competitors/suggest/route.ts`    | entities             |
+| `api/connections/disconnect/route.ts` | events / connections |
+
+寄せると「顧客は自分のデータを1行も書けない」形になり、締まりは良くなる。
+一方で**動いているものを止める**ので、経路ごとに service_role へ移す作業が要る。
+**今回はやらない。** 判断は検収者が出す。
+
+## anon の SELECT を共有行からも落とした（2026-09-09・受け入れ済み）
+
+`00036` は、指示では「`events` と `known_explanations` の `company_id IS NULL` 行の
+SELECT だけ anon に残す」だった。**実際には落とした。**
+
+理由は、**src に匿名で読む経路が1件も無い**ことである（2026-09-09 の grep）。
+使われていない口を開けたままにしない（fail-closed）。**強くなった側の変更として検収者が受け入れた。**
+
+副作用が1つある。**未認証の断り方が「0件」から `42501` に変わった。**
+それまでは RLS が行を絞って空の結果を返していたが、いまは表に到達する前に断る。
+`tests/integration/rls.test.ts` の期待をそちらに合わせてある。
+
+必要になったら戻す。そのときは `GRANT SELECT ON events, known_explanations TO anon;` ではなく、
+**共有行だけを返すビュー**を作る形を検討する（表ごと開けると company_id を持つ行まで開く）。
+
+## `connector_limits` の権限（**未判断**・2026-09-09 登録）
+
+発注 C の一覧に無かったが、実測では `authenticated` が
+DELETE / INSERT / UPDATE を持っていた。**書き込む経路はコードに0件**である。
+`00036` では anon から全権限を落とし、authenticated の書き込みは**残してある**
+（一覧に無いものを勝手に締めない）。締めるかは検収者の判断。
+
 ## 価格の出所が2箇所にある（2026-09-09 登録）
 
 **本番 Stripe の price オブジェクトと、`src/lib/pricing.ts` の定数が、別々に金額を持っている。**

@@ -64,14 +64,19 @@ export const TRIAL_PLAN: Plan = { id: "trial", fullRunsPerDay: 5 };
 export const STANDARD_PLAN: Plan = { id: "standard", fullRunsPerDay: 10 };
 
 /**
- * plan id が引けないときに落とす先。**いまは標準プランである。**
+ * plan id が引けないときに落とす先。**試用プランである**（2026-09-09 に倒した）。
  *
- * **課金が動き出したら、購読の無い会社は試用に落ちる。**
- * いまそうしないのは、購読という概念がまだ存在せず、
- * **既存の会社の枠を黙って 10 → 3 に減らすことになる**からである。
- * Stripe を繋いで購読を引けるようになった時点で、ここを `TRIAL_PLAN` に倒す。
+ * 倒した理由は2つ。
+ *
+ * 1. **未購読のアカウントに標準枠で LLM 費用が出る。** Stripe が本番で回り始め、
+ *    購読の有無が引けるようになったので、既定を購読なし側に置く
+ * 2. **体験は変わらない。** `investigate` は候補を `scanType` でまとめるので、
+ *    走査が5種の現状では起動は1日最大5回である。5 でも取りこぼさない
+ *    （`tests/unit/edge-budget.test.ts` が走査の種類数と枠を突き合わせて固定している）
+ *
+ * **走査が6種以上に増えたら、この前提は崩れる。** そのとき試験が赤くなる。
  */
-export const DEFAULT_PLAN: Plan = STANDARD_PLAN;
+export const DEFAULT_PLAN: Plan = TRIAL_PLAN;
 
 /** 引ける全プラン。**空にしない。**（2段構成・2026-09-02 決定） */
 export const PLANS: Readonly<Record<string, Plan>> = {
@@ -93,17 +98,57 @@ export function planFor(planId: string | null | undefined): Plan {
 }
 
 /**
- * フルハーネス（Planner→Generator→Evaluator）の日次起動上限。
+ * フルハーネス（Planner→Generator→Evaluator）の日次起動上限（**既定プランの値**）。
  *
- * **10 は暫定値**（`docs/spec/07_open_items.md` に登録済み）。
- * 3 にすると S-3-2（合成会社の一気通貫）が上限に当たり、テスト側で上限を上書きする
- * 経路が必要になる。それは「本番コードに `if (testMode)` を作らない」原則と衝突するため、
- * テストが素通しできる余裕を持たせてある。
+ * **会社ごとの上限はこれではない。** 2026-09-09 から `investigate` は
+ * 会社の購読からプランを解決し、`plan.fullRunsPerDay` を使う。
+ * ここは「プランが引けなかったときに落ちる先」の値であり、
+ * **ログや応答に出すのは解決済みのプランの値である**（発注 B-1 の条件2）。
  *
  * `light_runs` に上限は置かない。`spec/03:52` が「フルハーネス起動上限・超過はライトパス降格」
  * と定めており、**ライトを絞ると降格先が無くなる**ため。記録だけ行う。
  */
 export const MAX_FULL_RUNS_PER_DAY = DEFAULT_PLAN.fullRunsPerDay;
+
+/**
+ * `investigate` が候補をまとめる単位（`scanType`）の種類数。
+ *
+ * **枠がこの数を下回ると、走査が出した候補を取りこぼす。**
+ * `_shared/scan.ts` が出す `scanType` は
+ * `deviation` / `deadline` / `external` / `trend` / `silence` の5種。
+ * ここを実装から機械的に導けないのは、`scan.ts` が候補を返すまで種類が分からないためで、
+ * **突合は `tests/unit/edge-budget.test.ts` が実物の `runScan` の出力で行う。**
+ */
+export const SCAN_TYPE_COUNT = 5;
+
+/**
+ * 枠を与えてよい購読状態。**この集合が「購読している」の定義である**（発注 B-4）。
+ *
+ * `subscription-state.ts` の「購読の実体があるか」（否定リスト）とは**別物**である。
+ * あちらは「2本目を作らせない」ための門で、こちらは「枠と配信を与えるか」の判定。
+ * **片方をもう片方で代用しない。**
+ */
+export const ENTITLED_STATUSES: ReadonlySet<string> = new Set(["active", "trialing"]);
+
+export function isEntitledStatus(status: string | null | undefined): boolean {
+  return typeof status === "string" && ENTITLED_STATUSES.has(status);
+}
+
+/**
+ * `auth.users.user_metadata` からプランを解決する（**Next と Edge の共通実体**）。
+ *
+ * Edge は `supabase/functions/` の外を import できないので、実体をここに置き、
+ * Next 側（`src/lib/billing/plan.ts`）はこれを呼ぶ。**二重に実装しない。**
+ *
+ * 落とす先は `TRIAL_PLAN` であって 0 ではない。0 にすると請求の不整合で利用者が完全に止まる。
+ */
+export function planFromSubscriptionMetadata(metadata: unknown): Plan {
+  const sub = (metadata as { subscription?: { plan_id?: unknown; status?: unknown } } | null)
+    ?.subscription;
+  if (!sub || typeof sub !== "object") return TRIAL_PLAN;
+  if (!isEntitledStatus(typeof sub.status === "string" ? sub.status : null)) return TRIAL_PLAN;
+  return planFor(typeof sub.plan_id === "string" ? sub.plan_id : null);
+}
 
 /**
  * フルハーネスを起動してよいか。

@@ -27,16 +27,68 @@ import type {
  * 会社とアカウントは 1:1 である（`src/lib/auth/company.ts` と同じ前提）。
  * したがって `auth.users.id` がそのまま `company_id` になる。
  */
+/** 1回の `listUsers` で取る件数。Supabase の上限（1000）より小さくしておく */
+const TARGET_PAGE_SIZE = 200;
+
+/**
+ * 取りに行くページ数の上限。**無限ループにしないための止め具**であり、
+ * ここに当たったら「取り切れていない」である（会社数の想定ではない）。
+ */
+const MAX_TARGET_PAGES = 25;
+
+/** `user_metadata` から購読の状態だけを取り出す（B-4）。**引けなければ null** */
+function subscriptionStatusOf(metadata: unknown): string | null {
+  const sub = (metadata as { subscription?: { status?: unknown } } | null)?.subscription;
+  return typeof sub?.status === "string" && sub.status ? sub.status : null;
+}
+
 export function buildDeps(): DispatchDeps {
   const supabase = getSupabaseAdmin();
+  // `listTargets` が立て、`runDispatch` が読む。**取り切れなかった事実を持ち帰る**
+  let truncated = false;
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
   return {
+    // **環境変数はここで1回だけ読む。** 判断（`planCompany`）に環境変数を持ち込まない
+    enforceEntitlement: (Deno.env.get("SENTIO_ENFORCE_ENTITLEMENT") ?? "").trim() === "true",
+
+    get targetsTruncated(): boolean {
+      return truncated;
+    },
+
     listTargets: async (): Promise<CompanyTarget[]> => {
-      // service_role でのみ引ける。ページングの上限は当面の会社数から余裕を見た固定値
-      const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-      if (error) throw new Error(`dispatch: auth ユーザー一覧の取得に失敗: ${error.message}`);
+      // **全ページ取る**（発注 B-5）。1ページ固定だと、会社が 200 を超えた日から
+      // **超えたぶんに毎朝1通も届かない。しかもその事実がどこにも残らない。**
+      // 取り切れなかったときは `targetsTruncated` を立て、呼び出し側が non-2xx にする
+      const users: Array<{ id: string; email?: string | null; user_metadata?: unknown }> = [];
+      let page = 1;
+      truncated = false;
+
+      // 上限は「会社数の想定 × 余裕」ではなく**回数**で持つ。
+      // 無限ループにしないための止め具であり、ここに当たったら取り切れていない
+      for (; page <= MAX_TARGET_PAGES; page++) {
+        const { data, error } = await supabase.auth.admin.listUsers({
+          page,
+          perPage: TARGET_PAGE_SIZE,
+        });
+        if (error) throw new Error(`dispatch: auth ユーザー一覧の取得に失敗: ${error.message}`);
+
+        const batch = data?.users ?? [];
+        users.push(...batch);
+        if (batch.length < TARGET_PAGE_SIZE) break;
+      }
+
+      if (page > MAX_TARGET_PAGES) {
+        // **黙って一部だけ配らない。** 取り切れなかった事実を持ち帰る
+        console.error(
+          `[sentio:dispatch] 会社の一覧を取り切れなかった pages=${MAX_TARGET_PAGES} ` +
+            `per_page=${TARGET_PAGE_SIZE}`,
+        );
+        truncated = true;
+      }
+
+      const data = { users };
 
       // 連携の状態は provider ごとではなく**会社ごとに1つへ畳む**（CD-D3 の後継）。
       // **`active` が1つでもあれば `active`。** 無ければ revoked / reauth_required を拾う
@@ -100,6 +152,9 @@ export function buildDeps(): DispatchDeps {
         connectionState: stateByCompany.get(user.id) ?? "none",
         lastReconnectNoticeAt: lastNotice.get(user.id) ?? null,
         detectedAt: detectedAt.get(user.id) ?? null,
+        // 購読の状態（B-4）。**正本は webhook が書く `user_metadata` だけ**で、
+        // ここでも Stripe には問い合わせない（BU-D2 と同じ判断）
+        subscriptionStatus: subscriptionStatusOf(user.user_metadata),
       }));
     },
 

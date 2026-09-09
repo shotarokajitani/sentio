@@ -421,6 +421,23 @@ export const ja = {
     environment2: "Google カレンダーとの連携には Google アカウントが必要です。",
   },
 
+  /**
+   * 無料期間の終わりの知らせ（A-7・2026-09-09）。
+   *
+   * **お金の話は黙って始めない。** 終了日・金額・やめ方の3つを揃えて、始まる前に出す。
+   * 金額は `src/lib/pricing.ts` から渡す。**辞書に数字を書かない。**
+   */
+  trialEnding: {
+    subject: (endDate: string) => `【Sentio】無料期間が ${endDate} に終わります`,
+    lead: (endDate: string) =>
+      `ご利用中の無料期間は ${endDate} に終わります。この日までは料金は発生しません。`,
+    amount: monthlyPrice,
+    timing: (endDate: string) =>
+      `${endDate} に、初回のお支払いが発生します。以後は毎月、同じ日に決済されます。`,
+    cancelLead: "続けない場合は、終了日までに解約してください。手続きはこちらから行えます。",
+    note: "解約されても、無料期間の終了日まではそのままご利用いただけます。",
+  },
+
   /** 申込前の最終確認（特商法の最終確認画面の義務。6項目をまとめて出す） */
   checkoutNotice: {
     title: "お申し込み内容の確認",

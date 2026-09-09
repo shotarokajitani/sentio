@@ -6,7 +6,13 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
-import { MAX_FULL_RUNS_PER_DAY, canRunFullHarness, budgetDateKey } from "../_shared/budget.ts";
+import {
+  TRIAL_PLAN,
+  canRunFullHarness,
+  budgetDateKey,
+  planFromSubscriptionMetadata,
+  type Plan,
+} from "../_shared/budget.ts";
 import { FINDING_TEMPLATE, EVALUATOR_CRITERIA } from "../_shared/prompts.ts";
 import { MODEL_GENERATOR, MODEL_EVALUATOR, warnIfModelDeprecated } from "../_shared/models.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
@@ -247,6 +253,10 @@ Deno.serve(async (req: Request) => {
     );
     const memoryPacket = summaryData?.content || "(No company summary available yet)";
 
+    // 会社のプランを解決する（発注 B-3）。**枠は会社ごとに違う。**
+    // 引けなければ試用プランに落とす（fail-closed。多い側に倒さない）
+    const plan = await resolvePlan(supabase, company_id);
+
     // 調査予算（S-6-2 〜 S-6-6）。
     // 修復前は実在しない列（used / daily_limit）を引き、エラーを無視して null にしていた。
     // 「行が無ければ無制限」を廃し、行が無ければ作って 0 から数える
@@ -285,11 +295,11 @@ Deno.serve(async (req: Request) => {
       // 上限に達したら起動しない（fail-closed）。
       // 止めた事実をログとレスポンスの両方に残す。黙って0件で終わらせると、
       // 「候補が無かった」のか「予算で止めた」のかが区別できなくなる（S-6-6）
-      if (!canRunFullHarness(fullRuns)) {
+      if (!canRunFullHarness(fullRuns, plan)) {
         budgetStopped = true;
         console.warn(
-          `[sentio:budget] company_id=${company_id} date=${today} ` +
-            `full_runs=${fullRuns}/${MAX_FULL_RUNS_PER_DAY} ` +
+          `[sentio:budget] company_id=${company_id} date=${today} plan=${plan.id} ` +
+            `full_runs=${fullRuns}/${plan.fullRunsPerDay} ` +
             `上限に達したためフルハーネスを起動しない（残り ${investigations.length - findings.length} 群を見送り）`,
         );
         break;
@@ -375,6 +385,9 @@ Deno.serve(async (req: Request) => {
             hypotheses: draft.hypotheses,
             next_actions: draft.next_actions,
             eval_log: {
+              // 適用したプランと枠（発注 B-1 の条件2）。**枠のせいで見えなかったかを後から判別する**
+              plan_id: plan.id,
+              full_runs_per_day: plan.fullRunsPerDay,
               criteria: evalResult.criteria,
               revisions,
               result: evalResult.result,
@@ -410,7 +423,10 @@ Deno.serve(async (req: Request) => {
         // 0件の原因を応答から区別できるようにする（S-2-3 / S-6-6）
         budget: {
           full_runs: fullRuns,
-          limit: MAX_FULL_RUNS_PER_DAY,
+          // **適用したプランの枠**である（既定の定数ではない・発注 B-1 の条件2）。
+          // 後から「枠のせいで見えなかった」を判別できるように、plan_id も返す
+          plan_id: plan.id,
+          limit: plan.fullRunsPerDay,
           stopped_by_budget: budgetStopped,
         },
       }),
@@ -422,3 +438,29 @@ Deno.serve(async (req: Request) => {
     return errorResponse(error, corsHeaders);
   }
 });
+
+/**
+ * 会社のプランを解決する（発注 B-3）。
+ *
+ * **引けなければ試用プランに落とす。** 「引けなかった＝標準」に倒すと、
+ * 購読が無い会社に標準枠の LLM 費用が出る。多い側に倒さない（fail-closed）。
+ */
+async function resolvePlan(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+): Promise<Plan> {
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(companyId);
+    if (error || !data?.user) {
+      console.warn(`[sentio:budget] plan を引けないので試用に落とす company_id=${companyId}`);
+      return TRIAL_PLAN;
+    }
+    return planFromSubscriptionMetadata(data.user.user_metadata ?? null);
+  } catch (e) {
+    console.warn(
+      `[sentio:budget] plan の解決に失敗したので試用に落とす company_id=${companyId} ` +
+        `err=${e instanceof Error ? e.message : "unknown"}`,
+    );
+    return TRIAL_PLAN;
+  }
+}

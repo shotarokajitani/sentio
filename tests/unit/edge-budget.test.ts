@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   MAX_FULL_RUNS_PER_DAY,
+  SCAN_TYPE_COUNT,
+  planFromSubscriptionMetadata,
+  isEntitledStatus,
   DEFAULT_PLAN,
   TRIAL_PLAN,
   STANDARD_PLAN,
@@ -22,13 +27,46 @@ import { jstDateKey } from "@edge/_shared/jst";
 
 describe("MAX_FULL_RUNS_PER_DAY", () => {
   it("定数は1箇所（_shared）に置き、環境変数で変えない", () => {
-    expect(MAX_FULL_RUNS_PER_DAY).toBe(10);
+    // **既定は試用プランである**（2026-09-09 に倒した）。
+    // 未購読のアカウントに標準枠で LLM 費用が出る形をやめた
+    expect(MAX_FULL_RUNS_PER_DAY).toBe(TRIAL_PLAN.fullRunsPerDay);
   });
 
   it("合成会社の一気通貫（S-3-2）が上限に当たらない余裕がある", () => {
     // 3 だとテスト側で上限を上書きする経路が要り、
     // 「本番コードに testMode を作らない」原則と衝突する
-    expect(MAX_FULL_RUNS_PER_DAY).toBeGreaterThanOrEqual(10);
+    expect(MAX_FULL_RUNS_PER_DAY).toBeGreaterThanOrEqual(5);
+  });
+});
+
+/**
+ * **枠が走査の種類数を下回ったら、候補を取りこぼす**（発注 B-1 の条件1）。
+ *
+ * `investigate` は候補を `scanType` でまとめてから1群1回起動する。
+ * したがって1日の起動回数の上限は「`scanType` の種類数」で決まる。
+ * 走査が6種以上に増えたら、試用プランの 5 では足りなくなる——**そのときここが赤くなる。**
+ *
+ * 種類数は `_shared/scan.ts` の実物から数える。**人が書いた表を持たない。**
+ */
+describe("試用プランの枠と走査の種類数（B-1 条件1）", () => {
+  const scanSource = readFileSync(
+    path.resolve(__dirname, "../../supabase/functions/_shared/scan.ts"),
+    "utf8",
+  );
+
+  const scanTypes = new Set([...scanSource.matchAll(/scanType:\s*"([a-z_]+)"/g)].map((m) => m[1]));
+
+  it("走査の種類が数えられている（0件で緑にならない）", () => {
+    expect(scanTypes.size).toBeGreaterThan(0);
+    expect(scanTypes.size).toBe(SCAN_TYPE_COUNT);
+  });
+
+  it("**試用プランの枠で、走査5種すべてが起動できる**（取りこぼし0件）", () => {
+    expect(TRIAL_PLAN.fullRunsPerDay).toBeGreaterThanOrEqual(scanTypes.size);
+  });
+
+  it("既定プランでも同じ（既定は試用である）", () => {
+    expect(DEFAULT_PLAN.fullRunsPerDay).toBeGreaterThanOrEqual(scanTypes.size);
   });
 });
 
@@ -88,22 +126,24 @@ describe("budgetDateKey", () => {
  * 受け皿を作っただけで、どの会社も既定プランを引く。
  */
 describe("プランの受け皿", () => {
-  it("**既定プランの上限は従来と同じ 10**（挙動を変えていない）", () => {
-    expect(DEFAULT_PLAN.fullRunsPerDay).toBe(10);
+  it("**既定プランは試用**（2026-09-09 に倒した）", () => {
+    expect(DEFAULT_PLAN).toBe(TRIAL_PLAN);
     expect(MAX_FULL_RUNS_PER_DAY).toBe(DEFAULT_PLAN.fullRunsPerDay);
   });
 
   it("プランを渡さなければ既定プランで判定する（従来の呼び出しが壊れない）", () => {
-    expect(canRunFullHarness(9)).toBe(true);
-    expect(canRunFullHarness(10)).toBe(false);
-    expect(canRunFullHarness(9, DEFAULT_PLAN)).toBe(canRunFullHarness(9));
+    expect(canRunFullHarness(TRIAL_PLAN.fullRunsPerDay - 1)).toBe(true);
+    expect(canRunFullHarness(TRIAL_PLAN.fullRunsPerDay)).toBe(false);
+    expect(canRunFullHarness(1, DEFAULT_PLAN)).toBe(canRunFullHarness(1));
   });
 
   it("プランごとに上限が変わる", () => {
     const wide = { id: "wide", fullRunsPerDay: 50 };
     expect(canRunFullHarness(30, wide)).toBe(true);
-    expect(canRunFullHarness(30)).toBe(false); // 既定では 10 が上限
+    expect(canRunFullHarness(30)).toBe(false); // 既定（試用）では 5 が上限
     expect(canRunFullHarness(50, wide)).toBe(false);
+    // 標準プランは試用より広い（**課金の意味がここにある**）
+    expect(STANDARD_PLAN.fullRunsPerDay).toBeGreaterThan(TRIAL_PLAN.fullRunsPerDay);
   });
 
   it("使用量が取れないときは、どのプランでも起動しない（fail-closed は据え置き）", () => {
@@ -156,11 +196,17 @@ describe("プランの品揃え", () => {
     expect(TRIAL_PLAN.fullRunsPerDay).toBeGreaterThanOrEqual(SCAN_TYPES_PER_DAY);
   });
 
-  it("**既定は標準のまま**。既存の会社の枠を減らしていない", () => {
-    // 課金が動き出したら購読の無い会社は試用に落ちるが、購読という概念がまだ無い。
-    // ここを試用にすると、いまいる会社の枠を黙って 10 → 3 に減らすことになる
-    expect(DEFAULT_PLAN).toBe(STANDARD_PLAN);
-    expect(MAX_FULL_RUNS_PER_DAY).toBe(10);
+  it("**既定は試用**。購読が無い会社に標準枠を与えない（2026-09-09 に倒した）", () => {
+    // 倒す前は標準だった。**課金が本番で回り始め、購読の有無が引けるようになった**ので、
+    // 既定を購読なし側に置く。体験は変わらない（走査は5種で、起動は1日最大5回）
+    expect(DEFAULT_PLAN).toBe(TRIAL_PLAN);
+    expect(MAX_FULL_RUNS_PER_DAY).toBe(TRIAL_PLAN.fullRunsPerDay);
+    // **購読していれば標準に上がる**（ここが課金の意味である）
+    expect(
+      planFromSubscriptionMetadata({
+        subscription: { plan_id: "standard", status: "active" },
+      }),
+    ).toBe(STANDARD_PLAN);
   });
 
   it("両方のプランが id で引ける", () => {
@@ -175,5 +221,45 @@ describe("プランの品揃え", () => {
 
   it("段数は2つ。**増やすときは価格と枠をセットで決める**", () => {
     expect(Object.keys(PLANS).sort()).toEqual(["standard", "trial"]);
+  });
+});
+
+/**
+ * 購読からプランを解決する（**Next と Edge の共通実体**・発注 B-2 / B-3）。
+ *
+ * 実体をここ（`_shared/budget.ts`）に置いてあるのは、`investigate`（Edge）と
+ * `src/lib/billing/plan.ts`（Next）の両方が要るからである。**二重に実装しない。**
+ */
+describe("購読からプランを解決する", () => {
+  const sub = (status: string, planId = "standard") => ({
+    subscription: { plan_id: planId, status, stripe_customer_id: "c", stripe_subscription_id: "s" },
+  });
+
+  it("active は標準プラン", () => {
+    expect(planFromSubscriptionMetadata(sub("active"))).toBe(STANDARD_PLAN);
+  });
+
+  it("**trialing も標準プラン**（無料期間中は製品が全部使える）", () => {
+    expect(planFromSubscriptionMetadata(sub("trialing"))).toBe(STANDARD_PLAN);
+  });
+
+  it("**陰性**: 支払いが滞っている購読は試用に落とす（0 にはしない）", () => {
+    for (const status of ["past_due", "canceled", "unpaid", "paused", "incomplete"]) {
+      expect(planFromSubscriptionMetadata(sub(status)), status).toBe(TRIAL_PLAN);
+    }
+  });
+
+  it("**陰性**: 購読が無い会社は試用に落ちる（標準ではない）", () => {
+    expect(planFromSubscriptionMetadata(null)).toBe(TRIAL_PLAN);
+    expect(planFromSubscriptionMetadata({})).toBe(TRIAL_PLAN);
+    expect(planFromSubscriptionMetadata({ subscription: null })).toBe(TRIAL_PLAN);
+  });
+
+  it("枠と配信を与えてよい状態は active と trialing の2つだけ", () => {
+    expect(isEntitledStatus("active")).toBe(true);
+    expect(isEntitledStatus("trialing")).toBe(true);
+    for (const status of ["past_due", "canceled", "unpaid", "paused", "incomplete", null, ""]) {
+      expect(isEntitledStatus(status), String(status)).toBe(false);
+    }
   });
 });

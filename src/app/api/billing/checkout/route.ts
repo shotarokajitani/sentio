@@ -69,7 +69,14 @@ export async function POST() {
       // `trial_settings.end_behavior.missing_payment_method` は**渡さない**。
       // 既定は `create_invoice`（支払い方法が無ければ請求書を出す）で、
       // ここを変えると無料期間の終わり方が変わる。**変える判断はしていない。**
-      subscription_data: { trial_period_days: SENTIO_TRIAL_DAYS },
+      subscription_data: {
+        trial_period_days: SENTIO_TRIAL_DAYS,
+        // **会社を Subscription 自身に持たせる**（2026-09-09）。
+        // `client_reference_id` は Checkout Session にしか無く、
+        // `customer.subscription.*` の webhook からは引けない。
+        // customer の逆引きは Stripe 側の状態に依存するので、その手前にもう1本置く
+        metadata: { company_id: ctx.companyId },
+      },
       // 購読を会社に結び付ける唯一の鍵。webhook 側はこれで会社を引く
       client_reference_id: ctx.companyId,
       ...(ctx.email ? { customer_email: ctx.email } : {}),

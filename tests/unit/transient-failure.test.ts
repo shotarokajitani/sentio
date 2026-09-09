@@ -14,15 +14,23 @@
  * `tests/integration/token-refresh.test.ts` が持つ。
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   MAX_CONSECUTIVE_FAILURES,
   REAUTH_RETRY_HOURS,
   classifyTokenFailure,
+  planSyncRecovery,
   planTransientFailure,
   shouldRetryReauth,
 } from "@edge/_shared/token-refresh";
 
 const NOW = new Date("2026-09-10T00:00:00.000Z");
+
+const SYNC_SOURCE = readFileSync(
+  path.resolve(__dirname, "../../supabase/functions/sync-connections/index.ts"),
+  "utf8",
+).replace(/\s+/g, " ");
 
 describe("失敗を3種に分ける", () => {
   it("400 かつ invalid_grant は revoked（従来どおり）", () => {
@@ -104,5 +112,45 @@ describe("reauth_required の再試行は1日1回", () => {
     // この変更より前から reauth_required だった行がここに当たる
     expect(shouldRetryReauth(null, NOW)).toBe(true);
     expect(shouldRetryReauth("壊れた値", NOW)).toBe(true);
+  });
+});
+
+/**
+ * 同期が成功したときに状態を戻す（2026-09-09 の検収で足した）。
+ *
+ * **トークンが有効なまま同期できた経路には、戻す口が無かった。**
+ * `sync-connections` は期限切れのときだけ `refreshToken` を呼ぶので、
+ * 有効なトークンで取り込めた `reauth_required` の行は倒れたまま残っていた——
+ * **取り込めているのに「連携が切れています」が7日ごとに届く。**
+ */
+describe("同期の成功で reauth_required を戻す", () => {
+  it("リフレッシュを通らずに同期できたら active に戻し、記録も残す", () => {
+    expect(planSyncRecovery({ status: "reauth_required", recoveredByRefresh: false })).toEqual({
+      restoreActive: true,
+      recordEvent: true,
+    });
+  });
+
+  it("**陰性**: リフレッシュが戻したあとに二重で書かない（遷移が2行残る）", () => {
+    expect(planSyncRecovery({ status: "reauth_required", recoveredByRefresh: true })).toEqual({
+      restoreActive: false,
+      recordEvent: false,
+    });
+  });
+
+  it("**陰性**: もともと active の行を「戻した」ことにしない（平常を遷移にしない）", () => {
+    for (const status of ["active", "pending", null, undefined]) {
+      expect(planSyncRecovery({ status, recoveredByRefresh: false }), String(status)).toEqual({
+        restoreActive: false,
+        recordEvent: false,
+      });
+    }
+  });
+
+  it("同期の成功経路が、この判断を使っている（判断を関数の外に持たない）", () => {
+    expect(SYNC_SOURCE).toContain("planSyncRecovery({");
+    // **成功したら失敗の記録を消す**（間隔をあけた失敗が積み上がらない）
+    expect(SYNC_SOURCE).toContain("consecutive_failures: 0");
+    expect(SYNC_SOURCE).toContain("last_failure_at: null");
   });
 });

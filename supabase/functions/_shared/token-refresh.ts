@@ -125,6 +125,25 @@ export function shouldRetryReauth(lastFailureAt: string | null, now: Date): bool
   return now.getTime() - at >= REAUTH_RETRY_HOURS * 60 * 60 * 1000;
 }
 
+/**
+ * 同期が成功したときに、状態を戻すか（発注 ①-2・2026-09-09 の検収で足した）。
+ *
+ * **トークンが有効なまま同期できた経路には、戻す口が無かった。**
+ * `sync-connections` は期限切れのときだけ `refreshToken` を呼ぶので、
+ * 有効なトークンで取り込めた `reauth_required` の行は倒れたまま残る——
+ * **取り込めているのに「連携が切れています」が7日ごとに届く。**
+ *
+ * `recoveredByRefresh` が true のときは `refreshToken` が既に戻している。
+ * ここで二重に書くと、`connection_events` に同じ遷移が2行残る。
+ */
+export function planSyncRecovery(input: {
+  status: string | null | undefined;
+  recoveredByRefresh: boolean;
+}): { restoreActive: boolean; recordEvent: boolean } {
+  const recovering = !input.recoveredByRefresh && input.status === "reauth_required";
+  return { restoreActive: recovering, recordEvent: recovering };
+}
+
 export interface RefreshResult {
   ok: true;
   accessToken: string;

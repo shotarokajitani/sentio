@@ -1844,11 +1844,21 @@ $ ls node_modules/@sentry            → No such file or directory
 
 ### 観測（実測。1件ずつ足す）
 
-| PR  | run ID                                                                            | attempt       | ファイル:行                                          | 3回中     | 落ち方                      | 再実行                      |
-| --- | --------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | --------- | --------------------------- | --------------------------- |
-| #80 | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed） |
-| #54 | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                      |
-| #92 | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                           |
+| PR   | run ID                                                                            | attempt       | ファイル:行                                          | 3回中     | 落ち方                      | 再実行                       |
+| ---- | --------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | --------- | --------------------------- | ---------------------------- |
+| #80  | [33599722941](https://github.com/shotarokajitani/sentio/actions/runs/33599722941) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 13 passed）  |
+| #54  | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                       |
+| #92  | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                            |
+| #104 | [34297092859](https://github.com/shotarokajitani/sentio/actions/runs/34297092859) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **2回目** | `Test timed out in 5000ms.` | **緑**（3回とも 111 passed） |
+
+**4件目（#104・2026-09-09）で「3回目だけ」が崩れた。** 落ちたのは **2回目**である
+（run 1 は 15 files / 111 passed で緑、run 2 で `pipeline-db.test.ts:281` が 5秒でタイムアウト）。
+**この見出しの「3回目だけ」はもう事実と合わない。** 見出しを直すかは検収者の判断待ちで、
+ここでは事実だけを足す。再実行（attempt 2）は3回とも 111 passed・skip 0件で緑だった。
+
+**落ちる位置も固定されていない。** #80 と #104 は `pipeline-db.test.ts:281`、
+#54 と #92 は `delivery-idempotency.test.ts:168`。**共通しているのは
+「Edge Function への呼び出しが5秒で返らない」ことだけ**である。
 
 **「赤 → 再実行 → 緑」にした回数は、この表に1行ずつ残す。**
 数えないと「たまに落ちる」が「問題ない」に変わる。2026-09-03 に踏んだ形と同じである。

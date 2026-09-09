@@ -20,7 +20,13 @@ export type ConnectionStatus = "active" | "revoked" | "reauth_required" | "pendi
  * 確認であり、後者はこちら側や通信の問題である。**対処が違う。**
  */
 export type ConnectionEventReason =
-  "invalid_grant" | "refresh_failed" | "vault_destroy_failed" | "reconnected";
+  | "invalid_grant"
+  | "refresh_failed"
+  | "vault_destroy_failed"
+  /** 人が画面から繋ぎ直した */
+  | "reconnected"
+  /** **一時的な失敗が収まって、cron が自動で戻した**（00037・発注 ①-2） */
+  | "recovered";
 
 export interface ConnectionEventInput {
   companyId: string;

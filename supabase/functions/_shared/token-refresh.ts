@@ -38,10 +38,25 @@ export function isTokenExpired(expiresAt: string | null): boolean {
 }
 
 /**
- * 失敗の種別。`revoked` は「お客様が連携先で取り消した」と判別できた場合だけ。
- * それ以外はすべて `reauth_required`（再認証すれば直りうる、fail-safe 側）。
+ * 失敗の種別（2026-09-09 に3つへ分けた・発注 ①-2）。
+ *
+ * | 種別 | いつ | 状態をどうするか |
+ * | --- | --- | --- |
+ * | `revoked` | 400 かつ `invalid_grant` | 即 `revoked`（従来どおり） |
+ * | `reauth_required` | 400 / 401 で `invalid_grant` 以外、Vault の中身が壊れている | 即 `reauth_required` |
+ * | `transient` | ネットワーク例外・408・429・5xx・Vault の読み取り失敗 | **状態を変えない。3回続いたら倒す** |
+ *
+ * **分ける前は、ネットワークが1回瞬断しただけで `reauth_required` になっていた。**
+ * その行は `sync-connections` の対象から外れ（`status = 'active'` で絞っている）、
+ * 顧客が手で再連携するまで直らない。**7日ごとに「連携が切れています」が届き続ける。**
  */
-export type TokenFailureKind = "revoked" | "reauth_required";
+export type TokenFailureKind = "revoked" | "reauth_required" | "transient";
+
+/** 一時的な失敗を何回続けたら `reauth_required` に倒すか（発注 ①-2） */
+export const MAX_CONSECUTIVE_FAILURES = 3;
+
+/** `reauth_required` の行を再試行する間隔（時間）。**1日1回**に絞る */
+export const REAUTH_RETRY_HOURS = 24;
 
 /**
  * トークンエンドポイントが返した失敗応答を、取り消しと一時的失敗に分ける（契約 D-2）。
@@ -59,7 +74,18 @@ export type TokenFailureKind = "revoked" | "reauth_required";
  * 「取り消しだった」に丸めない。
  */
 export function classifyTokenFailure(status: number, body: string): TokenFailureKind {
-  if (status !== 400) return "reauth_required";
+  // **一時的な失敗。** 状態を変えず、続いたときだけ倒す（発注 ①-2）。
+  // 408 は要求のタイムアウト、429 は絞られただけ、5xx は相手側の障害である。
+  // どれも「顧客が連携を切った」ではないし、「再認証すれば直る」でもない
+  if (status === 408 || status === 429 || status >= 500) return "transient";
+
+  // **知らない状態コードも一時的に倒す。** 402 / 403 / 404 などは相手側の設定や
+  // プロキシの都合で出ることがあり、認可の失敗と断定できない。
+  // 本当に壊れていれば3回続いて reauth_required に落ちる（18時間で気づく）
+  if (status !== 400 && status !== 401) return "transient";
+
+  // 401 は「この資格情報では通らない」。再認証すれば直りうる
+  if (status === 401) return "reauth_required";
 
   let parsed: unknown;
   try {
@@ -70,6 +96,33 @@ export function classifyTokenFailure(status: number, body: string): TokenFailure
 
   if (typeof parsed !== "object" || parsed === null) return "reauth_required";
   return (parsed as { error?: unknown }).error === "invalid_grant" ? "revoked" : "reauth_required";
+}
+
+/**
+ * 一時的な失敗のあと、状態をどうするかを決める（発注 ①-2）。**実行はしない。**
+ *
+ * `planPurge` と同じ形で、判断を純関数に閉じてある。
+ * **3回目で倒す。** 2回目までは状態を変えず、次の窓（6時間後）に再試行される。
+ */
+export function planTransientFailure(consecutiveFailures: number): {
+  failures: number;
+  escalate: boolean;
+} {
+  const failures = (Number.isFinite(consecutiveFailures) ? consecutiveFailures : 0) + 1;
+  return { failures, escalate: failures >= MAX_CONSECUTIVE_FAILURES };
+}
+
+/**
+ * `reauth_required` の行を再試行してよいか（発注 ①-2）。**1日1回。**
+ *
+ * 失敗の記録が無い行（この変更より前から `reauth_required` だった行）は
+ * **再試行する**。放置され続けるほうが害が大きい。
+ */
+export function shouldRetryReauth(lastFailureAt: string | null, now: Date): boolean {
+  if (!lastFailureAt) return true;
+  const at = Date.parse(lastFailureAt);
+  if (Number.isNaN(at)) return true;
+  return now.getTime() - at >= REAUTH_RETRY_HOURS * 60 * 60 * 1000;
 }
 
 export interface RefreshResult {
@@ -95,6 +148,10 @@ interface Connection {
   /** 00007 では NULL 許容。認可が完了しなかった行には秘密が無い */
   vault_secret_id: string | null;
   expires_at: string | null;
+  /** 一時的な失敗の連続回数（00037）。呼び出し元が select に含める */
+  consecutive_failures?: number | null;
+  /** 最後に失敗した時刻（00037）。再試行の間隔を決めるのに使う */
+  last_failure_at?: string | null;
 }
 
 /**
@@ -126,7 +183,9 @@ export async function refreshToken(
     p_id: connection.vault_secret_id,
   });
   if (vaultError || !vaultData) {
-    await markReauthRequired(supabase, connection, "vault read failed");
+    // **Vault が読めないのは基盤の失敗**である（中身が壊れているのとは別）。
+    // 一時的に倒し、3回続いたときだけ状態を変える（発注 ①-2）
+    await markTransientFailure(supabase, connection, "vault read failed");
     return {
       ok: false,
       reason: `vault read failed: ${vaultError?.message ?? "no data"}`,
@@ -157,7 +216,8 @@ export async function refreshToken(
       }),
     });
   } catch (e: any) {
-    await markReauthRequired(supabase, connection, "token fetch failed");
+    // **ネットワークの瞬断がここに来る。** 1回で連携を切らない（発注 ①-2）
+    await markTransientFailure(supabase, connection, "token fetch failed");
     return { ok: false, reason: `token fetch failed: ${e.message}` };
   }
 
@@ -177,6 +237,18 @@ export async function refreshToken(
         reason: revoked
           ? `token endpoint returned ${tokenRes.status} (invalid_grant: revoked)`
           : `token endpoint returned ${tokenRes.status} (invalid_grant: revoke incomplete)`,
+      };
+    }
+
+    if (kind === "transient") {
+      const outcome = await markTransientFailure(
+        supabase,
+        connection,
+        `token endpoint ${tokenRes.status}`,
+      );
+      return {
+        ok: false,
+        reason: `token endpoint returned ${tokenRes.status} (transient ${outcome.failures}/${MAX_CONSECUTIVE_FAILURES})`,
       };
     }
 
@@ -216,6 +288,10 @@ export async function refreshToken(
         expires_at: newExpiresAt,
         last_refresh: new Date().toISOString(),
         status: "active",
+        // **成功したら失敗の記録を消す**（発注 ①-2）。
+        // 残したままだと、間隔をあけた失敗が積み上がって誤って倒れる
+        consecutive_failures: 0,
+        last_failure_at: null,
         // リフレッシュが通った連携は取り消されていない。取り消しの記録を残したままにすると
         // 30日削除（契約 D-3）が生きている連携のデータを消す起点になる（受入基準 D-2-6）
         revoked_at: null,
@@ -227,6 +303,20 @@ export async function refreshToken(
   if (connUpdateError) {
     console.error("connection update failed:", connUpdateError.message);
     return { ok: false, reason: `connection update failed: ${connUpdateError.message}` };
+  }
+
+  // **勝手に直ったことを残す**（発注 ①-2）。
+  // `reconnected`（人が繋ぎ直した）と別の理由にする——
+  // 「顧客が何かしたのか、放っておいて直ったのか」が読めなくなる
+  if (connection.status === "reauth_required") {
+    const recorded = await recordConnectionEvent(supabase, {
+      companyId: connection.company_id,
+      provider: connection.provider,
+      fromStatus: "reauth_required",
+      toStatus: "active",
+      reason: "recovered",
+    });
+    if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
   }
 
   // **取り消し中から自力で戻ったときだけ遷移を残す**（PS-9）。
@@ -340,4 +430,51 @@ async function markReauthRequired(
     reason: reason === "vault destroy failed on revoke" ? "vault_destroy_failed" : "refresh_failed",
   });
   if (!recorded.ok) console.error("connection_events insert failed:", recorded.error);
+}
+
+/**
+ * 一時的な失敗を数える（発注 ①-2）。**状態は変えない。**
+ *
+ * 3回続いたときだけ `reauth_required` に倒す。判断は `planTransientFailure`（純関数）にあり、
+ * ここは数えて書くだけである。
+ *
+ * **書けなくても throw しない。** 数えられなかったことで同期そのものを落とすと、
+ * 「一時的な失敗に強くする」という目的と逆になる。
+ */
+async function markTransientFailure(
+  supabase: any,
+  connection: Connection,
+  reason: string,
+): Promise<{ failures: number; escalate: boolean }> {
+  const outcome = planTransientFailure(connection.consecutive_failures ?? 0);
+
+  const patch: Record<string, unknown> = {
+    consecutive_failures: outcome.failures,
+    last_failure_at: new Date().toISOString(),
+  };
+
+  console.warn(
+    `[sentio:sync] 一時的な失敗 provider=${connection.provider} ` +
+      `company_id=${connection.company_id} reason=${reason} ` +
+      `failures=${outcome.failures}/${MAX_CONSECUTIVE_FAILURES}`,
+  );
+
+  if (!outcome.escalate) {
+    const error = await takeError(
+      supabase.from("connections").update(patch).eq("id", connection.id),
+      "token-refresh: count transient failure",
+    );
+    if (error) console.error("failed to count transient failure:", error.message);
+    return outcome;
+  }
+
+  // 3回目。**ここで初めて状態を倒す**（記録も残る）
+  const error = await takeError(
+    supabase.from("connections").update(patch).eq("id", connection.id),
+    "token-refresh: count transient failure",
+  );
+  if (error) console.error("failed to count transient failure:", error.message);
+
+  await markReauthRequired(supabase, connection, `transient x${outcome.failures}: ${reason}`);
+  return outcome;
 }

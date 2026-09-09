@@ -20,15 +20,17 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller } from "../_shared/caller.ts";
-import { mustData, mustCount, mustOk, takeError, errorResponse } from "../_shared/db.ts";
+import { mustData, mustCount, takeError, errorResponse } from "../_shared/db.ts";
 import {
   MAX_DELETE_ROWS,
   RETENTION_MONTHS,
   REVOKED_GRACE_DAYS,
   planPurge,
+  reconcileDeletion,
   retentionCutoff,
   revokedCutoff,
   sourcesForProvider,
+  type DeletionOutcome,
   type PurgePlan,
 } from "../_shared/retention.ts";
 
@@ -61,8 +63,14 @@ interface CompanyPurge {
   company_id: string | null;
   kind: PurgeKind;
   provider?: string;
-  counted: number;
+  /** 消す前に数えた件数。**予定**である（dry_run で決まるのはこれだけ） */
+  planned: number;
+  /** DB が返した削除行数。**観測**である。試みていない・取れなかったときは null */
+  observed: number | null;
+  /** 記録に残す削除件数（観測値。無ければ 0） */
   deleted: number;
+  /** 予定と観測が食い違ったか。**片方に寄せない** */
+  mismatch: boolean;
   decision: PurgePlan["decision"];
   reason?: string;
 }
@@ -120,14 +128,26 @@ Deno.serve(async (req: Request) => {
 
       const plan = planPurge({ companyId, counted, max: MAX_DELETE_ROWS, dryRun });
 
+      // **記録するのは観測値である。** `count: "exact"` で DB が返した行数を受け取る
+      let outcome = reconcileDeletion({ planned: plan.count, observed: null, attempted: false });
+
       if (plan.decision === "deleted") {
-        await mustOk(
-          supabase.from("events").delete().eq("company_id", companyId).lt("ingested_at", cutoff),
+        // **観測値を受け取る。** `mustCount` は行数が取れなければ 0 を返すので、
+        // 予定と食い違えば下の `reconcileDeletion` が食い違いとして立てる
+        const observed = await mustCount(
+          supabase
+            .from("events")
+            .delete({ count: "exact" })
+            .eq("company_id", companyId)
+            .lt("ingested_at", cutoff),
           "retention-purge: delete",
         );
+        outcome = reconcileDeletion({ planned: plan.count, observed, attempted: true });
       }
 
-      results.push(await record(supabase, { companyId, kind: "retention_months", plan, dryRun }));
+      results.push(
+        await record(supabase, { companyId, kind: "retention_months", plan, outcome, dryRun }),
+      );
     }
 
     // ------------------------------------------------------------------
@@ -153,6 +173,8 @@ Deno.serve(async (req: Request) => {
             kind: "revoked_grace",
             provider,
             plan: { decision: "blocked", reason: "unknown-provider", count: 0 },
+            // 消していないので観測は無い。**予定も0である**
+            outcome: { planned: 0, observed: null, deleted: 0, mismatch: false },
             dryRun,
           }),
         );
@@ -170,21 +192,37 @@ Deno.serve(async (req: Request) => {
 
       const plan = planPurge({ companyId, counted, max: MAX_DELETE_ROWS, dryRun });
 
+      let outcome = reconcileDeletion({ planned: plan.count, observed: null, attempted: false });
+
       if (plan.decision === "deleted") {
-        await mustOk(
-          supabase.from("events").delete().eq("company_id", companyId).in("source", sources),
+        const observed = await mustCount(
+          supabase
+            .from("events")
+            .delete({ count: "exact" })
+            .eq("company_id", companyId)
+            .in("source", sources),
           "retention-purge: revoked delete",
         );
+        outcome = reconcileDeletion({ planned: plan.count, observed, attempted: true });
       }
 
       results.push(
-        await record(supabase, { companyId, kind: "revoked_grace", provider, plan, dryRun }),
+        await record(supabase, {
+          companyId,
+          kind: "revoked_grace",
+          provider,
+          plan,
+          outcome,
+          dryRun,
+        }),
       );
     }
 
     const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
-    const counted = results.reduce((sum, r) => sum + r.counted, 0);
+    const planned = results.reduce((sum, r) => sum + r.planned, 0);
     const blocked = results.filter((r) => r.decision === "blocked").length;
+    // **食い違いは応答にも出す。** 記録を読みに行かないと気づけない形にしない
+    const mismatched = results.filter((r) => r.mismatch).length;
 
     // **対象が0件でも、実行そのものを1行残す。**
     // これが無いと「0件だったから記録が無い」と「cron が発火していないから記録が無い」が
@@ -196,8 +234,10 @@ Deno.serve(async (req: Request) => {
       kind: "run",
       plan: {
         decision: dryRun ? "dry_run" : deleted > 0 ? "deleted" : "nothing",
-        count: counted,
+        count: planned,
       },
+      // 実行そのものの行は、会社ごとの観測を合計したものを持つ
+      outcome: { planned, observed: dryRun ? null : deleted, deleted, mismatch: mismatched > 0 },
       dryRun,
       always: true,
     });
@@ -205,7 +245,8 @@ Deno.serve(async (req: Request) => {
     console.log(
       `[sentio:retention] purge 完了 dry_run=${dryRun} cutoff=${cutoff} ` +
         `revoked_before=${revokedBefore} months=${RETENTION_MONTHS} days=${REVOKED_GRACE_DAYS} ` +
-        `targets=${results.length} deleted=${deleted} blocked=${blocked}`,
+        `targets=${results.length} planned=${planned} deleted=${deleted} blocked=${blocked} ` +
+        `mismatched=${mismatched}`,
     );
 
     return new Response(
@@ -219,7 +260,10 @@ Deno.serve(async (req: Request) => {
         revoked_grace_days: REVOKED_GRACE_DAYS,
         // 全社数ではなく「対象になった（会社×種別）の数」。0 は正常（消すものが無い）
         targets: results.length,
+        // **予定と観測を同じ名前で持たない**（dry_run の数字と実削除の数字は別物）
+        planned,
         deleted,
+        mismatched,
         // 0件で終わった理由を応答から区別できるようにする（S-2-3 と同じ考え方）
         blocked,
         results,
@@ -264,23 +308,34 @@ async function record(
     kind: PurgeKind;
     provider?: string;
     plan: PurgeOutcome;
+    /** 予定と観測。**削除を試みていない経路でも渡す**（観測は null になる） */
+    outcome: DeletionOutcome;
     dryRun: boolean;
     /** `nothing` でも必ず記録する（実行そのものの行） */
     always?: boolean;
   },
 ): Promise<CompanyPurge> {
-  const { companyId, kind, provider, plan, dryRun, always } = input;
-  const deleted = plan.decision === "deleted" ? plan.count : 0;
+  const { companyId, kind, provider, plan, outcome, dryRun, always } = input;
 
   const row: CompanyPurge = {
     company_id: companyId ?? null,
     kind,
     ...(provider ? { provider } : {}),
-    counted: plan.count,
-    deleted,
+    planned: outcome.planned,
+    observed: outcome.observed,
+    deleted: outcome.deleted,
+    mismatch: outcome.mismatch,
     decision: plan.decision,
     ...(plan.reason ? { reason: plan.reason } : {}),
   };
+
+  if (outcome.mismatch) {
+    // **黙って片方に寄せない。** 記録には両方が残り、ログにも出る
+    console.warn(
+      `[sentio:retention] 数えた件数と削除行数が食い違った company_id=${companyId ?? "-"} ` +
+        `kind=${kind} planned=${outcome.planned} observed=${outcome.observed ?? "取得できず"}`,
+    );
+  }
 
   if (plan.decision === "blocked") {
     // 止めた事実は**ログとレコードの両方**に残す（片方だけだと気づく経路が1本になる）
@@ -301,8 +356,10 @@ async function record(
       company_id: companyId ?? null,
       kind,
       provider: provider ?? null,
-      counted: plan.count,
-      deleted,
+      // 列名は `counted`（00030）。中身は**消す前に数えた件数＝予定**である
+      counted: outcome.planned,
+      // **観測値。** dry_run では削除していないので 0 が入る（`decision` で区別できる）
+      deleted: outcome.deleted,
       decision: plan.decision,
       reason: plan.reason ?? null,
       dry_run: dryRun,

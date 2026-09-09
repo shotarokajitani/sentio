@@ -333,8 +333,13 @@ if (mode === "run") {
       company_id: string | null;
       kind: string;
       provider?: string;
-      counted: number;
+      /** 消す前に数えた件数（**予定**） */
+      planned: number;
+      /** DB が返した削除行数（**観測**）。試みていなければ null */
+      observed: number | null;
+      /** 記録に残す削除件数（観測値） */
       deleted: number;
+      mismatch: boolean;
       decision: string;
       reason?: string;
     }
@@ -343,8 +348,10 @@ if (mode === "run") {
       status: string;
       dry_run: boolean;
       targets: number;
+      planned: number;
       deleted: number;
       blocked: number;
+      mismatched: number;
       results: PurgeResult[];
     }
 
@@ -414,10 +421,13 @@ if (mode === "run") {
       expect(row, "対象の会社が結果に出ない").toBeDefined();
       expect(row?.decision).toBe("dry_run");
       // google_calendar 由来の2件だけ。csv:accounting は数にも入らない
-      expect(row?.counted).toBe(2);
+      expect(row?.planned).toBe(2);
       expect(row?.deleted).toBe(0);
+      // **消していないので観測は無い。** 予定の数字を実削除の名前で持たない
+      expect(row?.observed).toBeNull();
+      expect(row?.mismatch).toBe(false);
 
-      dryRunCounted = row?.counted ?? -1;
+      dryRunCounted = row?.planned ?? -1;
     });
 
     it("**陰性**: dry_run=true では1行も消えていない", async () => {
@@ -458,6 +468,10 @@ if (mode === "run") {
       const row = mine(res, targetCompany);
       expect(row?.decision).toBe("deleted");
       expect(row?.deleted).toBeGreaterThan(0);
+      // **記録するのは DB が返した行数である**（数えた値ではない）
+      expect(row?.observed).toBe(row?.deleted);
+      expect(row?.mismatch).toBe(false);
+      expect(res.mismatched).toBe(0);
 
       deletedCount = row?.deleted ?? -1;
 
@@ -491,6 +505,7 @@ if (mode === "run") {
       expect(row?.decision).toBe("blocked");
       expect(row?.reason).toBe("unknown-provider");
       expect(row?.deleted).toBe(0);
+      expect(row?.observed).toBeNull();
       expect(await eventCount(unknownCompany)).toBe(1);
     });
 

@@ -119,6 +119,49 @@ export function revokedCutoff(now: Date, days: number = REVOKED_GRACE_DAYS): Dat
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+/**
+ * 記録に残す削除件数を決める（2026-09-09 決定・検収者）。
+ *
+ * **「数えた件数」と「実際に消えた行数」は別物である。**
+ * 修復前は数えた値をそのまま `deleted` に書いていた。数えてから消すまでの間に
+ * 行が増減しても、記録は数えた値のままになる——**記録が観測でなく予定になっていた。**
+ *
+ * - `planned`  … 消す前に数えた件数。**予定**である
+ * - `observed` … DB が返した削除行数。**観測**である。取れなければ `null`
+ *
+ * **食い違ったら黙って片方に寄せない。** `mismatch` を立てて両方を残す。
+ * 観測が取れなかったときも `mismatch` を立てる（0件だったのか、
+ * 数えられなかったのかを区別できないため）。
+ */
+export interface DeletionOutcome {
+  planned: number;
+  observed: number | null;
+  /** 記録に残す削除件数。**観測値がそのまま入る**（無ければ 0） */
+  deleted: number;
+  mismatch: boolean;
+}
+
+export function reconcileDeletion(input: {
+  planned: number;
+  observed: number | null;
+  /** 実際に削除を試みたか。dry_run / nothing / blocked では false */
+  attempted: boolean;
+}): DeletionOutcome {
+  if (!input.attempted) {
+    return { planned: input.planned, observed: null, deleted: 0, mismatch: false };
+  }
+  if (input.observed === null) {
+    // 消したはずなのに行数が取れない。**0 と書くが、食い違いとして残す**
+    return { planned: input.planned, observed: null, deleted: 0, mismatch: true };
+  }
+  return {
+    planned: input.planned,
+    observed: input.observed,
+    deleted: input.observed,
+    mismatch: input.observed !== input.planned,
+  };
+}
+
 export type PurgeDecision = "deleted" | "dry_run" | "nothing" | "blocked";
 
 export interface PurgePlan {

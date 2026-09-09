@@ -97,10 +97,15 @@ describe("PS-2 / 13-1(d): 値が無い項目を省略しない", () => {
     }
   });
 
+  it("**3-2: 同じ状態に2つの言い方を持たない**（「記録なし」を使わない）", () => {
+    expect(render()).not.toContain("記録なし");
+  });
+
   it("空の会社でも、無いものは「無い」と書かれる", () => {
     const text = render();
+    const section3 = text.split("【3】")[1].split("【4】")[0];
 
-    expect(text).toContain("まだ1件も取り込んでいません");
+    expect(section3).toContain("まだ1件も取り込んでいません");
     expect(text).toContain("予定が1件も入っていません");
     expect(text).toContain("取引の系列は、まだ束ねられていません");
     expect(text).toContain("連携していません（行がありません）");
@@ -119,52 +124,74 @@ describe("項目1: いつ時点の状態か", () => {
   });
 });
 
-describe("項目2: 連携の生死（status 単独で「つながっている」と書かない）", () => {
+describe("項目2: 連携の生死（直近の取り込みの成否で判定する・2026-09-09 改）", () => {
+  // NOW は 2026-09-09T05:00:00Z。取り込みの窓は UTC 0/6/12/18 なので、いまの窓は 00:00Z
   const base: PacketConnection = {
     provider: "google_calendar",
     status: "active",
-    expires_at: "2026-09-09T06:00:00.000Z",
-    last_refresh: "2026-09-09T04:00:00.000Z",
+    // **期限は必ず切れている。** トークンの寿命1時間に対し、取り込みは6時間ごと
+    expires_at: "2026-09-09T01:09:00.000Z",
+    last_refresh: "2026-09-09T00:00:03.000Z",
     revoked_at: null,
   };
 
-  it("期限が更新より後なら「つながっている」", () => {
+  it("直近の窓で取り込みに成功していれば「つながっています」", () => {
     expect(linkStateOf(base, NOW)).toBe("connected");
-    expect(render({ connections: [base] })).toContain("つながっています");
+
+    const text = render({ connections: [base] });
+    expect(text).toContain("つながっています（最後の取り込み");
+    expect(text).toContain("次の取り込みは 1 時間後");
   });
 
-  it("**status='active' でも期限が更新より前なら「判断がつかない」**", () => {
-    // 2026-09-08 の実測（status='active' かつ expires_at が過去）がこの形
-    const stale = { ...base, expires_at: "2026-09-09T02:00:00.000Z" };
-
-    expect(linkStateOf(stale, NOW)).toBe("unknown");
-    expect(render({ connections: [stale] })).toContain("判断がつきません");
+  it("**陰性コントロール（5-6）**: 期限が切れていても「つながっています」のままである", () => {
+    // `expires_at` を判定に使う形に戻すと、ここが「取り込みが止まっています」になって赤くなる。
+    // 毎朝必ず期限は切れているので、期限で判定すると毎日この行が壊れる
+    expect(Date.parse(base.expires_at as string)).toBeLessThan(NOW.getTime());
+    expect(linkStateOf(base, NOW)).toBe("connected");
   });
 
-  it("**陰性**: 判断がつかないものを「つながっている」に寄せない", () => {
-    const stale = { ...base, expires_at: "2026-09-09T02:00:00.000Z" };
-    const text = render({ connections: [stale] });
+  it("窓を2つ以上またいだら「取り込みが止まっています」", () => {
+    // 09-08 12:00Z に成功 → 18:00Z / 00:00Z の2つを過ぎている
+    const stopped = { ...base, last_refresh: "2026-09-08T12:00:03.000Z" };
 
-    expect(text).not.toContain("つながっています");
+    expect(linkStateOf(stopped, NOW)).toBe("stopped");
+
+    const text = render({ connections: [stopped] });
+    expect(text).toContain("取り込みが止まっています（最後の成功");
+    expect(text).toContain("取り込みの窓を 2 回過ぎました");
   });
 
-  it("revoked は「連携が切れている」と検知時刻", () => {
-    const revoked = {
-      ...base,
-      status: "revoked",
-      revoked_at: "2026-09-08T18:00:00.000Z",
-    };
+  it("窓を1つまたいだだけなら止まっていない（その回はまだ走っていない）", () => {
+    const waiting = { ...base, last_refresh: "2026-09-08T18:00:03.000Z" };
+
+    expect(linkStateOf(waiting, NOW)).toBe("connected");
+  });
+
+  it("revoked は「連携が切れています」と検知時刻", () => {
+    const revoked = { ...base, status: "revoked", revoked_at: "2026-09-08T18:00:00.000Z" };
 
     expect(linkStateOf(revoked, NOW)).toBe("revoked");
     expect(render({ connections: [revoked] })).toContain("連携が切れています");
   });
 
-  it("3つの値を必ず併記する（status / 期限 / 最後の更新）", () => {
+  it("reauth_required も「連携が切れています」側に入れる", () => {
+    expect(linkStateOf({ ...base, status: "reauth_required" }, NOW)).toBe("revoked");
+  });
+
+  it("**5-3: トークンの期限と status を本文に出さない**（内部事情である）", () => {
     const text = render({ connections: [base] });
 
-    expect(text).toContain("status=active");
-    expect(text).toContain("期限=");
-    expect(text).toContain("最後の更新=");
+    expect(text).not.toContain("status=");
+    expect(text).not.toContain("期限=");
+    expect(text).not.toContain("最後の更新=");
+    // 期限そのものの時刻も出さない
+    expect(text).not.toContain("10:09");
+  });
+
+  it("**陰性**: 止まっているものを「つながっています」に寄せない", () => {
+    const stopped = { ...base, last_refresh: "2026-09-07T00:00:03.000Z" };
+
+    expect(render({ connections: [stopped] })).not.toContain("つながっています");
   });
 });
 
@@ -188,10 +215,12 @@ describe("項目3: 取り込みの鮮度（取り込んだ日とデータの日�
   });
 
   it("一度も取り込んでいない source も行を出す", () => {
-    const text = render();
+    // **項目3 の節だけを見る。** 全文で見ると、項目1 の同じ語で空振りする
+    // （2026-09-09 に用語を揃えたときに、この試験が陰性コントロールで赤くならなくなった）
+    const section = render().split("【3】")[1].split("【4】")[0];
 
     for (const source of INGEST_ROUTES) {
-      expect(text, source).toContain(`${source}: まだ1件も取り込んでいません`);
+      expect(section, source).toContain(`${source}: まだ1件も取り込んでいません`);
     }
   });
 });
@@ -291,6 +320,15 @@ describe("項目7: 入金（売上と書かない）", () => {
     expect(section).toContain("入金");
   });
 
+  it("**陰性コントロール（1-3）**: 出せない日は3行とも「まだ数えていません」に揃える", () => {
+    const section = render().split("【7】")[1].split("【8】")[0];
+
+    // **0 と「数えていない」を同じ表記にしない。** 取り込んでいないから 0 なのではない
+    expect(section).not.toContain("0 行");
+    expect(section).not.toContain("記録なし");
+    expect(section.match(/まだ数えていません/g) ?? []).toHaveLength(4);
+  });
+
   it("3つの枠を空で持つ（件数と金額 / 除外 / 対応づけ）", () => {
     const packet = buildStatePacket(input());
 
@@ -364,6 +402,64 @@ describe("項目8 / 13-1(b): 走査の3値", () => {
     expect(monitor?.state).toEqual({
       kind: "unavailable",
       reason: "監視イベント（event_type='monitor'）が0件",
+    });
+  });
+
+  it("**2-2: 0件のときは「0件」と書く**（「3点に届かない」と書かない）", () => {
+    const packet = buildStatePacket(input());
+    const worsening = packet.scans.find((s) => s.id === "worsening");
+
+    expect(worsening?.state).toEqual({
+      kind: "unavailable",
+      reason: "返信の遅さ・問い合わせ数・遅刻に該当するイベントが0件",
+    });
+  });
+
+  it("**2-3: 値はあるが条件に届かないときは、そう書く**", () => {
+    // communication が2件（3点に届かない）
+    const metric = (id: string, day: string, hours: number) =>
+      event({
+        event_id: id,
+        event_type: "communication",
+        occurred_at: `2026-09-0${day}T01:00:00.000Z`,
+        metrics: { reply_time_hours: hours },
+      });
+    const packet = buildStatePacket({
+      ...input(),
+      events: [metric("c1", "1", 2), metric("c2", "2", 3)],
+    });
+
+    expect(packet.scans.find((s) => s.id === "worsening")?.state).toEqual({
+      kind: "unavailable",
+      reason: "値はあるが、判定に要る3点に届かない（最大 2 点）",
+    });
+  });
+
+  it("**2-3: 系列も「束ねられない」と「間隔が足りない」を分ける**", () => {
+    const empty = buildStatePacket(input());
+    expect(empty.scans.find((s) => s.id === "silence_series")?.state).toEqual({
+      kind: "unavailable",
+      reason: "束ねられるイベント（予定の題・取引の摘要）が0件",
+    });
+
+    const some = buildStatePacket({
+      ...input(),
+      events: [
+        event({
+          event_id: "s1",
+          occurred_at: "2026-09-01T01:00:00.000Z",
+          metrics: { title: "定例" },
+        }),
+        event({
+          event_id: "s2",
+          occurred_at: "2026-09-03T01:00:00.000Z",
+          metrics: { title: "定例" },
+        }),
+      ],
+    });
+    expect(some.scans.find((s) => s.id === "silence_series")?.state).toEqual({
+      kind: "unavailable",
+      reason: "系列はあるが、間隔が3本に届かない（最大 1 本）",
     });
   });
 
@@ -443,6 +539,14 @@ describe("項目9 / 13-1(c): 見えていないもの", () => {
     expect(packet.blindSpots.noRoute.length).toBeGreaterThan(0);
     expect(packet.blindSpots.byDesign.length).toBeGreaterThan(0);
     for (const name of packet.blindSpots.noRoute) expect(name).not.toMatch(/^\d+件$/);
+  });
+
+  it("**4-1: 経路があるものを (a) に置かない**（freee は項目2・項目3 に出る）", () => {
+    const packet = buildStatePacket(input());
+
+    expect(packet.blindSpots.noRoute).not.toContain("会計（自動）");
+    // freee は連携の行と鮮度の行に毎日出る
+    expect(render()).toContain("freee: 連携していません（行がありません）");
   });
 
   it("9-4: 取り込み経路の一覧が実装とずれたら気づける", () => {

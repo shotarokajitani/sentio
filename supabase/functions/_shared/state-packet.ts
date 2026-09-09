@@ -100,16 +100,24 @@ export interface PacketInput {
 // 出力
 // ──────────────────────────────────────────────────────────
 
-/** 連携の3値。**`status` 単独で「つながっている」と書かない** */
-export type LinkState = "connected" | "revoked" | "unknown" | "absent";
+/**
+ * 連携の3値（2026-09-09 に定義を改めた）。**`status` 単独で「つながっている」と書かない。**
+ *
+ * `stopped` は「判断がつかない」の置き換えである。**判断はつく。**
+ * 直近の取り込みが成功しているかは分かるので、**分かることを分からないと書かない。**
+ */
+export type LinkState = "connected" | "revoked" | "stopped" | "absent";
 
 export interface PacketLink {
   provider: string;
   state: LinkState;
-  status: string | null;
-  expiresAt: string | null;
-  lastRefresh: string | null;
+  /** 最後に**取り込みに成功**した時刻（`connections.last_refresh`） */
+  lastSuccessAt: string | null;
   revokedAt: string | null;
+  /** `stopped` のとき、成功以降に過ぎた取り込みの窓の数 */
+  missedWindows: number;
+  /** `connected` のとき、次の取り込みまでの時間（時） */
+  nextInHours: number;
 }
 
 export interface PacketFreshness {
@@ -185,12 +193,12 @@ export interface StatePacket {
  * **実装と食い違ったときに気づける形にしてある。** `INGEST_ROUTES` が増えたら
  * `tests/unit/state-packet.test.ts` の突合が落ちるので、そこで人が並べ直す。
  *
- * **既知の食い違いが1つある。** 「会計（自動）」は freee の経路がコード上は存在する
- * （`src/app/auth/callback/freee/route.ts`）。本番では一度も接続されていないため
- * 承認済みの一覧は「経路が無い」側に置いてある。**判断は検収者が持つ。**
+ * **「会計（自動）」は 2026-09-09 に外した。** freee は経路がコード上に存在し
+ * （`src/app/auth/callback/freee/route.ts`）、項目2 と項目3 にも毎日出ている。
+ * **出ているものを「経路が無い」と書かない。** 繋がっていないことは
+ * 項目2 が「連携していません」と毎日書くので、情報は落ちない。
  */
 const BLIND_NO_ROUTE = [
-  "会計（自動）",
   "売上（Stripe など）",
   "勤怠",
   "メールとチャット",
@@ -314,21 +322,45 @@ export function formatJst(at: Date): string {
   return `${get("year")}年${get("month")}月${get("day")}日 ${get("hour")}:${get("minute")}`;
 }
 
-/** 連携の3値。**`status` は「最後に試したときの結果」であって「いま有効か」ではない** */
+/** 取り込みの窓の始まり（UTC の 0/6/12/18 時）。cron の `sync-connections` と同じ刻み */
+function windowStart(at: number): number {
+  const d = new Date(at);
+  const hours = d.getUTCHours() - (d.getUTCHours() % INGEST_INTERVAL_HOURS);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hours);
+}
+
+/** 成功から数えて、取り込みの窓をいくつ過ぎたか */
+export function missedWindowsSince(lastSuccess: string | null, now: Date): number {
+  if (!lastSuccess) return Number.MAX_SAFE_INTEGER;
+  const from = Date.parse(lastSuccess);
+  if (Number.isNaN(from)) return Number.MAX_SAFE_INTEGER;
+  const diff = windowStart(now.getTime()) - windowStart(from);
+  return Math.max(0, Math.round(diff / (INGEST_INTERVAL_HOURS * 60 * 60 * 1000)));
+}
+
+/**
+ * 連携の3値（2026-09-09 に定義を改めた）。**判定は「直近の取り込みの成否」で行う。**
+ *
+ * ## なぜ `expires_at` を使わないか
+ *
+ * トークンの寿命は1時間で、取り込みは6時間ごとである。
+ * **パケットを組む時点で、期限は必ず数時間前に切れている。**
+ * 期限で判定すると毎朝必ず「判断がつかない」が出る。
+ * トークンの期限は利用者に見せるものではない（本文にも出さない）。**内部事情である。**
+ *
+ * ## 何を見ているか
+ *
+ * `connections.last_refresh` は **`sync-connections` が取り込みに成功した後にだけ**
+ * 更新される（`sync-connections/index.ts` の 2f）。失敗した回は更新されない。
+ * したがって「最後に取り込みに成功した時刻」として読める。
+ *
+ * **窓を2つ以上またいだら止まっているとみなす。** 1つ（＝いまの窓でまだ動いていない）は
+ * 正常な待ちである——組む時刻が窓の直後なら、その回の取り込みはまだ走っていない。
+ */
 export function linkStateOf(connection: PacketConnection, now: Date): LinkState {
   const status = (connection.status ?? "").trim();
   if (status === "revoked" || status === "reauth_required") return "revoked";
-  if (status !== "active") return "unknown";
-
-  // **`status` は「最後に試したときの結果」であって「いま有効か」ではない。**
-  // 2026-09-08 の実測で `status='active'` かつ `expires_at` が過去の行が2つあった。
-  // 期限が切れていて、それ以降に更新を試みた記録が無ければ**判断がつかない**——
-  // 次の `sync-connections`（6時間ごと）が回るまで、繋がっているとは言えない
-  const expiresAt = connection.expires_at ? Date.parse(connection.expires_at) : null;
-  const lastRefresh = connection.last_refresh ? Date.parse(connection.last_refresh) : null;
-  if (expiresAt === null || lastRefresh === null) return "unknown";
-  if (expiresAt <= now.getTime()) return "unknown";
-  return "connected";
+  return missedWindowsSince(connection.last_refresh, now) >= 2 ? "stopped" : "connected";
 }
 
 function buildLinks(input: PacketInput): PacketLink[] {
@@ -346,19 +378,20 @@ function buildLinks(input: PacketInput): PacketLink[] {
       return {
         provider,
         state: "absent" as const,
-        status: null,
-        expiresAt: null,
-        lastRefresh: null,
+        lastSuccessAt: null,
         revokedAt: null,
+        missedWindows: 0,
+        nextInHours: 0,
       };
     }
+    const nextWindow = windowStart(input.generatedAt.getTime()) + INGEST_INTERVAL_HOURS * 3600000;
     return {
       provider,
       state: linkStateOf(c, input.generatedAt),
-      status: c.status,
-      expiresAt: c.expires_at,
-      lastRefresh: c.last_refresh,
+      lastSuccessAt: c.last_refresh,
       revokedAt: c.revoked_at,
+      missedWindows: c.last_refresh ? missedWindowsSince(c.last_refresh, input.generatedAt) : 0,
+      nextInHours: Math.max(0, Math.ceil((nextWindow - input.generatedAt.getTime()) / 3600000)),
     };
   });
 }
@@ -525,7 +558,17 @@ function buildScans(input: PacketInput, candidates: ScanCandidate[]): PacketScan
   );
   const scheduleEvents = events.filter((e) => e.event_type === "schedule");
 
-  const seriesWithEnoughIntervals = countSeriesWithIntervals(events);
+  // **「値が無い」と「値はあるが条件に届かない」を混ぜない**（2026-09-09）
+  const worseningReason =
+    worseningMax === 0
+      ? "返信の遅さ・問い合わせ数・遅刻に該当するイベントが0件"
+      : `値はあるが、判定に要る${TREND_MIN_POINTS}点に届かない（最大 ${worseningMax} 点）`;
+
+  const seriesGroups = countSeries(events);
+  const seriesReason =
+    seriesGroups.total === 0
+      ? "束ねられるイベント（予定の題・取引の摘要）が0件"
+      : `系列はあるが、間隔が${SERIES_MIN_INTERVALS}本に届かない（最大 ${seriesGroups.maxIntervals} 本）`;
 
   const unavailable = (reason: string): ScanState => ({ kind: "unavailable", reason });
   const ran = (id: ScanId): ScanState => {
@@ -552,32 +595,31 @@ function buildScans(input: PacketInput, candidates: ScanCandidate[]): PacketScan
       monitorEvents.length === 0
         ? unavailable("監視イベント（event_type='monitor'）が0件")
         : ran("monitor"),
-    worsening:
-      worseningMax < TREND_MIN_POINTS
-        ? unavailable(
-            `返信の遅さ・問い合わせ数・遅刻の3つとも、判定に要る${TREND_MIN_POINTS}点に届かない（最大 ${worseningMax} 点）`,
-          )
-        : ran("worsening"),
-    silence_company: !intervalBaseline
-      ? unavailable("予定の間隔のベースラインが確立していない")
-      : scheduleEvents.length === 0
+    worsening: worseningMax < TREND_MIN_POINTS ? unavailable(worseningReason) : ran("worsening"),
+    silence_company:
+      scheduleEvents.length === 0
         ? unavailable("予定のイベントが0件")
-        : ran("silence_company"),
+        : !intervalBaseline
+          ? unavailable("予定はあるが、間隔の平常がまだ定まっていない")
+          : ran("silence_company"),
     silence_series:
-      seriesWithEnoughIntervals === 0
-        ? unavailable(`間隔が${SERIES_MIN_INTERVALS}本以上ある系列が0本`)
-        : ran("silence_series"),
+      seriesGroups.withEnoughIntervals === 0 ? unavailable(seriesReason) : ran("silence_series"),
     elongation_series:
-      seriesWithEnoughIntervals === 0
-        ? unavailable(`間隔が${SERIES_MIN_INTERVALS}本以上ある系列が0本`)
-        : ran("elongation_series"),
+      seriesGroups.withEnoughIntervals === 0 ? unavailable(seriesReason) : ran("elongation_series"),
   };
 
   return SCAN_IDS.map((id) => ({ id, label: SCAN_LABELS[id], state: states[id] }));
 }
 
-/** `scan.ts` の系列走査が実際に見る系列の本数（間隔が3本以上あるもの） */
-function countSeriesWithIntervals(events: readonly PacketEvent[]): number {
+/**
+ * `scan.ts` の系列走査が見る系列を数える。
+ * **「束ねられるものが無い」と「束ねたが間隔が足りない」を区別する**ために両方返す。
+ */
+function countSeries(events: readonly PacketEvent[]): {
+  total: number;
+  withEnoughIntervals: number;
+  maxIntervals: number;
+} {
   const groups = new Map<string, number>();
   for (const event of events) {
     const key = seriesKeyOf({
@@ -592,11 +634,14 @@ function countSeriesWithIntervals(events: readonly PacketEvent[]): number {
     const id = `${event.event_type}:${key}`;
     groups.set(id, (groups.get(id) ?? 0) + 1);
   }
-  let n = 0;
+  let withEnoughIntervals = 0;
+  let maxIntervals = 0;
   for (const count of groups.values()) {
-    if (count - 1 >= SERIES_MIN_INTERVALS) n++;
+    const intervals = count - 1;
+    if (intervals >= SERIES_MIN_INTERVALS) withEnoughIntervals++;
+    if (intervals > maxIntervals) maxIntervals = intervals;
   }
-  return n;
+  return { total: groups.size, withEnoughIntervals, maxIntervals };
 }
 
 /** 走査に渡すベースライン（`ScanBaseline` の形）。stats が空の行は落とす */
@@ -669,8 +714,17 @@ export function buildStatePacket(input: PacketInput): StatePacket {
 // 人が読む形にする（整形は最小限。読めればよい）
 // ──────────────────────────────────────────────────────────
 
+/**
+ * **同じ状態に2つの言い方を持たない**（2026-09-09）。
+ * 取り込みが1件も無いことは、項目1・項目3 とも同じ語で書く。
+ */
+const NOT_INGESTED = "まだ1件も取り込んでいません";
+
+/** **数えていない**ことを 0 と書かない（項目7）。取り込んでいないから 0 なのではない */
+const NOT_COUNTED = "まだ数えていません";
+
 function jstDateTime(iso: string | null): string {
-  return iso ? formatJst(new Date(iso)) : "記録なし";
+  return iso ? formatJst(new Date(iso)) : NOT_INGESTED;
 }
 
 /** パケットをそのまま読める行に落とす。**項目を1つも省略しない** */
@@ -684,7 +738,11 @@ export function renderPacketText(packet: StatePacket): string {
   push(`予定は${packet.ingestIntervalHours}時間ごとに取り込んでいます。`);
   push(`したがって、ここに出ているのは「いま」ではなく、最後に取り込んだ時点の状態です。`);
   for (const f of packet.freshness) {
-    push(`  ${f.source}: 最後の取り込み ${jstDateTime(f.lastIngestedAt)}`);
+    push(
+      f.lastIngestedAt === null
+        ? `  ${f.source}: ${NOT_INGESTED}`
+        : `  ${f.source}: 最後の取り込み ${jstDateTime(f.lastIngestedAt)}`,
+    );
   }
   push();
 
@@ -692,29 +750,28 @@ export function renderPacketText(packet: StatePacket): string {
   for (const link of packet.links) {
     if (link.state === "absent") {
       push(`  ${link.provider}: 連携していません（行がありません）`);
-      continue;
-    }
-    if (link.state === "connected") {
-      push(`  ${link.provider}: つながっています（最後の更新 ${jstDateTime(link.lastRefresh)}）`);
     } else if (link.state === "revoked") {
       push(`  ${link.provider}: 連携が切れています（検知 ${jstDateTime(link.revokedAt)}）`);
-    } else {
+    } else if (link.state === "connected") {
       push(
-        `  ${link.provider}: 判断がつきません（最後の更新は ${jstDateTime(link.lastRefresh)}。` +
-          `それ以降、更新を試みた記録がありません）`,
+        `  ${link.provider}: つながっています（最後の取り込み ${jstDateTime(link.lastSuccessAt)}。` +
+          `次の取り込みは ${link.nextInHours} 時間後）`,
+      );
+    } else {
+      // **「失敗した回数」ではなく「過ぎた窓の数」を書く。**
+      // 取り込みが走って失敗したのか、そもそも走らなかったのかを分ける記録が無い
+      push(
+        `  ${link.provider}: 取り込みが止まっています（最後の成功 ${jstDateTime(link.lastSuccessAt)}。` +
+          `それ以降、取り込みの窓を ${link.missedWindows} 回過ぎましたが、新しい成功がありません）`,
       );
     }
-    push(
-      `    status=${link.status ?? "なし"} / 期限=${jstDateTime(link.expiresAt)} / ` +
-        `最後の更新=${jstDateTime(link.lastRefresh)}`,
-    );
   }
   push();
 
   push(`【3】取り込みの鮮度`);
   for (const f of packet.freshness) {
     if (f.lastIngestedAt === null && f.lastOccurredAt === null) {
-      push(`  ${f.source}: まだ1件も取り込んでいません`);
+      push(`  ${f.source}: ${NOT_INGESTED}`);
       continue;
     }
     push(
@@ -769,21 +826,28 @@ export function renderPacketText(packet: StatePacket): string {
 
   push(`【7】入金`);
   if (!packet.deposits.available) {
+    // **数えていないので、下の3行も 0 と書かない**（2026-09-09）。
+    // 取り込んでいないから 0 なのであって、**数えた結果の 0 ではない**
     push(`  入金は出せません。金額の列を読み取れていません`);
-  } else if (!packet.deposits.trustworthy) {
-    push(
-      `  入金額は出しません。金額が入らなかった行が ${packet.deposits.rowsWithoutAmount} 行あります`,
-    );
+    push(`  件数と金額: ${NOT_COUNTED}`);
+    push(`  除外: ${NOT_COUNTED}`);
+    push(`  対応づけられなかった列: ${NOT_COUNTED} / 金額が入らなかった行: ${NOT_COUNTED}`);
   } else {
-    push(`  ${packet.deposits.count} 件 / ${packet.deposits.amount} 円`);
+    if (!packet.deposits.trustworthy) {
+      push(
+        `  入金額は出しません。金額が入らなかった行が ${packet.deposits.rowsWithoutAmount} 行あります`,
+      );
+    } else {
+      push(`  件数と金額: ${packet.deposits.count} 件 / ${packet.deposits.amount} 円`);
+    }
+    push(
+      `  除外: ${packet.deposits.excludedCount === null ? NOT_COUNTED : `${packet.deposits.excludedCount} 件 / ${packet.deposits.excludedAmount} 円`}`,
+    );
+    push(
+      `  対応づけられなかった列: ${packet.deposits.unmappedColumns.length === 0 ? "0 件" : packet.deposits.unmappedColumns.join(", ")}` +
+        ` / 金額が入らなかった行: ${packet.deposits.rowsWithoutAmount} 行`,
+    );
   }
-  push(
-    `  除外: ${packet.deposits.excludedCount === null ? "記録なし" : `${packet.deposits.excludedCount} 件 / ${packet.deposits.excludedAmount} 円`}`,
-  );
-  push(
-    `  対応づけられなかった列: ${packet.deposits.unmappedColumns.length === 0 ? "記録なし" : packet.deposits.unmappedColumns.join(", ")}` +
-      ` / 金額が入らなかった行: ${packet.deposits.rowsWithoutAmount} 行`,
-  );
   push();
 
   push(`【8】走査の結果（8本）`);

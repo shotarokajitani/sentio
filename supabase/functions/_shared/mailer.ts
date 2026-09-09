@@ -66,6 +66,17 @@ export async function sendEmail(
   config: MailConfig,
   message: MailMessage,
   fetchImpl: typeof fetch = fetch,
+  /**
+   * Resend の `Idempotency-Key`（発注 B-2）。**`delivery_log.idempotency_key` を渡す。**
+   *
+   * 掃除で `sending` を `failed` に倒して再送すると、**1通目が実は届いていた**場合に
+   * 2通目が出る。落ちた場所が「Resend に投げた直後」なら十分ありうる。
+   * こちらでは区別できないので、**Resend 側に同じ鍵で弾いてもらう。**
+   *
+   * 行の `id` ではなく `idempotency_key` を使うのは、**同じ配信を指す値だから**である。
+   * `id` は行ごとに変わるので、掃除して作り直した行では別の鍵になってしまう。
+   */
+  idempotencyKey?: string,
 ): Promise<SendOutcome> {
   let res: Response;
   try {
@@ -74,6 +85,7 @@ export async function sendEmail(
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: config.from,

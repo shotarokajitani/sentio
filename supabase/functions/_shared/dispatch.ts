@@ -194,6 +194,16 @@ export interface DispatchDeps {
    * 「送れたのに 5xx」が起きる。失敗は値で返し、summary に出す。
    */
   recordDispatch(rows: DispatchRecord[]): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * `sending` のまま固まった行を掃除する（発注 B-1 / B-3）。**配る前に走らせる。**
+   *
+   * 倒した行は `RETRYABLE` に入るので、**同じ実行で再送の対象になる。**
+   * 掃除を配信のあとに置くと、直った行が次の日まで待たされる。
+   *
+   * **ここで throw しない。** 掃除に失敗しても配信は続ける——
+   * 掃除は「取りこぼしを拾う」機能であって、配信の前提ではない。
+   */
+  sweepStaleSending?(now: Date): Promise<{ swept: number; abandoned: number; error?: string }>;
 }
 
 /** `dispatch_runs`（00032）に書く1行。**列と同じ形にしてある** */
@@ -229,6 +239,16 @@ export interface DispatchSummary {
   reconnect_suppressed: number;
   /** 購読が無いので送らなかった会社数（B-4）。**0件でも必ず出す** */
   skipped_not_entitled: number;
+  /**
+   * `sending` のまま固まっていて、この実行で `failed` に倒した行数（発注 B-1）。
+   * **0件でも必ず出す。** 「掃除が要らなかった」と「掃除が走らなかった」は別である
+   */
+  stale_swept: number;
+  /**
+   * 再送の上限（3回）に達したので `abandoned` に移した行数（発注 B-3）。
+   * **黙って諦めない。** 翌朝の要約に出す
+   */
+  abandoned: number;
   /**
    * 会社の一覧を取り切れたか（B-5）。**取り切れていないなら non-2xx。**
    * 一部だけ配って 200 を返すと、届かなかった会社が記録にも残らない
@@ -307,12 +327,23 @@ export async function runDispatch(
     reconnect_notice: 0,
     reconnect_suppressed: 0,
     skipped_not_entitled: 0,
+    stale_swept: 0,
+    abandoned: 0,
     recorded: false,
     ...(truncated ? { truncated: true } : {}),
   };
 
   const records: DispatchRecord[] = [];
   const now = new Date();
+
+  // **配る前に掃除する**（発注 B-1）。倒した行はこの実行の再送対象になる。
+  // 掃除の失敗で配信を止めない——取りこぼしを拾う機能であって、前提ではない
+  if (deps.sweepStaleSending) {
+    const swept = await deps.sweepStaleSending(now);
+    summary.stale_swept = swept.swept;
+    summary.abandoned = swept.abandoned;
+    if (swept.error) console.error("dispatch: sending の掃除に失敗:", swept.error);
+  }
 
   // 環境変数はここで1回だけ読む。**分岐の材料を関数の外に置かない**
   const enforceEntitlement = deps.enforceEntitlement === true;

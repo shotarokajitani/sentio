@@ -116,13 +116,13 @@ Deno.serve(async (req: Request) => {
         content: { ...alertContent, event_id: eventId, category },
         now,
       },
-      () =>
+      (key) =>
         sendEmail(mail.config, {
           to: email,
           subject: alertContent.subject,
           html: renderAlertHtml(alertContent.subject, alertContent.body),
           text: renderAlertText(alertContent.subject, alertContent.body),
-        }),
+        }, fetch, key),
     );
 
     return deliveryResponse(result, { company_id: companyId, alert: alertContent });

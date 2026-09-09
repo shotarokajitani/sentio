@@ -31,6 +31,9 @@ export const DELIVERY_STATUSES = [
   "deferred",
   "draft",
   "confirmed",
+  // **再送を諦めた行**（00041・発注 B-3）。`failed` と分ける——
+  // `failed` のままだと `RETRYABLE` に当たり続け、毎朝拾っては上限で弾かれる
+  "abandoned",
 ] as const;
 
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
@@ -257,7 +260,13 @@ const RETRYABLE: readonly DeliveryStatus[] = ["failed", "deferred"];
 export async function deliverOnce(
   db: DeliveryDb,
   input: DeliverInput,
-  send: () => Promise<SendOutcome>,
+  /**
+   * 送信そのもの。**冪等キーを引数で渡す**（発注 B-2）。
+   *
+   * 呼び出し元が `input.idempotencyKey` を写して渡す形にすると、写し間違えても
+   * 誰も気づかない。**予約に使った鍵と、Resend に渡す鍵は同じでなければならない。**
+   */
+  send: (idempotencyKey: string) => Promise<SendOutcome>,
 ): Promise<DeliverResult> {
   const intent = input.intent ?? "send";
   const reserved = await reserve(db, input, intent);
@@ -265,7 +274,7 @@ export async function deliverOnce(
   if (!reserved.proceed) return reserved.result;
   if (intent === "defer") return { outcome: "deferred", id: reserved.id };
 
-  const sent = await send();
+  const sent = await send(input.idempotencyKey);
 
   if (!sent.ok) {
     // 送信していないことが確定しているので、記録の失敗はそのまま失敗にしてよい

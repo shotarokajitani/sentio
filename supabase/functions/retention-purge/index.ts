@@ -137,7 +137,7 @@ Deno.serve(async (req: Request) => {
     // 構造的に対象外**である（再連携すると 00027 / D-2-6 が NULL に戻す）。
     // ------------------------------------------------------------------
     const revoked = await mustData<{ company_id: string; provider: string }[]>(
-      supabase.from("connections").select("company_id, provider").not("revoked_at", "is", null),
+      supabase.from("connections").select("company_id, provider").lt("revoked_at", revokedBefore),
       "retention-purge: revoked connections",
     );
 

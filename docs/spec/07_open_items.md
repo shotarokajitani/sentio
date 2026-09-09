@@ -1949,6 +1949,7 @@ $ ls node_modules/@sentry            → No such file or directory
 | #54  | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                       |
 | #92  | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                            |
 | #104 | [34297092859](https://github.com/shotarokajitani/sentio/actions/runs/34297092859) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **2回目** | `Test timed out in 5000ms.` | **緑**（3回とも 111 passed） |
+| #108 | [34321069799](https://github.com/shotarokajitani/sentio/actions/runs/34321069799) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 15 files）   |
 
 **通算4回目（#104・2026-09-09）。現セットで落ちたのは2回目である**
 （run 1 は 15 files / 111 passed で緑、run 2 で `pipeline-db.test.ts:281` が 5秒でタイムアウト）。
@@ -1957,6 +1958,12 @@ $ ls node_modules/@sentry            → No such file or directory
 **この4件目を受けて、2026-09-09 に検収者の判断で見出しから「3回目だけ」を外した**（PS §16）。
 **見出しを直したことは、原因を特定したことではない。** 何が5秒を超えさせているかは分かっていない。
 **再実行したものは、いずれも緑になっている**（#92 だけ再実行していない）。
+
+**5件目（#108・2026-09-09）。** 落ちたのは3回目で、位置は #104 と同じ
+`pipeline-db.test.ts:281` だった。**位置が2回続けて同じになった**が、
+通算で見ると `delivery-idempotency.test.ts:168` と半々である。
+**「固定されていない」という見立ては変えない。** 回数も3回目・2回目・3回目と揃っていない。
+2026-09-02 以降の `integration` の failure に占める割合は変わらず、**原因は依然として未特定**である。
 
 **落ちる位置も固定されていない。** #80 と #104 は `pipeline-db.test.ts:281`、
 #54 と #92 は `delivery-idempotency.test.ts:168`。**共通しているのは

@@ -16,11 +16,17 @@
 -- ## 何をするか
 --
 --   1. `source = 'csv:accounting'` の行について新しい `event_id` を計算する
---   2. 同じ新 `event_id` に複数行が当たったら、**`created_at` が最も古い1行を残す**
+--   2. 同じ新 `event_id` に複数行が当たったら、**`ingested_at` が最も古い1行を残す**
 --   3. 残した行の `event_id` を新しい値に書き換える
 --
 -- 古い行を残すのは、**最初に取り込んだ事実を残すため**である。新しいほうを残すと
 -- 「いつ入ってきたデータか」が入れ直しのたびに動く。
+--
+-- **`events` に `created_at` は無い**（2026-09-10 の本番実測。列は event_id /
+-- company_id / occurred_at / period_start / period_end / ingested_at / source /
+-- event_type / actor_ref / entity_refs / metrics / sensitivity の12本）。
+-- 取り込んだ時刻は `ingested_at` である。CI で `column e.created_at does not exist
+-- (SQLSTATE 42703)` として実測した。
 --
 -- ## 正規化を SQL 側にも書く
 --
@@ -124,7 +130,7 @@ BEGIN
   CREATE TEMP TABLE csv_recompute ON COMMIT DROP AS
   SELECT
     e.event_id AS old_id,
-    e.created_at,
+    e.ingested_at,
     public.csv_event_id(
       e.company_id,
       to_char(e.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD'),
@@ -139,7 +145,7 @@ BEGIN
   -- **同じ新 event_id に当たった行のうち、created_at が最も古い1行だけ残す**
   WITH ranked AS (
     SELECT old_id, new_id,
-           row_number() OVER (PARTITION BY new_id ORDER BY created_at ASC, old_id ASC) AS rn
+           row_number() OVER (PARTITION BY new_id ORDER BY ingested_at ASC NULLS LAST, old_id ASC) AS rn
     FROM csv_recompute
   )
   DELETE FROM events

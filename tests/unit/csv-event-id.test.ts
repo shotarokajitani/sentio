@@ -130,6 +130,8 @@ describe("SQL 側の正規化が TypeScript と同じ順序で書かれている
   });
 
   it("古い1行を残す（最初に取り込んだ事実を残す）", () => {
-    expect(migration).toContain("ORDER BY created_at ASC");
+    // **`events` に `created_at` は無い**（2026-09-10 の本番実測）。
+    // 取り込んだ時刻は `ingested_at` である
+    expect(migration).toContain("ORDER BY ingested_at ASC NULLS LAST");
   });
 });

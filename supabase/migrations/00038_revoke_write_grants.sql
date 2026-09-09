@@ -112,3 +112,6 @@ BEGIN
     END LOOP;
   END LOOP;
 END $$;
+
+-- 【陰性コントロール・一時】TRUNCATE を1表だけ戻す。自表検証 3-3 が捕まえるはず
+GRANT TRUNCATE ON events TO authenticated;

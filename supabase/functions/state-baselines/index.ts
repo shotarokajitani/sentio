@@ -7,7 +7,10 @@ import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { mustData, mustOk, errorResponse } from "../_shared/db.ts";
 import {
   BASELINE_NATURAL_KEY,
+  INFLOW_BASELINE,
+  OUTFLOW_BASELINE,
   REVENUE_BASELINE,
+  splitByDirection,
   SCHEDULE_INTERVAL_BASELINE,
   buildBaselineStats,
   scheduleDayIntervals,
@@ -44,7 +47,11 @@ Deno.serve(async (req: Request) => {
       "state-baselines: events",
     );
 
-    // Extract revenue values
+    // **`metrics.revenue` は本番のどのイベントにも存在しない**（発注 E-3）。
+    // 実物は `amount` / `direction` なので、向きで分けてから絶対値で集める。
+    // 混ぜると中央値が0の近くに寄って、走査1が何も検知しなくなる
+    const { inflow, outflow } = splitByDirection(events || []);
+    // `revenue` の分は**残す**。過去に書いた行があり、消すと観測の履歴が読めなくなる
     const revenues = (events || [])
       .map((e) => (e.metrics as Record<string, unknown>)?.revenue as number)
       .filter((v): v is number => typeof v === "number");
@@ -74,6 +81,33 @@ Deno.serve(async (req: Request) => {
       ),
       "state-baselines: baselines upsert",
     );
+
+    // ── 入金・出金（発注 E-3）──
+    //
+    // **走査1が読む鍵をここで作る。** 検出器とベースラインは対で要る。
+    // `revenue` を読んでいた間、両側とも本番に存在しない鍵を見ていた
+    for (const [decl, values] of [
+      [INFLOW_BASELINE, inflow],
+      [OUTFLOW_BASELINE, outflow],
+    ] as const) {
+      const s = buildBaselineStats(values, MIN_OBS);
+      await mustOk(
+        supabase.from("baselines").upsert(
+          {
+            company_id,
+            metric_key: decl.metricKey,
+            entity_id: decl.entityId,
+            granularity: decl.granularity,
+            stats: s ?? {},
+            min_obs: MIN_OBS,
+            is_established: s !== null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: BASELINE_NATURAL_KEY },
+        ),
+        `state-baselines: ${decl.metricKey} upsert`,
+      );
+    }
 
     // ── 予定の発生間隔（途絶＝沈黙シグナルの土台）──
     //

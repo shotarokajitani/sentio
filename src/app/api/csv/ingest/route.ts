@@ -136,6 +136,11 @@ export async function POST(req: NextRequest) {
       } else if (debitVal > 0) {
         amount = debitVal;
         direction = "debit";
+      } else if (creditVal < 0 || debitVal < 0) {
+        // **入出金の列に負の値が入る形式がある**（出金を負で書く銀行）。
+        // 向きは列で決まっているので、金額は絶対値に揃える
+        amount = Math.abs(creditVal !== 0 ? creditVal : debitVal);
+        direction = creditVal !== 0 ? "credit" : "debit";
       } else {
         // Both are 0 or empty — still a valid row (e.g., balance-only entry)
         amount = 0;
@@ -174,11 +179,17 @@ export async function POST(req: NextRequest) {
     const description = descIdx >= 0 ? cols[descIdx]?.trim() || "(不明)" : "(不明)";
     const balance = balanceIdx >= 0 ? parseNumber(cols[balanceIdx]) : null;
 
+    // **鍵に入れる金額は全分岐で非負にする**（発注 C の検収）。
+    // 00042 の組み直しは `abs(metrics.amount)` で鍵を作るので、ここが符号付きだと
+    // **migration の前と後で同じ取引が別の鍵になる。**
+    // 向きは `direction` が持っているので、絶対値にしても情報は落ちない
+    const keyAmount = Math.abs(amount);
+
     const eventId = csvEventId({
       companyId,
       date: normalizedDate,
       direction,
-      amount,
+      amount: keyAmount,
       description,
       balance,
     });

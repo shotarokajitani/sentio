@@ -1413,9 +1413,109 @@ PS-9 で入れたのは**利用者に届ける経路**（取り消し中の会�
 **解除条件: PS-9（取り消しを人へ届ける）が本番で1回実測できること。**
 順序を逆にする——**気づく経路が動いてから、消す経路を有効にする。**
 
+### 2026-09-09 時点で、2つの理由のうち解けたのは1つだけである
+
+**理由2（気づけない）は解けた。** §11-7 の6段が 2026-09-09 14:09 JST に揃った。
+`197f2c0e` は `active` に戻り、`connection_events` に
+`revoked` → `active` / `reason='reconnected'` の行が入っている。
+
+**理由1（削除の経路が一度も通っていない）も、CI については解けた。**
+`tests/integration/retention-purge-revoked.test.ts` が `retention-purge` を
+service_role で叩き、**ローカルの Supabase スタックで行が実際に消えるところまで**通す。
+DRY-RUN で数えた件数と実削除の件数が一致すること、境界の外側（29日前）・
+`status='active'`・別 source・知らない provider が消えないことも、同じ試験で固定してある。
+
+**本番の実削除はまだ一度も動いていない。** これは 2026-10-08 以降に別途行う
+（`ab73e516` の `revoked_at` が 2026-09-08 18:00 UTC なので、30日を越えるのはその日から）。
+**CI で通ったことを「本番で動いた」と読まない。** 2つは別の実測である。
+
+**したがって cron の `{"dry_run": true}` は据え置く。**
+有効にする判断は検収者が出す。
+
+#### 記録に残す `deleted` は観測値である（2026-09-09 決定・検収者）
+
+**修復前は「消す前に数えた件数」を `deleted` に書いていた。** 数えてから消すまでの間に
+行が増減しても記録は変わらない——**記録が観測ではなく予定になっていた。**
+
+- `counted`（00030 の列）… 消す前に数えた件数。**予定**
+- `deleted`（同）… **DB が返した削除行数**（`delete({ count: "exact" })`）。**観測**
+- 食い違ったら**両方を残す**。応答の `mismatched` とログの両方に出す。片方に寄せない
+- 行数が取れなかったときも食い違いとして立てる
+  （「0件だった」と「数えられなかった」を同じ顔にしない）
+- **`dry_run` は予定しか持たない。** 応答では `planned` と `deleted` を別の名前にしてある
+
+**陰性コントロール（実測）。** `reconcileDeletion` を「数えた値を返す」形に戻すと、
+`tests/unit/retention-policy.test.ts` の3件が赤くなる
+（`expected 5 to be 3` / `expected 3 to be 5` / 二重実装のずれ止め）。
+
+#### 陰性コントロールの実測（2026-09-09・使い捨ての枝で実施）
+
+**試験が赤くなることを確かめた。** 検査器と同じで、
+**壊しても緑のままの試験は、意味を持っていない。**
+
+| 改変                                     | 赤くなったもの                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| 30日の境界を外す（`lt` → `is not null`） | 「境界の外側（29日前）は消えない」1件（`expected +0 to be 1`）             |
+| DRY-RUN でも消すようにする               | 「dry_run=true では1行も消えていない」を先頭に5件（`expected +0 to be 2`） |
+
+#### この試験が見ていない `blocked` の理由（**未検証**）
+
+`retention_purge_runs.reason` の CHECK は4つを持つが、
+**Edge Function の経路から到達するのは `unknown-provider` だけである。**
+
+- `unscoped`: `company_id` が空文字のとき。**`company_id` は uuid 型なので、空文字を入れられない**
+  （`''` は uuid にキャストできない）。**「列が NOT NULL だから作れない」は誤りだった**
+  （2026-09-09 に検収者が訂正）。実測は次のとおりで、`events.company_id` は NULL を許す。
+
+  | 列                         | 型   | is_nullable |
+  | -------------------------- | ---- | ----------- |
+  | `events.company_id`        | uuid | YES         |
+  | `connections.company_id`   | uuid | NO          |
+  | `dispatch_runs.company_id` | uuid | YES         |
+
+- `uncounted`: 件数が `null` のとき。`_shared/db.ts` の `mustCount` が
+  `count ?? 0` を返すため、`planPurge` に `null` は渡らない。**この経路では到達しない**
+- `over-limit`: 10万行を超えたとき。**試験で作れる量ではない**
+
+3つとも `tests/unit/retention-policy.test.ts` が `evaluateDeletion` / `planPurge` の
+単体として固定している。**実DBで通したのは `unknown-provider` だけ**である。
+
 > 引用元は `claude/2026-09-08_本番実測_検収側.md` と `claude/Sentio_契約PS_20260903.md` §10。
 > **どちらもリポジトリ外の文書で、本文は確認していない**（この節の実測値は
 > 検収者から渡された数値と、こちらで実行した読み取り照会・ログ照会による）。
+
+## D-3 まわりで登録した3件（2026-09-09・**いずれも今回は直さない**）
+
+### 1. `company_id` が NULL の `events` 行は、`unscoped` の判定に落ちない
+
+削除の門（`evaluateDeletion`）は `company_id` が**空文字**のときだけ `unscoped` にする。
+**`events.company_id` は NULL を許す**（上の実測）ので、NULL の行はこの判定に落ちない。
+
+**本番は0件だった**（2026-09-09 実測・111行すべて `company_id` あり）。
+`#100` で課金記録の側を直したのと**同じ形が `events` 側に残っている可能性がある**。
+**今回は直さない。** 直すなら「NULL も `unscoped` に落とす」か「列を NOT NULL にする」かの判断が要る。
+
+### 2. 「ちょうど30日」は未検証
+
+抽出は**厳密不等号**（`revoked_at < now - 30日`）なので、境界ちょうどは**消えない側**に倒れる。
+**消えすぎる方向のリスクではない。**
+
+試験では確かめていない。フィクスチャを作ってから関数を叩くまでに時間が進むので、
+`now - 30日` はその瞬間に「30日より古い」側へ回る。
+**時刻を注入できる形に作り替えるかは未判断。**
+
+### 3. 取り消し側の削除は、行の古さを見ない
+
+**2つの削除は条件が別である。同じものとして読まない。**
+
+| 種別               | 消す対象                                                   |
+| ------------------ | ---------------------------------------------------------- |
+| `retention_months` | `ingested_at` が24ヶ月より古い行                           |
+| `revoked_grace`    | その provider 由来の source の行を**全件**（古さを見ない） |
+
+取り消しから30日待つのは**「消してよいか」の判断**であって、
+**「どの行を消すか」の条件ではない。** 30日を過ぎたら、その連携由来の行は
+昨日入ったものも含めて消える。**設計どおりである。**
 
 ## 手元のマシンのメモリが足りない（2026-09-08 登録・**判断は書かない**）
 
@@ -1849,6 +1949,7 @@ $ ls node_modules/@sentry            → No such file or directory
 | #54  | [33740705367](https://github.com/shotarokajitani/sentio/actions/runs/33740705367) | 1 → 2         | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | **緑**                       |
 | #92  | [34074740378](https://github.com/shotarokajitani/sentio/actions/runs/34074740378) | 1（未再実行） | `tests/integration/delivery-idempotency.test.ts:168` | **3回目** | `Test timed out in 5000ms.` | —                            |
 | #104 | [34297092859](https://github.com/shotarokajitani/sentio/actions/runs/34297092859) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **2回目** | `Test timed out in 5000ms.` | **緑**（3回とも 111 passed） |
+| #108 | [34321069799](https://github.com/shotarokajitani/sentio/actions/runs/34321069799) | 1 → 2         | `tests/integration/pipeline-db.test.ts:281`          | **3回目** | `Test timed out in 5000ms.` | **緑**（3回とも 15 files）   |
 
 **通算4回目（#104・2026-09-09）。現セットで落ちたのは2回目である**
 （run 1 は 15 files / 111 passed で緑、run 2 で `pipeline-db.test.ts:281` が 5秒でタイムアウト）。
@@ -1857,6 +1958,12 @@ $ ls node_modules/@sentry            → No such file or directory
 **この4件目を受けて、2026-09-09 に検収者の判断で見出しから「3回目だけ」を外した**（PS §16）。
 **見出しを直したことは、原因を特定したことではない。** 何が5秒を超えさせているかは分かっていない。
 **再実行したものは、いずれも緑になっている**（#92 だけ再実行していない）。
+
+**5件目（#108・2026-09-09）。** 落ちたのは3回目で、位置は #104 と同じ
+`pipeline-db.test.ts:281` だった。**位置が2回続けて同じになった**が、
+通算で見ると `delivery-idempotency.test.ts:168` と半々である。
+**「固定されていない」という見立ては変えない。** 回数も3回目・2回目・3回目と揃っていない。
+2026-09-02 以降の `integration` の failure に占める割合は変わらず、**原因は依然として未特定**である。
 
 **落ちる位置も固定されていない。** #80 と #104 は `pipeline-db.test.ts:281`、
 #54 と #92 は `delivery-idempotency.test.ts:168`。**共通しているのは

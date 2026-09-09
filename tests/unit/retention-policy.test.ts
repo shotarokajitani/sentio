@@ -8,6 +8,7 @@ import {
   REVOKED_GRACE_DAYS,
   revokedCutoff,
   planPurge,
+  reconcileDeletion,
 } from "@/lib/retention/policy";
 import * as edge from "@edge/_shared/retention";
 
@@ -211,6 +212,60 @@ describe("planPurge — 消すか、数えるだけか", () => {
   });
 });
 
+describe("記録に残す削除件数は観測値である（2026-09-09）", () => {
+  it("DB が返した行数をそのまま記録する", () => {
+    const outcome = reconcileDeletion({ planned: 5, observed: 5, attempted: true });
+
+    expect(outcome.deleted).toBe(5);
+    expect(outcome.observed).toBe(5);
+    expect(outcome.mismatch).toBe(false);
+  });
+
+  it("**食い違いを黙って片方に寄せない**（数えた5・消えた3なら、両方残して食い違いを立てる）", () => {
+    const outcome = reconcileDeletion({ planned: 5, observed: 3, attempted: true });
+
+    // ここが要件の芯。**予定を記録に書かない**
+    expect(outcome.deleted).toBe(3);
+    expect(outcome.planned).toBe(5);
+    expect(outcome.observed).toBe(3);
+    expect(outcome.mismatch).toBe(true);
+  });
+
+  it("消えた行数が多い側の食い違いも立てる（数えた3・消えた5）", () => {
+    const outcome = reconcileDeletion({ planned: 3, observed: 5, attempted: true });
+
+    expect(outcome.deleted).toBe(5);
+    expect(outcome.mismatch).toBe(true);
+  });
+
+  it("行数が取れなかったら 0 を書き、食い違いとして残す", () => {
+    // 「0件だった」と「数えられなかった」を同じ顔にしない
+    const outcome = reconcileDeletion({ planned: 4, observed: null, attempted: true });
+
+    expect(outcome.deleted).toBe(0);
+    expect(outcome.observed).toBeNull();
+    expect(outcome.mismatch).toBe(true);
+  });
+
+  it("**dry_run は予定だけを持つ。** 観測は無く、食い違いも立てない", () => {
+    const outcome = reconcileDeletion({ planned: 7, observed: null, attempted: false });
+
+    expect(outcome.planned).toBe(7);
+    expect(outcome.observed).toBeNull();
+    expect(outcome.deleted).toBe(0);
+    expect(outcome.mismatch).toBe(false);
+  });
+
+  it("予定と実削除を同じ名前で持たない（名前から区別できる）", () => {
+    const dry = reconcileDeletion({ planned: 7, observed: null, attempted: false });
+    const real = reconcileDeletion({ planned: 7, observed: 7, attempted: true });
+
+    // dry_run の 7 は planned にしか入らない。deleted に 7 が入るのは実削除だけ
+    expect(dry.deleted).toBe(0);
+    expect(real.deleted).toBe(7);
+  });
+});
+
 describe("Edge 側と Next.js 側でポリシーがずれていない", () => {
   // Edge Function は supabase/functions の外を import できないため、保持期間は
   // _shared/retention.ts にも要る。二重に持つ以上、ずれを機械で止める
@@ -226,6 +281,21 @@ describe("Edge 側と Next.js 側でポリシーがずれていない", () => {
     for (const iso of ["2026-08-20T00:00:00.000Z", "2026-03-31T12:00:00.000Z"]) {
       expect(edge.retentionCutoff(new Date(iso)).toISOString()).toBe(
         retentionCutoff(new Date(iso)).toISOString(),
+      );
+    }
+  });
+
+  it("reconcileDeletion が同じ結果を返す", () => {
+    const cases = [
+      { planned: 5, observed: 5, attempted: true },
+      { planned: 5, observed: 3, attempted: true },
+      { planned: 5, observed: null, attempted: true },
+      { planned: 5, observed: null, attempted: false },
+    ];
+
+    for (const input of cases) {
+      expect(edge.reconcileDeletion(input), JSON.stringify(input)).toEqual(
+        reconcileDeletion(input),
       );
     }
   });

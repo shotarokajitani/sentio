@@ -129,6 +129,16 @@ describe("SQL 側の正規化が TypeScript と同じ順序で書かれている
     expect(migration).toContain("extensions.digest(");
   });
 
+  it("数値の文字列化が JS と揃っている（`to_char` は末尾のピリオドを残す）", () => {
+    // `to_char(396000, 'FM999999999999990.999999')` は `396000.` を返す。
+    // **`FM` は末尾のゼロを削るが、ピリオドは残る**（2026-09-10 の本番実測）
+    expect(migration).toContain("csv_number_text");
+    expect(migration).toContain("rtrim(rtrim(trim(to_char(v, 'FM999999999999990.999999')), '0'), '.')");
+    // 自表検証が3つの形を実DBで確かめる
+    expect(migration).toContain("csv_number_text(396000) <> '396000'");
+    expect(migration).toContain("csv_number_text(396000.5) <> '396000.5'");
+  });
+
   it("古い1行を残す（最初に取り込んだ事実を残す）", () => {
     // **`events` に `created_at` は無い**（2026-09-10 の本番実測）。
     // 取り込んだ時刻は `ingested_at` である

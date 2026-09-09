@@ -89,6 +89,22 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- 数値の文字列化。**JS の `String(n)` と同じ結果にする**
+--
+-- `to_char(396000, 'FM999999999999990.999999')` は `396000.` を返す。
+-- **`FM` は末尾のゼロを削るが、ピリオドは残る**（2026-09-10 の本番実測）。
+-- そのまま鍵に入れると TypeScript 側の `"396000"` と一致しない——
+-- CI の統合試験が実際にこのずれを捕まえた。
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.csv_number_text(v NUMERIC)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT rtrim(rtrim(trim(to_char(v, 'FM999999999999990.999999')), '0'), '.');
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 新しい event_id。**TypeScript の `csvEventId` と同じ並び**
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.csv_event_id(
@@ -109,10 +125,10 @@ AS $$
     extensions.digest(
       'csv:' || p_company::text || ':' || p_date || ':' || p_direction || ':' ||
       -- **整数は小数点を付けない。** JS の String(396000) は "396000" である
-      trim(to_char(p_amount, 'FM999999999999990.999999')) || ':' ||
+      public.csv_number_text(p_amount) || ':' ||
       public.csv_normalize_description(p_description) || ':' ||
       CASE WHEN p_balance IS NULL THEN ''
-           ELSE trim(to_char(p_balance, 'FM999999999999990.999999')) END,
+           ELSE public.csv_number_text(p_balance) END,
       'sha256'
     ),
     'hex'
@@ -178,6 +194,17 @@ BEGIN
   -- **別の取引まで同じにしていないこと**（緩めすぎの検出）
   IF public.csv_normalize_description('A社') = public.csv_normalize_description('B社') THEN
     RAISE EXCEPTION '00042: 別の摘要が同一に潰れている';
+  END IF;
+
+  -- **数値の文字列化が JS と同じ形になること。** ここがずれると全行の鍵がずれる
+  IF public.csv_number_text(396000) <> '396000' THEN
+    RAISE EXCEPTION '00042: 整数に余計な文字が付く（%）', public.csv_number_text(396000);
+  END IF;
+  IF public.csv_number_text(0) <> '0' THEN
+    RAISE EXCEPTION '00042: 0 が % になる', public.csv_number_text(0);
+  END IF;
+  IF public.csv_number_text(396000.5) <> '396000.5' THEN
+    RAISE EXCEPTION '00042: 小数が % になる', public.csv_number_text(396000.5);
   END IF;
 
   -- 残高の有無で鍵が変わること（無い形式を "null" と書いていない）

@@ -52,7 +52,9 @@ export interface Plan {
 export const TRIAL_PLAN: Plan = { id: "trial", fullRunsPerDay: 5 };
 
 /**
- * 標準プラン。**月3万円**（2026-09-02 梶谷さん決定）。
+ * 標準プラン（2026-09-02 梶谷さん決定）。
+ * **金額の正本は Next 側の `src/lib/pricing.ts` である**（2026-09-09 に定数化）。
+ * ここに数字を書くと、値上げのときに直し漏れる面がひとつ増える。
  *
  * 年36万円で、正本 `06_positioning.md` が持つ最小の代替コスト
  * （5名×毎日15分の日報＝年90万円）の4割にあたる。

@@ -30,6 +30,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Sear
       // 購読の状態（契約 スライスBU）。**正本は webhook が書く user_metadata だけ**で、
       // ここでも画面でも Stripe には問い合わせない（BU-D2）
       subscriptionStatus={ctx.subscriptionStatus}
+      // 特商法の表記を出せるか（2026-09-09）。**窓口が未設定なら `/legal` は 404 なので、
+      // リンクも出さない。** `process.env` はクライアントに無いので真偽値だけ渡す
+      legalNoticeAvailable={Boolean(process.env.SENTIO_SUPPORT_EMAIL?.trim())}
     />
   );
 }

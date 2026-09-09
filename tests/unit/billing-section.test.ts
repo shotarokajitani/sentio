@@ -15,6 +15,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ConnectClient } from "@/app/connect/connect-client";
 import type { ConnectionOverview } from "@/lib/connections/overview";
 import { ja } from "@/i18n/ja";
+import { SENTIO_PRICE_JPY_TAX_INCLUDED } from "@/lib/pricing";
 
 // 実在しないアドレスに固定する（契約 停止点。実在の値をフィクスチャに書かない）
 const FAKE_ACCOUNT_EMAIL = "nobody@example.invalid";
@@ -50,9 +51,12 @@ describe("BU-1-1 / BU-1-3 試用中の見せ方", () => {
   });
 
   it("金額を出す。**税込であること**まで含めて出す（BU-D6）", () => {
-    expect(render(null)).toContain(ja.billing.standardPrice);
+    // 2026-09-09 に金額は `src/lib/pricing.ts` の定数から組み立てる形にした
+    const price = ja.billing.standardPrice(SENTIO_PRICE_JPY_TAX_INCLUDED);
+
+    expect(render(null)).toContain(price);
     // 09_pricing.md の決定は「税込」である。額だけ出すと意味が変わる
-    expect(ja.billing.standardPrice).toContain("税込");
+    expect(price).toContain("税込");
   });
 });
 
@@ -113,7 +117,10 @@ describe("④-b 解約導線（2026-09-08・BU-D4 を改めた）", () => {
     for (const status of [null, "", "canceled", "incomplete_expired"]) {
       const html = render(status);
 
-      expect(html, `status=${status}`).not.toContain(ja.billing.managePlan);
+      // **入口（ボタン）が出ないこと**を見る。2026-09-09 に足した申込前の確認は、
+      // 特商法の承認済み文言として「ログイン後の『プランと支払いを管理』から」という
+      // **説明文**を含む。**説明が出ることと、押せる入口が出ることは別である**
+      expect(html, `status=${status}`).not.toContain(`>${ja.billing.managePlan}</button>`);
       expect(html, `status=${status}`).not.toContain(ja.billing.manageNote);
       expect(html, `status=${status}`).not.toContain(ja.billing.paymentNote);
     }

@@ -30,9 +30,14 @@ export interface ProbeOutcome {
 export function probe(label: string, body: string, dbUrl = process.env.SUPABASE_DB_URL) {
   if (!dbUrl) throw new Error("SUPABASE_DB_URL が未設定のため実DBに当てられない");
 
-  const sql = `\set VERBOSITY verbose\nBEGIN;\n${body}\nROLLBACK;\n`;
+  // `\set` は `-c` の中では使えない。SQL として解釈され
+  // `syntax error at or near "verbose"` になる（2026-09-09 CI で実測）。
+  // psql 変数は `-v` で渡す。verbose にすると SQLSTATE が
+  // `ERROR:  42501: permission denied ...` の形で本文の先頭に出る
+  const sql = `BEGIN;\n${body}\nROLLBACK;\n`;
   try {
-    const stdout = execFileSync("psql", [dbUrl, "-v", "ON_ERROR_STOP=1", "-c", sql], {
+    const args = [dbUrl, "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-c", sql];
+    const stdout = execFileSync("psql", args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -40,8 +45,15 @@ export function probe(label: string, body: string, dbUrl = process.env.SUPABASE_
   } catch (e) {
     const err = e as { stdout?: string; stderr?: string; message: string };
     const stderr = err.stderr ?? err.message;
-    const m = /SQLSTATE\s+(\w+)/.exec(stderr) ?? /^ERROR:\s+(\w+):/.exec(stderr);
-    return { label, sqlstate: m ? m[1] : "?", stdout: (err.stdout ?? "").trim(), stderr: stderr.trim() };
+    // verbose では `ERROR:  42501: permission denied ...`。行頭に psql の接頭辞が付くので
+    // 行頭固定にしない。念のため `SQLSTATE 42501` の形も拾う
+    const m = /ERROR:\s+(\d{5}):/.exec(stderr) ?? /SQLSTATE\s+(\w+)/.exec(stderr);
+    return {
+      label,
+      sqlstate: m ? m[1] : "?",
+      stdout: (err.stdout ?? "").trim(),
+      stderr: stderr.trim(),
+    };
   }
 }
 

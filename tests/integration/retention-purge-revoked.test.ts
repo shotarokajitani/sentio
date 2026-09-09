@@ -242,3 +242,298 @@ if (mode === "run") {
     });
   });
 }
+
+/**
+ * D-3 の削除経路を、**実際に行が消えるところまで**通す（2026-09-09 決定・検収者）。
+ *
+ * 上の describe は**抽出条件**だけを見ていた。Edge Function を叩いていないので、
+ * **消える経路は一度も動いていなかった。** ここがその1本である。
+ *
+ * ## この試験が本番について言えないこと
+ *
+ * **CI で通ったことは、本番で動いたことではない。** ここで動かすのはローカルの
+ * Supabase スタックであり、本番の cron は `{"dry_run": true}` のまま据え置いてある。
+ * 本番での確認は 2026-10-08 以降（`ab73e516` の `revoked_at` が30日を越えてから）。
+ *
+ * ## なぜ同じファイルに足すか
+ *
+ * `retention-purge` は**会社を選べない。** 呼べば、その時点で条件に合う会社が
+ * 全部消える。vitest はファイル単位で並行に走るので、別ファイルに置くと
+ * 上の describe のフィクスチャを**実行中に消してしまう**。
+ * 同じファイルなら宣言順に走るため、上の検証が終わってからここが動く。
+ *
+ * 巻き込みの範囲も確かめてある。2026-09-09 時点で、`revoked_at` が30日より古い
+ * 連携を作る試験も、`ingested_at` が24ヶ月より古い行を作る試験も、**このファイル以外に無い。**
+ */
+if (mode === "run") {
+  describe("D-3: 実際に消えるところまで通す（Edge Function を叩く）", () => {
+    let admin: SupabaseClient;
+
+    const RUN_ID = `d3x${Date.now().toString(36)}`;
+    const createdUserIds: string[] = [];
+    const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString();
+
+    /** 対象・境界の外・繋がっている・知らない provider の4社 */
+    let targetCompany: string;
+    let freshCompany: string;
+    let activeCompany: string;
+    let unknownCompany: string;
+
+    async function makeCompany(label: string): Promise<string> {
+      const { data, error } = await admin.auth.admin.createUser({
+        email: `${RUN_ID}-${label}@example.test`,
+        password: `D3x!${RUN_ID}${label}9x`,
+        email_confirm: true,
+      });
+      if (error || !data.user) throw new Error(`createUser(${label}) 失敗: ${error?.message}`);
+      createdUserIds.push(data.user.id);
+      return data.user.id;
+    }
+
+    async function addEvent(companyId: string, source: string, label: string) {
+      const { error } = await admin.from("events").insert({
+        event_id: `${RUN_ID}_${label}`,
+        company_id: companyId,
+        occurred_at: new Date().toISOString(),
+        source,
+        event_type: "transaction",
+        sensitivity: "S1",
+      });
+      if (error) throw new Error(`events insert(${label}) 失敗: ${error.message}`);
+    }
+
+    async function addConnection(
+      companyId: string,
+      provider: string,
+      revokedDaysAgo: number | null,
+    ) {
+      const { error } = await admin.from("connections").insert({
+        company_id: companyId,
+        provider,
+        status: revokedDaysAgo === null ? "active" : "revoked",
+        revoked_at: revokedDaysAgo === null ? null : daysAgo(revokedDaysAgo),
+      });
+      if (error) throw new Error(`connections insert(${provider}) 失敗: ${error.message}`);
+    }
+
+    /** 会社の残存イベント数。**消えたかどうかは、応答ではなく実DBで見る** */
+    async function eventCount(companyId: string, source?: string): Promise<number> {
+      let query = admin
+        .from("events")
+        .select("event_id", { count: "exact", head: true })
+        .eq("company_id", companyId);
+      if (source) query = query.eq("source", source);
+
+      const { count, error } = await query;
+      expect(error).toBeNull();
+      return count ?? 0;
+    }
+
+    interface PurgeResult {
+      company_id: string | null;
+      kind: string;
+      provider?: string;
+      /** 消す前に数えた件数（**予定**） */
+      planned: number;
+      /** DB が返した削除行数（**観測**）。試みていなければ null */
+      observed: number | null;
+      /** 記録に残す削除件数（観測値） */
+      deleted: number;
+      mismatch: boolean;
+      decision: string;
+      reason?: string;
+    }
+
+    interface PurgeResponse {
+      status: string;
+      dry_run: boolean;
+      targets: number;
+      planned: number;
+      deleted: number;
+      blocked: number;
+      mismatched: number;
+      results: PurgeResult[];
+    }
+
+    /** Edge Function を internal（service_role）として叩く */
+    async function purge(dryRun: boolean): Promise<PurgeResponse> {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/retention-purge`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SERVICE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+
+      expect(res.status, `retention-purge(dry_run=${dryRun}) の応答`).toBe(200);
+      return (await res.json()) as PurgeResponse;
+    }
+
+    const mine = (res: PurgeResponse, companyId: string): PurgeResult | undefined =>
+      res.results.find((r) => r.company_id === companyId && r.kind === "revoked_grace");
+
+    beforeAll(async () => {
+      admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+
+      // 31日前に取り消された会社。**消える側**
+      targetCompany = await makeCompany("target");
+      await addConnection(targetCompany, "google_calendar", 31);
+      await addEvent(targetCompany, "google_calendar", "target_cal1");
+      await addEvent(targetCompany, "google_calendar", "target_cal2");
+      // 同じ会社の別 source。**巻き込まれてはいけない**
+      await addEvent(targetCompany, "csv:accounting", "target_csv");
+
+      // 29日前。**境界の外側（1日足りない）**
+      freshCompany = await makeCompany("fresh");
+      await addConnection(freshCompany, "google_calendar", 29);
+      await addEvent(freshCompany, "google_calendar", "fresh_cal");
+
+      // 繋がっている会社（revoked_at が NULL）
+      activeCompany = await makeCompany("active");
+      await addConnection(activeCompany, "google_calendar", null);
+      await addEvent(activeCompany, "google_calendar", "active_cal");
+
+      // 知らない provider。**消さずに blocked として記録される側**
+      unknownCompany = await makeCompany("unknown");
+      await addConnection(unknownCompany, "notion", 31);
+      await addEvent(unknownCompany, "notion", "unknown_evt");
+    });
+
+    afterAll(async () => {
+      await admin.from("events").delete().like("event_id", `${RUN_ID}_%`);
+      for (const id of createdUserIds) {
+        await admin.from("connections").delete().eq("company_id", id);
+        await admin.from("retention_purge_runs").delete().eq("company_id", id);
+        await admin.auth.admin.deleteUser(id);
+      }
+    });
+
+    // ── DRY-RUN（数えるだけ） ────────────────────────────────
+
+    let dryRunCounted = -1;
+
+    it("dry_run=true: 対象として数える（応答が数を持つ）", async () => {
+      const res = await purge(true);
+
+      expect(res.dry_run).toBe(true);
+      const row = mine(res, targetCompany);
+      expect(row, "対象の会社が結果に出ない").toBeDefined();
+      expect(row?.decision).toBe("dry_run");
+      // google_calendar 由来の2件だけ。csv:accounting は数にも入らない
+      expect(row?.planned).toBe(2);
+      expect(row?.deleted).toBe(0);
+      // **消していないので観測は無い。** 予定の数字を実削除の名前で持たない
+      expect(row?.observed).toBeNull();
+      expect(row?.mismatch).toBe(false);
+
+      dryRunCounted = row?.planned ?? -1;
+    });
+
+    it("**陰性**: dry_run=true では1行も消えていない", async () => {
+      // 数えているのに消えていない、を両方見る（数だけ見ると「対象0件」と区別がつかない）
+      expect(dryRunCounted).toBe(2);
+      expect(await eventCount(targetCompany, "google_calendar")).toBe(2);
+      expect(await eventCount(targetCompany)).toBe(3);
+      expect(await eventCount(freshCompany)).toBe(1);
+      expect(await eventCount(activeCompany)).toBe(1);
+      expect(await eventCount(unknownCompany)).toBe(1);
+    });
+
+    it("dry_run=true の記録が残る（deleted は0）", async () => {
+      const { data, error } = await admin
+        .from("retention_purge_runs")
+        .select("kind, counted, deleted, decision, dry_run")
+        .eq("company_id", targetCompany);
+
+      expect(error).toBeNull();
+      expect(data ?? []).toHaveLength(1);
+      expect(data?.[0]).toMatchObject({
+        kind: "revoked_grace",
+        counted: 2,
+        deleted: 0,
+        decision: "dry_run",
+        dry_run: true,
+      });
+    });
+
+    // ── 実削除 ──────────────────────────────────────────────
+
+    let deletedCount = -1;
+
+    it("dry_run=false: 対象の行が**実際に消える**", async () => {
+      const res = await purge(false);
+
+      expect(res.dry_run).toBe(false);
+      const row = mine(res, targetCompany);
+      expect(row?.decision).toBe("deleted");
+      expect(row?.deleted).toBeGreaterThan(0);
+      // **記録するのは DB が返した行数である**（数えた値ではない）
+      expect(row?.observed).toBe(row?.deleted);
+      expect(row?.mismatch).toBe(false);
+      expect(res.mismatched).toBe(0);
+
+      deletedCount = row?.deleted ?? -1;
+
+      // **応答ではなく実DBで見る。** 応答は「消したつもり」を返せる
+      expect(await eventCount(targetCompany, "google_calendar")).toBe(0);
+    });
+
+    it("DRY-RUN の数と実削除の数が一致する（予測できていること）", () => {
+      // ここがずれると、DRY-RUN の数字は本番の削除量を予測できていないことになる
+      expect(deletedCount).toBe(dryRunCounted);
+      expect(deletedCount).toBe(2);
+    });
+
+    it("**陰性**: 同じ会社の別 source は消えない（provider 由来だけ）", async () => {
+      expect(await eventCount(targetCompany, "csv:accounting")).toBe(1);
+      expect(await eventCount(targetCompany)).toBe(1);
+    });
+
+    it("**陰性**: 境界の外側（29日前）は消えない", async () => {
+      expect(await eventCount(freshCompany)).toBe(1);
+    });
+
+    it("**陰性**: 繋がっている会社（status='active'）は消えない", async () => {
+      expect(await eventCount(activeCompany)).toBe(1);
+    });
+
+    it("**陰性**: 知らない provider は blocked として数えられ、消えない", async () => {
+      const res = await purge(false);
+      const row = mine(res, unknownCompany);
+
+      expect(row?.decision).toBe("blocked");
+      expect(row?.reason).toBe("unknown-provider");
+      expect(row?.deleted).toBe(0);
+      expect(row?.observed).toBeNull();
+      expect(await eventCount(unknownCompany)).toBe(1);
+    });
+
+    it("実削除の記録が残る（deleted が実測値として入る）", async () => {
+      const { data, error } = await admin
+        .from("retention_purge_runs")
+        .select("kind, counted, deleted, decision, dry_run")
+        .eq("company_id", targetCompany)
+        .eq("dry_run", false);
+
+      expect(error).toBeNull();
+      expect(data ?? []).toHaveLength(1);
+      expect(data?.[0]).toMatchObject({ deleted: 2, decision: "deleted", dry_run: false });
+    });
+
+    it("消し終わったあとの再実行は0件で、記録も増えない（毎日0件の行を積まない）", async () => {
+      const res = await purge(false);
+
+      // 対象は残っているが（`revoked_at` は消えない）、数えると0件になる
+      expect(mine(res, targetCompany)?.decision).toBe("nothing");
+
+      const { data } = await admin
+        .from("retention_purge_runs")
+        .select("id")
+        .eq("company_id", targetCompany);
+
+      // dry_run 1行 + 実削除1行のまま。`nothing` は記録しない
+      expect(data ?? []).toHaveLength(2);
+    });
+  });
+}

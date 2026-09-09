@@ -76,6 +76,14 @@ export const DUAL_IMPL_SPECS: DualImplSpec[] = [
     reason: "保持期間の方針。privacy §6 の正本。二重実装の**あるべき形**の実例",
   },
   {
+    fn: "reconcileDeletion",
+    src: "src/lib/retention/policy.ts",
+    edge: "supabase/functions/_shared/retention.ts",
+    pinnedBy: "tests/unit/retention-policy.test.ts",
+    reason:
+      "削除の記録を観測値にする判定（2026-09-09）。retentionCutoff と同じ理由で両側に要る",
+  },
+  {
     fn: "recordConnectionEvent",
     src: "src/lib/connections/connection-events.ts",
     edge: "supabase/functions/_shared/connection-events.ts",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
-import { createHash } from "crypto";
+import { csvEventId } from "@/lib/csv/event-id";
 
 interface ColumnMapping {
   date: string;
@@ -81,8 +81,12 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const fileFingerprint = `csv:${companyId}:${file_name}`;
+  // **event_id にファイル名を入れない**（発注 ①-5）。入れていたせいで、
+  // 同じ明細を別名で取り込むと全行が二重に入っていた。`csvEventId` を参照
   const rows = [];
+  /** 同じファイルの中で同じ鍵に当たった行数。**「重複として除いた件数」として返す** */
+  const seen = new Set<string>();
+  let duplicates = 0;
   const skipReasons: SkipReason[] = [];
   const totalDataLines = lines.slice(1).filter((l) => l.trim()).length;
 
@@ -170,8 +174,22 @@ export async function POST(req: NextRequest) {
     const description = descIdx >= 0 ? cols[descIdx]?.trim() || "(不明)" : "(不明)";
     const balance = balanceIdx >= 0 ? parseNumber(cols[balanceIdx]) : null;
 
-    const rowContent = cols.join(",");
-    const eventId = createHash("sha256").update(`${fileFingerprint}:${rowContent}`).digest("hex");
+    const eventId = csvEventId({
+      companyId,
+      date: normalizedDate,
+      direction,
+      amount,
+      description,
+      balance,
+    });
+
+    // **同じファイルの中の重複も数える。** upsert なので DB では1行に畳まれるが、
+    // 畳まれたことを黙っていると「入れた行数」と「増えた行数」がずれたまま返る
+    if (seen.has(eventId)) {
+      duplicates++;
+      continue;
+    }
+    seen.add(eventId);
 
     rows.push({
       event_id: eventId,
@@ -206,6 +224,9 @@ export async function POST(req: NextRequest) {
       count: 0,
       skipped: totalDataLines,
       total_lines: totalDataLines,
+      duplicates,
+      duplicate_summary:
+        duplicates > 0 ? `重複していた ${duplicates} 件は取り込みませんでした` : null,
       skip_summary: summaryText || "データ行なし",
       skip_reasons: skipReasons.slice(0, 10),
     });
@@ -232,6 +253,11 @@ export async function POST(req: NextRequest) {
     count: totalInserted,
     skipped: skipReasons.length,
     total_lines: totalDataLines,
+    // **重複を黙って消さない**（発注 ①-5）。同じ明細を入れ直したときに
+    // 「0件だった」と出ると、取り込みが壊れているように見える
+    duplicates,
+    duplicate_summary:
+      duplicates > 0 ? `重複していた ${duplicates} 件は取り込みませんでした` : null,
     skip_summary:
       skipReasons.length > 0
         ? Object.entries(

@@ -102,8 +102,19 @@ describe("削除の段の作法", () => {
     expect(workflow).toContain("exit $failed");
   });
 
-  it("消す20本が、4月の旧関数の一覧と一致する", () => {
-    expect(decl.remove).toHaveLength(20);
+  it("4月の旧関数20本が、消す一覧に全部入っている", () => {
+    // **件数で固定しない。** 発注 ①-5 で `ingest-csv` が消す側に移り21本になった。
+    // 見るべきは「20本が漏れなく入っているか」であって、一覧の長さではない
+    const legacy = [
+      "analyze-financial-pdf", "check-trial-expiry", "collect-external-data",
+      "create-checkout", "create-portal-link", "deliver-question", "detect-signals",
+      "generate-question", "google-calendar-oauth", "learn-pattern",
+      "on-concern-changed", "on-integration-connected", "process-answer",
+      "register-company", "send-onboarding", "send-weekly-summary", "stripe-webhook",
+      "suggest-competitors", "sync-calendar-data", "update-company-settings",
+    ];
+    expect(legacy).toHaveLength(20);
+    for (const slug of legacy) expect(decl.remove, slug).toContain(slug);
     for (const slug of ["stripe-webhook", "create-checkout", "create-portal-link", "process-answer"]) {
       expect(decl.remove, slug).toContain(slug);
     }

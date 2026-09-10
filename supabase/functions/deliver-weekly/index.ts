@@ -168,7 +168,10 @@ Deno.serve(async (req: Request) => {
       );
       isFirstWeekly = (past ?? []).length === 0;
     } catch (e) {
-      console.error("deliver-weekly: 過去の配信を引けなかった:", e instanceof Error ? e.message : e);
+      console.error(
+        "deliver-weekly: 過去の配信を引けなかった:",
+        e instanceof Error ? e.message : e,
+      );
     }
 
     const result = await deliverOnce(

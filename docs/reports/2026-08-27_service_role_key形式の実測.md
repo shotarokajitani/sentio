@@ -106,14 +106,14 @@ users = 2 / active_sessions = 8 / live_connections = 1
       → **レガシーのままだった。cron は静かに 401 していた。**
 
       | 実測 | 値 |
-                              | --- | --- |
-                              | `net._http_response` の直近 | `id 194` / `status_code 401` / `2026-08-27 06:00:00 UTC` |
-                              | Vault 更新後の `updated_at` | `2026-08-27 09:55:53 UTC`（`sb_secret_...` へ差し替え済み） |
+                                          | --- | --- |
+                                          | `net._http_response` の直近 | `id 194` / `status_code 401` / `2026-08-27 06:00:00 UTC` |
+                                          | Vault 更新後の `updated_at` | `2026-08-27 09:55:53 UTC`（`sb_secret_...` へ差し替え済み） |
 
-                              `cron.job_run_details` は succeeded のままで、**どこにも赤が出ていなかった。**
-                              本ファイル上部の `net.http_post` 非同期の落とし穴が、実際にそのまま起きていた。
-                              **実疎通の確認は次の発火（`0 0,6,12,18 * * *` UTC ＝ 12:00 UTC / 21:00 JST）待ち。**
-                              停止点 2-b はそれまで閉じない
+                                          `cron.job_run_details` は succeeded のままで、**どこにも赤が出ていなかった。**
+                                          本ファイル上部の `net.http_post` 非同期の落とし穴が、実際にそのまま起きていた。
+                                          **実疎通の確認は次の発火（`0 0,6,12,18 * * *` UTC ＝ 12:00 UTC / 21:00 JST）待ち。**
+                                          停止点 2-b はそれまで閉じない
 
 - [ ] Vercel env の `SUPABASE_SERVICE_ROLE_KEY` がどちらの形式かを確認する
 - [ ] `07_open_items` のレガシー JWT 項目の書き直し

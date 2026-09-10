@@ -25,6 +25,9 @@ const ALLOWED_REAL_ADDRESSES = new Set([
   // 外部の連絡先（BOJ API の通知先。gotchas に規約として書いてある）
   "post.rsd17@boj.or.jp",
   "onboarding@resend.dev",
+  // **自社の問い合わせ先**（発注 ③-8）。メールのフッターに出すことが決まっている。
+  // 顧客のアドレスではなく、こちらから公開している窓口である
+  "support@mdc-diseno.com",
 ]);
 
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -87,5 +90,20 @@ describe("検証メールの宛先 (S-2-10)", () => {
     }
 
     expect(offenders, `到達しうるアドレスが混入している:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("**陰性**: 許可はアドレスの完全一致で、ドメインを丸ごと通さない", () => {
+    // `support@mdc-diseno.com` を許可したが、**同じドメインの別のアドレスは通らない。**
+    // ドメイン単位で許可すると、個人の実アドレスがコードに書かれても検査が黙る
+    expect(ALLOWED_REAL_ADDRESSES.has("support@mdc-diseno.com")).toBe(true);
+    for (const other of [
+      "info@mdc-diseno.com",
+      "kajitani@mdc-diseno.com",
+      "support@mdc-diseno.com.evil.jp",
+      "xsupport@mdc-diseno.com",
+    ]) {
+      expect(ALLOWED_REAL_ADDRESSES.has(other), other).toBe(false);
+      expect(isReservedTestAddress(other), other).toBe(false);
+    }
   });
 });

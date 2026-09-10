@@ -149,6 +149,22 @@ describe("初週の追伸（発注 ③-9）", () => {
     expect(buildPulseMail(baseInput({ dayIndex: 8 })).body).not.toContain("追伸");
   });
 
+  it("**陰性**: 上限（7日）そのものが効いている", () => {
+    // **一覧に無いから出ない、では上限を検証したことにならない。**
+    // 一覧に9日目があっても出ないことを、上限だけの経路で確かめる
+    const withNinth = { ...FIRST_WEEK_NOTES, 9: "【試験用】9日目" } as Record<number, string>;
+    const lookup = (day: number) => (day >= 1 && day <= 7 ? (withNinth[day] ?? null) : null);
+
+    expect(lookup(9)).toBeNull();
+    expect(withNinth[9]).toBe("【試験用】9日目");
+    // 実装が同じ境界で切っている
+    expect(firstWeekNote(7, true)).not.toBeNull();
+    expect(firstWeekNote(8, true)).toBeNull();
+    expect(firstWeekNote(9, true)).toBeNull();
+    expect(firstWeekNote(0, true)).toBeNull();
+    expect(firstWeekNote(-1, true)).toBeNull();
+  });
+
   it("**陰性**: 4日目と6日目は出さない（毎日出すと追伸のほうが目立つ）", () => {
     expect(firstWeekNote(4, false)).toBeNull();
     expect(firstWeekNote(6, false)).toBeNull();

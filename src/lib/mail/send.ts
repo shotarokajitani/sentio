@@ -88,3 +88,65 @@ export async function sendNextEmail(
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }
 }
+
+/**
+ * Next 側の送信に必要な環境変数。**Vercel にも入っていないと1通も出ない。**
+ *
+ * Supabase の Function Secrets に入っていても Next からは見えない。
+ * `next.config.ts` がビルド時にここを読み、欠けていれば1行出す
+ * （**Vercel の env は CI からは読めないので、ビルドログが唯一の可視化になる**）。
+ */
+export const NEXT_MAIL_ENV_KEYS = ["RESEND_API_KEY", "RESEND_FROM"] as const;
+
+/** 送れなかった理由として `delivery_log.last_error` に入れる値（発注 A-1） */
+export const MAIL_CONFIG_MISSING = "mail_config_missing";
+
+export interface MailFailureRecord {
+  companyId: string;
+  deliveryType: string;
+  idempotencyKey: string;
+  missing: string[];
+}
+
+/**
+ * 送信設定が無くて送らなかったことを `delivery_log` に残す（発注 A-1）。
+ *
+ * **ログだけだと、流れた時点で分からなくなる。**
+ * Vercel のログは保持期間があり、「0通だった」のか「一度も試していない」のかを
+ * あとから区別できない。行が1つ残っていれば区別できる。
+ *
+ * 一意制約違反（23505）は**正常な分岐**である。同じ購読について
+ * 2回目の webhook が来ただけで、記録は既に1行ある。
+ *
+ * **例外を投げない。** ここで投げると、記録の失敗が購読の更新を巻き戻したように見える。
+ */
+export interface MailFailureDb {
+  from(table: string): {
+    insert(row: Record<string, unknown>): PromiseLike<{ error: unknown }>;
+  };
+}
+
+export async function recordMailConfigMissing(
+  admin: MailFailureDb,
+  record: MailFailureRecord,
+): Promise<{ recorded: boolean; reason?: string }> {
+  const now = new Date().toISOString();
+  const { error } = await admin.from("delivery_log").insert({
+    company_id: record.companyId,
+    channel: "email",
+    delivery_type: record.deliveryType,
+    // **何が足りなかったかを残す。** 「送れなかった」だけでは直せない
+    content: { missing: record.missing },
+    status: "failed",
+    last_error: MAIL_CONFIG_MISSING,
+    last_error_at: now,
+    attempts: 0,
+    idempotency_key: record.idempotencyKey,
+    created_at: now,
+  });
+
+  if (!error) return { recorded: true };
+  const code = (error as { code?: string }).code;
+  if (code === "23505") return { recorded: false, reason: "already_recorded" };
+  return { recorded: false, reason: (error as { message?: string }).message ?? "unknown" };
+}

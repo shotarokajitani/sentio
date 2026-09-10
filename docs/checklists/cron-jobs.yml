@@ -42,12 +42,15 @@
 
 jobs:
   - name: sync-connections
-    schedule: "0 0,6,12,18 * * *"
-    migration: "00020_cron_vault_secrets.sql"
+    schedule: "0 2,8,14,20 * * *"
+    migration: "00040_cron_sync_avoid_kot_window.sql"
     contract: S-4
     note: >-
-      UTC 0/6/12/18。KING OF TIME の禁止帯（JST 8:30–10:00 / 17:30–18:30）を避けるため
-      UTC 02:00 以降という制約があり、この並びはそれを満たす。
+      UTC 2/8/14/20 = JST 11:00 / 17:00 / 23:00 / 翌 05:00。
+      **旧 UTC 0/6/12/18 は制約を満たしていなかった**（UTC 0:00 = JST 9:00 で
+      KING OF TIME の禁止帯 8:30–10:00 のど真ん中）。この note も
+      「この並びはそれを満たす」と書いていたが誤りで、2026-09-10 に 00040 で直した。
+      6時間間隔は変えず、起点だけを移している。
 
   - name: dispatch-daily
     schedule: "0 22 * * *"

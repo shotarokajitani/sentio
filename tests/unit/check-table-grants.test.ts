@@ -88,10 +88,14 @@ describe("authenticated に残す書き込みを、許可側として宣言に�
 
   it("**陰性**: 許可側が空なら、0件成功ではなく例外にする", () => {
     // **無い一覧を「一致した」と読ませない。** fail-closed
-    const broken = readFileSync(
-      path.join(root, "docs/checklists/table-grants.yml"),
-      "utf8",
-    ).replace(/^writable_privileges:\n(  - \w+\n)+/m, "writable_privileges: []\n");
+    // **改行に依存させない。** `\n` 固定にすると、CRLF でチェックアウトされた環境で
+    // 置換が空振りし、**壊していないのに緑になる**（2026-09-10 に Windows で実測）
+    const original = readFileSync(path.join(root, "docs/checklists/table-grants.yml"), "utf8");
+    const broken = original.replace(
+      /^writable_privileges:\r?\n(\s+-\s+\w+\r?\n)+/m,
+      "writable_privileges: []\n",
+    );
+    expect(broken, "置換が空振りしている").not.toBe(original);
     const tmp = path.join(root, "node_modules/.tmp-table-grants.yml");
     writeFileSync(tmp, broken);
     expect(() => loadDeclaration(tmp)).toThrow(/writable_privileges/);

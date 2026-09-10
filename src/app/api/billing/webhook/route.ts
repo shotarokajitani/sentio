@@ -3,7 +3,12 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { verifyStripeSignature } from "@/security/webhook-verify";
 import { renderTrialEndingNotice } from "@/lib/billing/trial-ending";
-import { resolveNextMailConfig, sendNextEmail } from "@/lib/mail/send";
+import {
+  recordMailConfigMissing,
+  resolveNextMailConfig,
+  sendNextEmail,
+  type MailFailureDb,
+} from "@/lib/mail/send";
 import { STANDARD_PLAN } from "@edge/_shared/budget.ts";
 
 /**
@@ -536,9 +541,22 @@ async function sendTrialEndingMail(
     return;
   }
 
+  const key = `trial_ending:${companyId}:${resolved.subscriptionId}`;
+
   const mail = resolveNextMailConfig();
   if (!mail.ok) {
+    // **ログだけにしない**（発注 A-1）。Vercel のログは流れるので、
+    // 「0通だった」と「一度も試していない」があとから区別できなくなる
     console.error(`trial_will_end: 送信設定が無いので送らない missing=${mail.missing.join(",")}`);
+    const recorded = await recordMailConfigMissing(admin as unknown as MailFailureDb, {
+      companyId,
+      deliveryType: "trial_ending",
+      idempotencyKey: key,
+      missing: mail.missing,
+    });
+    if (!recorded.recorded && recorded.reason !== "already_recorded") {
+      console.error("trial_will_end: 設定欠落の記録に失敗:", recorded.reason);
+    }
     return;
   }
 
@@ -550,7 +568,6 @@ async function sendTrialEndingMail(
     return;
   }
 
-  const key = `trial_ending:${companyId}:${resolved.subscriptionId}`;
   const rowId = crypto.randomUUID();
 
   // 予約。**一意制約違反は正常な分岐**（すでに1通出している）

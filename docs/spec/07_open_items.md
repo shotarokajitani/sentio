@@ -2858,3 +2858,51 @@ mdc-diseno.com  MX preference = 1, mail exchanger = smtp.google.com
 
 **正本は契約PS §16 である**（`claude/Sentio_契約PS_20260903.md`。このリポジトリには無い）。
 ここに書いてあるのは、実装側で参照するための写しである。
+
+---
+
+## 00036 の実装漏れ（2026-09-09 実測・発注 ①-1.5 で修正）
+
+**「本文と GRANT は正しく、REVOKE の相手と自表検証の一覧だけがずれる」形。**
+`migration` は緑になり、`CI` も緑になり、**誰も気づかない。**
+
+00036 は本文に「読むだけにする」と書き、`GRANT SELECT ON known_explanations,
+connector_limits TO authenticated;` も書いている。しかし直前の
+
+```sql
+REVOKE ALL ON events, entities, connections, known_explanations, connector_limits
+  FROM anon;
+```
+
+の相手が **`anon` だけ**だった。**`GRANT` は既存の権限を消さない。**
+`authenticated` は元の `DELETE / INSERT / UPDATE / TRUNCATE / REFERENCES / TRIGGER`
+をそのまま保持していた。00036 の自表検証（4-1）が読むだけの表として並べたのは8表で、
+**この2表が入っていなかった**ため、検証も素通りした。
+
+実測（本番 `information_schema.role_table_grants`・2026-09-09）:
+
+| 表                   | `authenticated` が持っていた権限                                  |
+| -------------------- | ----------------------------------------------------------------- |
+| `connector_limits`   | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE     |
+| `known_explanations` | DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE     |
+| `events`             | 同上（00036 は DELETE/INSERT/UPDATE を残す判断。TRUNCATE は漏れ） |
+| `entities`           | 同上                                                              |
+| `connections`        | 同上                                                              |
+
+**`TRUNCATE` には RLS が一切掛からない。** 行を絞るポリシーは `DELETE` には効くが、
+`TRUNCATE` は評価を通らない。`authenticated` がこれを持っている限り、
+ログインした顧客が全社の `events` を1文で消せた。
+
+### 直した形（00038）
+
+- 一覧の正本を `docs/checklists/table-grants.yml` に1か所だけ置いた
+- `scripts/check-table-grants.ts` が **宣言 × migration の配列 × 実DBの GRANT ×
+  実際に叩いた結果** の4方向で突き合わせる（`ci.integration` に載せた）
+- **`GRANT` の一覧は「最終的に何が通るか」を見せない。** RLS と合わせた結果が実物なので、
+  `SET ROLE authenticated` に降りて3本を実際に叩く試行を別に持つ
+
+### 残る未判断
+
+`events` / `entities` / `connections` の書き込みを `service_role` に寄せるかは
+**まだ決めていない**（00036 で登録済み。ここでも変えていない）。
+寄せるまでは `authenticated` の `SELECT / INSERT / UPDATE / DELETE` を残す。

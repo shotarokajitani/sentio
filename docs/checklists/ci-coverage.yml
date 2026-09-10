@@ -39,6 +39,20 @@ checks:
       cron.schedule は同名ジョブを上書きするため、将来の migration が
       名前を再利用すると静かに置き換わる。実DB照会なので verify には載せない。
 
+  - id: check-table-grants
+    script: "check:table-grants"
+    file: "check-table-grants.ts"
+    command: "pnpm run check:table-grants"
+    contract: "発注 ①-1.5"
+    requires: [live-db]
+    must_run_in: ["ci.integration"]
+    note: >-
+      anon / authenticated の表権限を docs/checklists/table-grants.yml と突合し、
+      さらに SET ROLE authenticated で3本を実際に叩いて 42501 を確かめる。
+      GRANT の一覧は「最終的に何が通るか」を見せないため、実試行を分けて持つ。
+      00036 は本文と GRANT が正しく REVOKE の相手だけがずれていた形で、
+      migration が緑になったかでは捕まらなかった。実DB照会なので verify には載せない。
+
   - id: check-deletion-coverage
     script: "check:deletion-coverage"
     file: "check-deletion-coverage.ts"

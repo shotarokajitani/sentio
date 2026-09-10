@@ -143,10 +143,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: supabase functions deploy ingest-calendar --project-ref "$SUPABASE_PROJECT_REF"
 
-      - name: Deploy ingest-csv
-        if: ${{ !cancelled() }}
-        run: supabase functions deploy ingest-csv --project-ref "$SUPABASE_PROJECT_REF"
-
       - name: Deploy ingest-s0
         if: ${{ !cancelled() }}
         run: supabase functions deploy ingest-s0 --project-ref "$SUPABASE_PROJECT_REF"

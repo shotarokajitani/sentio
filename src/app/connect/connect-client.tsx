@@ -115,6 +115,8 @@ export function ConnectClient({
     count: number;
     skipped?: number;
     total_lines?: number;
+    /** 同じ内容として除いた行数（発注 ①-5）。**0件でも「重複が無かった」と読める** */
+    duplicates?: number;
   } | null>(null);
   const [csvError, setCsvError] = useState("");
   // 断った理由の本文。原因ごとに「何を直せばいいか」が違うので、題と別に持つ（CH-D7）
@@ -493,6 +495,11 @@ export function ConnectClient({
                         <p className="row-desc">
                           {t.csv.skipped(csvResult.skipped, csvResult.total_lines ?? 0)}
                         </p>
+                      ) : null}
+                      {/* **重複を黙って消さない**（①-5）。入れ直したときに
+                          「増えなかった」だけだと、壊れているように見える */}
+                      {csvResult.duplicates ? (
+                        <p className="row-desc">{t.csv.duplicates(csvResult.duplicates)}</p>
                       ) : null}
                     </>
                   ) : (

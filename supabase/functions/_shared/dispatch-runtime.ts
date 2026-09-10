@@ -343,6 +343,7 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
       return { swept: plan.retry.length, abandoned: plan.abandon.length };
     },
 
+
     /**
      * 実行の記録を書く（PS-8）。**まとめて1回の insert にする。**
      *

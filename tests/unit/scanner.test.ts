@@ -30,7 +30,9 @@ function makeEvent(overrides: Partial<TimelineEvent> = {}): TimelineEvent {
 
 function makeBaseline(overrides: Partial<Baseline> = {}): Baseline {
   return {
-    metric_key: "revenue",
+    // **2026-09-10（発注 E-3）で鍵が変わった。** `revenue` は本番のどのイベントにも
+    // 存在せず、走査1は6週間ずっと0件だった。実物の metrics は amount / direction
+    metric_key: "inflow",
     is_established: true,
     median: 100000,
     iqr: 20000,
@@ -46,7 +48,7 @@ describe("Scanner (D1-D2, D4)", () => {
     const events: TimelineEvent[] = [
       makeEvent({
         event_type: "transaction",
-        metrics: { revenue: 50000 }, // well below p25 of 90000
+        metrics: { amount: 50000, direction: "credit" }, // well below p25 of 90000
         occurred_at: new Date().toISOString(),
       }),
     ];

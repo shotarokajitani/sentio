@@ -93,6 +93,13 @@ jobs:
         with:
           version: 2.113.0
 
+      # 削除の段と本番突合が `pnpm exec tsx` を使う（発注 F）。
+      # **一覧をワークフローに直書きしない**ため、宣言を読む口が要る
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
       # function ごとに個別step。`if: !cancelled()` で1件の失敗が後続を止めないようにしつつ、
       # 失敗したstepはそのままジョブ失敗として顕在化させる（|| true / continue-on-error は禁止）
       #
@@ -198,3 +205,52 @@ jobs:
       - name: Deploy dispatch-weekly
         if: ${{ !cancelled() }}
         run: supabase functions deploy dispatch-weekly --project-ref "$SUPABASE_PROJECT_REF"
+
+      # ------------------------------------------------------------------
+      # 旧関数の削除（発注 F）
+      #
+      # **本番に、リポジトリのどこにも無い関数が20本 ACTIVE で残っていた**
+      # （2026-09-10 の実測）。4月に作られたもので、`entrypoint_path` が
+      # `/tmp/user_fn_…` になっているのが目印である。
+      #
+      # `deploy.yml` は「配る」しかしていなかったので、配っていない関数が
+      # 本番に残っていても誰も見なかった。残っていたものには
+      # `stripe-webhook` / `create-checkout` / `create-portal-link` /
+      # `process-answer` が含まれる——**課金と入力の口が、誰も見ていない実装で
+      # 開いたままだった。**
+      #
+      # 消す一覧は `docs/checklists/edge-functions.yml` の `remove`。
+      # **存在しない slug は成功扱い**にする（冪等）。再実行のたびに赤くなると、
+      # この段そのものが「いつも赤いから見ない」ものになる。
+      # ------------------------------------------------------------------
+      - name: "旧関数を消す（宣言どおり。存在しない slug は成功扱い）"
+        if: ${{ !cancelled() }}
+        run: |
+          set -uo pipefail
+          slugs=$(pnpm exec tsx scripts/check-edge-functions.ts --list-remove)
+          echo "消す対象: $slugs"
+          failed=0
+          for slug in $slugs; do
+            out=$(supabase functions delete "$slug" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) && {
+              echo "削除: $slug"
+              continue
+            }
+            # **「そもそも無い」は成功。** それ以外は失敗として顕在化させる
+            if printf '%s' "$out" | grep -qiE "not found|does not exist"; then
+              echo "既に無い: $slug"
+            else
+              echo "::error::$slug の削除に失敗: $out"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      # 本番の一覧と宣言を突き合わせる。**「知らないものが居る」を検出する**のが目的で、
+      # 消し忘れではなく**新たに増えた残骸**を捕まえる（今回の20本と同じ形の再発）
+      - name: "check:edge-functions — 本番に知らない関数が居ないことを確かめる"
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          live=$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF" -o json             | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).map(f=>f.slug).join(' ')))")
+          echo "本番に居る関数: $live"
+          SUPABASE_FUNCTIONS_LIVE="$live" pnpm run check:edge-functions

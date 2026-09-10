@@ -3,6 +3,7 @@
 // Reads prompts from filesystem at runtime (code embedding prohibited)
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { sanitizeMetrics } from "../_shared/prompt-safety.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
@@ -37,6 +38,19 @@ interface EvalCriterion {
 // Prompts loaded via import from _shared/prompts.ts (Edge Runtime sandbox blocks readTextFile)
 
 // Planner: cluster related candidates into investigation units
+/**
+ * Generator の応答を Finding にできなかった。**握りつぶさない。**
+ *
+ * 呼び出し元が件数を数え、`dispatch_runs` の要約と `findings_skipped` のログに出す。
+ * 0件で静かに終わると、「候補が無かった」のか「壊れている」のかが分からなくなる。
+ */
+export class GeneratorParseError extends Error {
+  constructor(detail: string) {
+    super(`Generator の応答を Finding にできなかった: ${detail}`);
+    this.name = "GeneratorParseError";
+  }
+}
+
 function planInvestigations(candidates: Candidate[]): Candidate[][] {
   // Group by scanType for now; related candidates are investigated together
   const groups = new Map<string, Candidate[]>();
@@ -119,23 +133,17 @@ ${findingTemplate}
       ...new Set([...evidenceIds, ...(parsed.evidence_event_ids || [])]),
     ];
     return parsed;
-  } catch {
-    // Fallback structured response
-    return {
-      what: candidates[0]?.description || "Unknown signal",
-      hypotheses: [
-        { text: "Primary hypothesis based on data pattern", plausibility: "high" },
-        { text: "Alternative explanation", plausibility: "medium" },
-        { text: "Low-probability scenario", plausibility: "low" },
-      ],
-      evidence_event_ids: evidenceIds,
-      urgency:
-        candidates[0]?.suggestedUrgency === "immediate"
-          ? "weekly"
-          : candidates[0]?.suggestedUrgency || "weekly",
-      next_actions: [{ description: "Investigate further", onetap_type: "watch" }],
-      rendered: text,
-    };
+  } catch (e) {
+    // **中身の無い Finding を作らない**（発注 E-1・fail-closed）。
+    //
+    // ここは以前、パースに失敗すると「Primary hypothesis based on data pattern」
+    // という**ダミーの仮説3件**を組み立てて返していた。中身はデータと無関係で、
+    // それでも Finding 台帳に載り、経営者のメールに出る。
+    // **「Sentio がそう言った」ことになる。**
+    //
+    // 投げて呼び出し元に落とさせる。呼び出し元は件数を数えて要約に出すので、
+    // 「候補が無かった」と「組み立てに失敗した」が区別できる
+    throw new GeneratorParseError(e instanceof Error ? e.message : String(e));
   }
 }
 
@@ -253,6 +261,12 @@ Deno.serve(async (req: Request) => {
     );
     const memoryPacket = summaryData?.content || "(No company summary available yet)";
 
+    // **自社ドメイン**（発注 E-2）。出席者を社内 / 社外に分けるのに使う。
+    // 引けなければ `null` のままにする——**分からないものを社内にしない。**
+    // 全員が社外として数えられるだけで、アドレスは1つも外へ出ない
+    const ownerEmail = await resolveOwnerEmail(supabase, company_id);
+    const ownDomain = ownerEmail ? (ownerEmail.split("@")[1] ?? null) : null;
+
     // 会社のプランを解決する（発注 B-3）。**枠は会社ごとに違う。**
     // 引けなければ試用プランに落とす（fail-closed。多い側に倒さない）
     const plan = await resolvePlan(supabase, company_id);
@@ -286,6 +300,8 @@ Deno.serve(async (req: Request) => {
     // 「行が無ければ無制限」の再来になる。null のまま canRunFullHarness に渡すと false になる
     let fullRuns: number | null = budgetRow?.full_runs ?? null;
     let budgetStopped = false;
+    /** Generator の応答を Finding にできなかった群の数（発注 E-1） */
+    let findingsSkipped = 0;
 
     // Plan investigations
     const investigations = planInvestigations(candidates);
@@ -306,7 +322,20 @@ Deno.serve(async (req: Request) => {
       }
 
       // Generator
-      const draft = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
+      // **組み立てに失敗した群は Finding を作らずに飛ばす**（発注 E-1・fail-closed）。
+      // 件数を数えて要約に出すので、「候補が無かった」と区別できる
+      let draft: Awaited<ReturnType<typeof generate>>;
+      try {
+        draft = await generate(client, MODEL_GENERATOR, group, memoryPacket, findingTemplate);
+      } catch (e) {
+        if (!(e instanceof GeneratorParseError)) throw e;
+        findingsSkipped++;
+        console.warn(
+          `[sentio:findings_skipped] company_id=${company_id} scan=${group[0]?.scanType ?? "unknown"} ` +
+            `reason=generator_parse_failed detail=${e.message}`,
+        );
+        continue;
+      }
 
       // Fetch evidence summaries for Evaluator
       const evidenceEvents = await mustData(
@@ -317,9 +346,14 @@ Deno.serve(async (req: Request) => {
         "investigate: evidence events",
       );
 
+      // **metrics をそのまま渡さない**（発注 E-2）。カレンダー由来の `metrics` には
+      // 出席者のメールアドレスがそのまま入っている。Finding に要るのは
+      // 「誰と会ったか」ではなく「社内か社外か・何人か」である
       const evidenceSummaries = (evidenceEvents || []).map((e) => ({
         event_id: e.event_id,
-        summary: `[${e.event_type}] ${e.source} @ ${e.occurred_at}: ${JSON.stringify(e.metrics)}`,
+        summary:
+          `[${e.event_type}] ${e.source} @ ${e.occurred_at}: ` +
+          JSON.stringify(sanitizeMetrics(e.metrics, ownDomain)),
       }));
 
       // Evaluator loop (max 2 revisions)
@@ -429,6 +463,9 @@ Deno.serve(async (req: Request) => {
           limit: plan.fullRunsPerDay,
           stopped_by_budget: budgetStopped,
         },
+        // **組み立てに失敗した群の数**（発注 E-1）。**0件でも必ず出す。**
+        // 「候補が無かった」と「組み立てに失敗した」を同じ顔にしない
+        findings_skipped: findingsSkipped,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -445,6 +482,27 @@ Deno.serve(async (req: Request) => {
  * **引けなければ試用プランに落とす。** 「引けなかった＝標準」に倒すと、
  * 購読が無い会社に標準枠の LLM 費用が出る。多い側に倒さない（fail-closed）。
  */
+/**
+ * 会社の代表メールを引く（発注 E-2）。**ドメインだけを使う。**
+ *
+ * 出席者を社内 / 社外に分けるのに要る。引けなければ `null` を返す——
+ * **分からないものを社内にしない。** 全員が社外として数えられるだけで、
+ * アドレスが外へ出ることは無い。
+ */
+async function resolveOwnerEmail(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(companyId);
+    if (error || !data?.user?.email) return null;
+    return data.user.email;
+  } catch {
+    // **引けないことは異常ではない。** 社外に倒して先へ進む
+    return null;
+  }
+}
+
 async function resolvePlan(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,

@@ -12,6 +12,8 @@ import {
   type DeliveryStatus,
 } from "@edge/_shared/delivery";
 import { DbError } from "@edge/_shared/db";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 /**
  * S-2-7 / S-2-8: 二重送信の起きない順序。
@@ -350,9 +352,32 @@ describe("繰り延べ（deliver-alert の静音時間）", () => {
 });
 
 describe("status の集合", () => {
-  it("00024 の CHECK 制約と同じ7値である", () => {
+  it("00041 の CHECK 制約と同じ8値である", () => {
+    // **2026-09-10（発注 B-3）で `abandoned` が増えた。** 再送の上限に達した行を
+    // `failed` のまま置くと `RETRYABLE` に当たり続け、毎朝拾っては上限で弾かれる
     expect([...DELIVERY_STATUSES].sort()).toEqual(
-      ["confirmed", "deferred", "draft", "failed", "sending", "sent", "skipped"].sort(),
+      ["abandoned", "confirmed", "deferred", "draft", "failed", "sending", "sent", "skipped"].sort(),
     );
+  });
+
+  it("**陰性**: 諦めた行は再試行の対象に入らない（拾っては捨てる往復を止める）", () => {
+    // `RETRYABLE` は export していないので、実物のソースで見る
+    const source = readFileSync(
+      path.resolve(__dirname, "../../supabase/functions/_shared/delivery.ts"),
+      "utf8",
+    );
+    const line = /const RETRYABLE: readonly DeliveryStatus\[\] = \[([^\]]*)\]/.exec(source);
+    expect(line, "RETRYABLE の宣言が見つからない").not.toBeNull();
+    expect(line![1]).not.toContain("abandoned");
+  });
+
+  it("CHECK 制約の一覧と、コード側の一覧が同じである", () => {
+    const migration = readFileSync(
+      path.resolve(__dirname, "../../supabase/migrations/00041_delivery_log_abandoned.sql"),
+      "utf8",
+    );
+    for (const status of DELIVERY_STATUSES) {
+      expect(migration, status).toContain(`'${status}'`);
+    }
   });
 });

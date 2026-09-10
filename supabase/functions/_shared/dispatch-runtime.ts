@@ -10,6 +10,12 @@ import { getSupabaseAdmin } from "./supabase-client.ts";
 import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
+import {
+  ABANDONED,
+  STALE_SENDING,
+  planStaleSweep,
+  type StaleRow,
+} from "./stale-sending.ts";
 import type {
   BillingCounts,
   CompanyTarget,
@@ -41,6 +47,15 @@ function subscriptionStatusOf(metadata: unknown): string | null {
   const sub = (metadata as { subscription?: { status?: unknown } } | null)?.subscription;
   return typeof sub?.status === "string" && sub.status ? sub.status : null;
 }
+
+/**
+ * 掃除で一度に引く行数の上限。
+ *
+ * **無制限に引かない。** 固まった行が大量にあるとき、全部を1回で倒そうとして
+ * Edge Function のメモリと時間を使い切ると、**配信そのものが走らなくなる。**
+ * 残りは翌日の実行が拾う（毎日走るので、放置され続けることは無い）。
+ */
+const SWEEP_LIMIT = 500;
 
 export function buildDeps(): DispatchDeps {
   const supabase = getSupabaseAdmin();
@@ -171,6 +186,62 @@ export function buildDeps(): DispatchDeps {
 
       // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
       return { ok: res.ok, status: res.status };
+    },
+
+    /**
+     * `sending` のまま固まった行を掃除する（発注 B-1 / B-3）。
+     *
+     * **判断は `planStaleSweep` が持つ。** ここは引いて書くだけにしてある——
+     * 「どの行を倒すか」を I/O に混ぜると、壊して赤くする試験が書けなくなる。
+     *
+     * 引く範囲を `sending` に絞るのは、**それ以外を1行も触らないため**である。
+     * 2時間の判定は `planStaleSweep` が `created_at` を見て行う。
+     */
+    sweepStaleSending: async (now: Date) => {
+      // **引けなかったことを 0件と混ぜない**（`countBillingUnresolved` と同じ作法）。
+      // `mustData` は throw するので、ここで捕まえて値に落とす
+      let rows: StaleRow[];
+      try {
+        rows = (await mustData(
+          supabase
+            .from("delivery_log")
+            .select("id, status, attempts, created_at")
+            .eq("status", "sending")
+            .limit(SWEEP_LIMIT),
+          "dispatch: sending の行を引く",
+        )) as unknown as StaleRow[];
+      } catch (e) {
+        return { swept: 0, abandoned: 0, error: e instanceof Error ? e.message : String(e) };
+      }
+
+      const plan = planStaleSweep(rows, now);
+      const at = now.toISOString();
+
+      // **倒す側から先に書く。** ここで落ちても、諦めた行は次の実行で拾い直せる
+      if (plan.retry.length > 0) {
+        const e = await takeError(
+          supabase
+            .from("delivery_log")
+            .update({ status: "failed", last_error: STALE_SENDING, last_error_at: at })
+            .in("id", plan.retry),
+          "dispatch: stale sending を failed に倒す",
+        );
+        if (e) return { swept: 0, abandoned: 0, error: e.message };
+      }
+
+      if (plan.abandon.length > 0) {
+        const e = await takeError(
+          supabase
+            .from("delivery_log")
+            .update({ status: ABANDONED, last_error: STALE_SENDING, last_error_at: at })
+            .in("id", plan.abandon),
+          "dispatch: 上限到達を abandoned に移す",
+        );
+        // **倒したぶんは倒した、と数える。** 諦めた側の失敗で全部を0件にしない
+        if (e) return { swept: plan.retry.length, abandoned: 0, error: e.message };
+      }
+
+      return { swept: plan.retry.length, abandoned: plan.abandon.length };
     },
 
     /**

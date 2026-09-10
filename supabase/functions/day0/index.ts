@@ -971,7 +971,7 @@ Deno.serve(async (req: Request) => {
         content: report as unknown as Record<string, unknown>,
         now: new Date(),
       },
-      () =>
+      (key) =>
         sendEmail(mail.config, {
           to: email,
           subject: `[Sentio] Day0レポート: ${company_name}`,
@@ -982,7 +982,7 @@ Deno.serve(async (req: Request) => {
             totalCount: blocks.length,
           }),
           text: renderDay0Text(company_name, passedBlocks),
-        }),
+        }, fetch, key),
     );
 
     return deliveryResponse(result, { report });

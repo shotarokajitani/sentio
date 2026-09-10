@@ -1,0 +1,409 @@
+<title>Sentio 週次メール試案</title>
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500&family=Noto+Sans+JP:wght@400;500&display=swap"
+/>
+<style>
+  :root {
+    --bg: #efece5;
+    --paper: #fbfaf6;
+    --ink: #1f2430;
+    --ink2: #5b6070;
+    --ink3: #8d90a0;
+    --rule: #e2ddd2;
+    --navy: #22375a;
+    --navy-soft: #e9edf4;
+    --warn: #a4651d;
+    --warn-soft: #f6ecd9;
+    --ok: #2f6b4f;
+    --serif: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+    --sans: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111318;
+      --paper: #1c2028;
+      --ink: #ebe8e0;
+      --ink2: #b3b0a6;
+      --ink3: #7d7b74;
+      --rule: #2c3039;
+      --navy: #b9c7e2;
+      --navy-soft: #252d3d;
+      --warn: #dcae62;
+      --warn-soft: #3a2f1c;
+      --ok: #8fc7a8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111318;
+    --paper: #1c2028;
+    --ink: #ebe8e0;
+    --ink2: #b3b0a6;
+    --ink3: #7d7b74;
+    --rule: #2c3039;
+    --navy: #b9c7e2;
+    --navy-soft: #252d3d;
+    --warn: #dcae62;
+    --warn-soft: #3a2f1c;
+    --ok: #8fc7a8;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .lbl {
+    max-width: 640px;
+    margin: 32px auto 0;
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--ink3);
+  }
+  .mail {
+    max-width: 640px;
+    margin: 10px auto 60px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 36px 40px 28px;
+  }
+  .wm {
+    font-family: var(--serif);
+    letter-spacing: 0.18em;
+    font-size: 16px;
+    color: var(--ink2);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 22px;
+    margin: 24px 0 12px;
+  }
+  .sum p {
+    margin: 0 0 4px;
+    font-size: 15.5px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: var(--ink2);
+    margin: 30px 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .num {
+    font-size: 11px;
+    color: var(--ink3);
+    margin-right: 6px;
+  }
+  p {
+    margin: 0 0 6px;
+  }
+  .q {
+    color: var(--ink2);
+    font-size: 14px;
+  }
+  .chg {
+    border-left: 2px solid var(--warn);
+    padding-left: 14px;
+    margin: 8px 0 14px;
+  }
+  .chg b {
+    font-weight: 500;
+  }
+  .chg .ev {
+    font-size: 13px;
+    color: var(--ink2);
+  }
+  .acts {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .acts a {
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1px solid var(--navy);
+    color: var(--navy);
+    text-decoration: none;
+    border-radius: 2px;
+  }
+  .acts a.p {
+    background: var(--navy);
+    color: var(--paper);
+  }
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .tbl th {
+    font-weight: 500;
+    color: var(--ink2);
+    font-size: 12px;
+    text-align: left;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tbl td {
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--rule);
+    font-variant-numeric: tabular-nums;
+    vertical-align: top;
+  }
+  .tbl td.r,
+  .tbl th.r {
+    text-align: right;
+  }
+  .ok {
+    color: var(--ok);
+  }
+  .wn {
+    color: var(--warn);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 40px repeat(5, 1fr);
+    gap: 3px;
+    font-size: 11px;
+    color: var(--ink3);
+    margin: 8px 0 4px;
+  }
+  .grid .h {
+    text-align: center;
+  }
+  .grid .rl {
+    text-align: right;
+    padding-right: 6px;
+    line-height: 22px;
+  }
+  .cell {
+    height: 22px;
+    border: 1px solid var(--rule);
+  }
+  .c1 {
+    background: var(--navy-soft);
+  }
+  .c2 {
+    background: var(--navy);
+    opacity: 0.6;
+  }
+  .cx {
+    background: var(--warn);
+    opacity: 0.7;
+  }
+  .news {
+    font-size: 13.5px;
+  }
+  .news li {
+    margin: 0 0 4px;
+  }
+  .news .src {
+    color: var(--ink3);
+    font-size: 12px;
+  }
+  .foot {
+    margin-top: 36px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink3);
+    line-height: 1.8;
+  }
+  .foot a {
+    color: var(--ink3);
+  }
+  @media (max-width: 560px) {
+    .mail {
+      padding: 26px 20px;
+    }
+  }
+</style>
+<div class="lbl">
+  本文（自社アカウントの実データ・2026年8月31日〜9月6日。取引先ニュースの行は形式の例で、実在の報道ではありません）
+</div>
+<div class="mail">
+  <div class="wm">Sentio</div>
+  <h1>今週の会社（8月31日〜9月6日）</h1>
+
+  <h2><span class="num">1</span>先週の要約</h2>
+  <div class="sum">
+    <p>会議は5件・300分で、前週と同じ量でした。内訳は定例3件・商談1件・採用1件です。</p>
+    <p>入金は 426,000円（定期2件）、支払いは 55,350円。月末の定期入金2件は予定どおり届きました。</p>
+    <p>
+      定例会議はすべて通常の間隔で続いています。今週は「週次経営会議」の予定がまだ入っていません。
+    </p>
+  </div>
+
+  <h2><span class="num">2</span>前週からの変化</h2>
+  <div class="chg">
+    <b>「週次経営会議」が今週の予定に入っていません</b>
+    <p class="ev">8月24日・8月31日と7日おきに続いていました（通常の間隔 7日、前回から9日）。</p>
+    <p class="ev">
+      判断は梶谷さんがされることですが、開催しない週であれば「見送る」で、次回以降は通常として扱います。
+    </p>
+    <div class="acts">
+      <a class="p" href="#">対応した</a><a href="#">見送る</a><a href="#">これは通常です</a
+      ><a href="#">根拠を見る</a>
+    </div>
+  </div>
+
+  <h2><span class="num">3</span>取引先の動き</h2>
+  <table class="tbl">
+    <tr>
+      <th>取引先</th>
+      <th>接点</th>
+      <th class="r">入金</th>
+    </tr>
+    <tr>
+      <td>Hakuhodo DY ONE</td>
+      <td>会議なし（最終 5月29日）</td>
+      <td class="r ok">8月31日 396,000円（定期）</td>
+    </tr>
+    <tr>
+      <td>アクシスコンサルティング</td>
+      <td>会議なし</td>
+      <td class="r ok">8月27日 1,105,340円（定期）</td>
+    </tr>
+    <tr>
+      <td>DATAZORA</td>
+      <td>9月7日 打ち合わせ（初回）</td>
+      <td class="r">—</td>
+    </tr>
+    <tr>
+      <td>モーニン</td>
+      <td>会議なし</td>
+      <td class="r">8月28日 1,349,700円（初めての相手先）</td>
+    </tr>
+  </table>
+  <ul class="news" style="margin: 10px 0 0; padding-left: 18px">
+    <li>（形式の例）Hakuhodo DY ONE「◯◯を発表」 <span class="src">出典・9月3日</span></li>
+  </ul>
+  <p class="q">ニュースは見出しと出典だけを載せます。本文は取得しません。</p>
+
+  <h2><span class="num">4</span>主要指標と時間の使い方</h2>
+  <table class="tbl">
+    <tr>
+      <th>指標</th>
+      <th>今週</th>
+      <th>前週</th>
+      <th class="r">過去8週の平均</th>
+    </tr>
+    <tr>
+      <td>会議件数</td>
+      <td>5件</td>
+      <td>5件</td>
+      <td class="r">1.3件</td>
+    </tr>
+    <tr>
+      <td>会議時間</td>
+      <td>300分</td>
+      <td>300分</td>
+      <td class="r">75分</td>
+    </tr>
+    <tr>
+      <td>社外との会議</td>
+      <td>2件</td>
+      <td>1件</td>
+      <td class="r">0.4件</td>
+    </tr>
+    <tr>
+      <td>入金（定期を除く）</td>
+      <td>0円</td>
+      <td>1,349,700円</td>
+      <td class="r">—</td>
+    </tr>
+  </table>
+  <div class="grid">
+    <div></div>
+    <div class="h">月</div>
+    <div class="h">火</div>
+    <div class="h">水</div>
+    <div class="h">木</div>
+    <div class="h">金</div>
+    <div class="rl">午前</div>
+    <div class="cell c2"></div>
+    <div class="cell"></div>
+    <div class="cell c1"></div>
+    <div class="cell"></div>
+    <div class="cell"></div>
+    <div class="rl">午後</div>
+    <div class="cell"></div>
+    <div class="cell cx"></div>
+    <div class="cell"></div>
+    <div class="cell c1"></div>
+    <div class="cell c1"></div>
+  </div>
+  <p class="q">
+    月曜午前に経営会議、火曜午後に商談（社外）、木曜午後に顧客定例、金曜午後に採用面談。
+  </p>
+
+  <h2><span class="num">5</span>定例会議・定期入金の状況</h2>
+  <table class="tbl">
+    <tr>
+      <td>週次経営会議</td>
+      <td>通常 7日</td>
+      <td>最終 8月31日</td>
+      <td class="r wn">9日空いています</td>
+    </tr>
+    <tr>
+      <td>開発デイリー</td>
+      <td>通常 7日</td>
+      <td>最終 9月2日</td>
+      <td class="r ok">通常</td>
+    </tr>
+    <tr>
+      <td>顧客定例 — 導入レビュー</td>
+      <td>通常 7日</td>
+      <td>最終 9月3日</td>
+      <td class="r ok">通常</td>
+    </tr>
+    <tr>
+      <td>Hakuhodo DY ONE からの入金</td>
+      <td>毎月末</td>
+      <td>最終 8月31日</td>
+      <td class="r ok">届きました</td>
+    </tr>
+    <tr>
+      <td>アクシスコンサルティング からの入金</td>
+      <td>毎月末</td>
+      <td>最終 8月27日</td>
+      <td class="r ok">届きました</td>
+    </tr>
+  </table>
+
+  <h2><span class="num">6</span>見通し（10〜12月）</h2>
+  <p>
+    定期の入金2社が続けば、10〜12月の入金は約450万円（1社止まれば119万〜332万円）。定期の支払いを差し引くと約433万円です。
+  </p>
+  <p class="q">
+    商談からの新規入金と季節性は、実績が6か月・12か月分たまると加わります。同業種の景況感は取込後に表示します。
+  </p>
+
+  <h2><span class="num">7</span>来週の予定</h2>
+  <p>会議は1件・45分（DATAZORA 打ち合わせ・社外）。定例3件はまだ予定に入っていません。</p>
+
+  <h2><span class="num">8</span>連携済み・未連携のデータ</h2>
+  <p class="q">
+    Google カレンダー: 9月7日 21:00 取り込み（52件）。入出金: 8月31日分まで（CSV・59件）。<br />freee
+    をつなぐと、入出金が自動で取り込まれ、9月分の定期入金の到着をお知らせできます。
+  </p>
+
+  <div class="foot">
+    株式会社ディセーノ　〒150-0043 東京都渋谷区道玄坂1丁目10番8号 渋谷道玄坂東急ビル2F-C<br />
+    お問い合わせ: support@mdc-diseno.com　／　配信の停止はお問い合わせ先まで<br />
+    <a href="#">ダッシュボードで根拠を見る</a>　／　<a href="#"
+      >Sentio が見ているもの・見ていないもの</a
+    >
+  </div>
+</div>

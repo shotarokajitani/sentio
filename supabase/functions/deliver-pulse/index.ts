@@ -125,12 +125,17 @@ Deno.serve(async (req: Request) => {
           now,
         },
         (key) =>
-          sendEmail(mailConfig.config, {
-            to: email,
-            subject: `【Sentio】状態パケット（${period}）`,
-            html: renderAlertHtml(`状態パケット（${period}）`, packetText, NOTICE_HEADING),
-            text: packetText,
-          }, fetch, key),
+          sendEmail(
+            mailConfig.config,
+            {
+              to: email,
+              subject: `【Sentio】状態パケット（${period}）`,
+              html: renderAlertHtml(`状態パケット（${period}）`, packetText, NOTICE_HEADING),
+              text: packetText,
+            },
+            fetch,
+            key,
+          ),
       );
 
       // **送らなかった日と送り損ねた日を区別する**（12-3）
@@ -196,13 +201,18 @@ Deno.serve(async (req: Request) => {
           now,
         },
         (key) =>
-          sendEmail(mailConfig.config, {
-            to: email,
-            subject: notice.subject,
-            // **赤い「アラート」にしない**（2026-09-09）。連携切れは異常ではなく状態である
-            html: renderAlertHtml(notice.subject, notice.body, NOTICE_HEADING),
-            text: renderAlertText(notice.subject, notice.body),
-          }, fetch, key),
+          sendEmail(
+            mailConfig.config,
+            {
+              to: email,
+              subject: notice.subject,
+              // **赤い「アラート」にしない**（2026-09-09）。連携切れは異常ではなく状態である
+              html: renderAlertHtml(notice.subject, notice.body, NOTICE_HEADING),
+              text: renderAlertText(notice.subject, notice.body),
+            },
+            fetch,
+            key,
+          ),
       );
 
       return deliveryResponse(noticeResult, { company_id: companyId, kind: "reconnect", period });

@@ -26,12 +26,7 @@ function attendees(n: number): { email: string }[] {
   return Array.from({ length: n }, (_, i) => ({ email: `attendee-${i}@example.invalid` }));
 }
 
-function meeting(
-  title: string,
-  startJst: string,
-  endJst: string,
-  attendeeCount = 0,
-): EventRow {
+function meeting(title: string, startJst: string, endJst: string, attendeeCount = 0): EventRow {
   return {
     source: "google_calendar",
     event_type: "schedule",
@@ -174,8 +169,10 @@ describe("週次メールの本文（スライスWM）", () => {
 
     expect(coverage).not.toBe("");
     expect(coverage).not.toContain("基準値はデータ蓄積後に確立されます");
-    // 終日の内訳は events からしか出せない数字である
-    expect(coverage).toMatch(/終日\s*0\s*件/);
+    // 終日の内訳は events からしか出せない数字である。
+    // **2026-09-10（発注 ③-3）で言い回しが変わった**——
+    // 「うち終日 0件」から「終日の予定は0件」へ。数字の出所は変えていない
+    expect(coverage).toMatch(/終日の予定は\s*0\s*件/);
   });
 
   it("WM-2-1（陰性コントロール）: 出席者のメールアドレスが HTML / text の両方に1文字も出ない", () => {
@@ -208,9 +205,19 @@ describe("週次メールの本文（スライスWM）", () => {
   });
 
   it("WM-3-1: 冪等キーは weekly:<company_id>:<ISO週> のまま変わらない", () => {
-    const key = deliveryKey({ kind: "weekly", companyId: "c0ffee00-0000-4000-8000-000000000001", period: "2026-W35" });
+    const key = deliveryKey({
+      kind: "weekly",
+      companyId: "c0ffee00-0000-4000-8000-000000000001",
+      period: "2026-W35",
+    });
     expect(key).toBe("weekly:c0ffee00-0000-4000-8000-000000000001:2026-W35");
     // 同じ週なら同じキー＝2回叩いても2通にならない
-    expect(deliveryKey({ kind: "weekly", companyId: "c0ffee00-0000-4000-8000-000000000001", period: "2026-W35" })).toBe(key);
+    expect(
+      deliveryKey({
+        kind: "weekly",
+        companyId: "c0ffee00-0000-4000-8000-000000000001",
+        period: "2026-W35",
+      }),
+    ).toBe(key);
   });
 });

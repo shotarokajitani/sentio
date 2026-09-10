@@ -73,11 +73,11 @@ cron が失敗するまで表面化せず、**しかも cron は失敗しない*
 `GOOGLE_CLIENT_SECRET` と同じ形の事故が、service_role キーでも起きうる。
 **同じ値を3つの保管先が別々に持つ。**片方だけ更新すると、更新しなかった側の経路だけが静かに壊れる。
 
-| 保管先 | 使う経路 | 失敗したときの見え方 |
-| ------ | -------- | -------------------- |
-| **Vault `sentio_service_role_key`** | cron（`00020` の `sync-connections`）が送る `Authorization: Bearer` | **どこにも出ない。** `net.http_post` は非同期で、`cron.job_run_details` は succeeded のまま。`net._http_response.status_code` かダッシュボードの Invocations でしか気づけない |
-| **Edge Function 実行環境の `SUPABASE_SERVICE_ROLE_KEY`**（Supabase が自動注入） | `resolveCaller` が `internal` 判定に使う突き合わせ相手 | 全 Function が 401。パイプライン全停止 |
-| **GitHub Secrets `SUPABASE_SERVICE_ROLE_KEY`**（`invoke-function.yml` 用・2026-08-20 新設） | 手動実行ワークフロー | 手動実行が 401。**「封鎖が効いている」と誤読されやすい**のが一番の危険 |
+| 保管先                                                                                      | 使う経路                                                            | 失敗したときの見え方                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vault `sentio_service_role_key`**                                                         | cron（`00020` の `sync-connections`）が送る `Authorization: Bearer` | **どこにも出ない。** `net.http_post` は非同期で、`cron.job_run_details` は succeeded のまま。`net._http_response.status_code` かダッシュボードの Invocations でしか気づけない |
+| **Edge Function 実行環境の `SUPABASE_SERVICE_ROLE_KEY`**（Supabase が自動注入）             | `resolveCaller` が `internal` 判定に使う突き合わせ相手              | 全 Function が 401。パイプライン全停止                                                                                                                                        |
+| **GitHub Secrets `SUPABASE_SERVICE_ROLE_KEY`**（`invoke-function.yml` 用・2026-08-20 新設） | 手動実行ワークフロー                                                | 手動実行が 401。**「封鎖が効いている」と誤読されやすい**のが一番の危険                                                                                                        |
 
 ~~`--no-verify-jwt` を17本すべてから外した（スライスS・S-4）ため、
 不一致は**ゲートウェイ層**でも 401 になる。関数の中に入る前に落ちるので、
@@ -147,8 +147,8 @@ gh secret set SUPABASE_SERVICE_ROLE_KEY --repo shotarokajitani/sentio
      → Q2 の `key_len` / `key_tail` / `key_sha256` を採る
    - **リテラル埋め込み**（`00018` の残骸や手作業登録）
      → Q3 の同3項目を採る。**この場合は一致していても是正対象**。
-       秘密が `cron.job.command` に平文で載っており、`cron.job` を読める者に見える。
-       `00020` の `cron.schedule` を流し直して Vault 参照に寄せること
+     秘密が `cron.job.command` に平文で載っており、`cron.job` を読める者に見える。
+     `00020` の `cron.schedule` を流し直して Vault 参照に寄せること
    - **判定不能** → 本文を目視する。貼り戻すときは `command_redacted` を使う
 
 3. 突き合わせ相手（現行 service_role キー）の指紋を採る。**ローカルで**ハッシュする。

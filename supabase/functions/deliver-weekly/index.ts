@@ -8,6 +8,8 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { renderWeeklyHtml, renderWeeklyText } from "../_shared/email-html.ts";
+import { formatMonthDay, weeklySubject } from "../_shared/mail-words.ts";
+import { footerLinks, renderFooterText } from "../_shared/mail-footer.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustCount, mustData } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
@@ -147,6 +149,28 @@ Deno.serve(async (req: Request) => {
       calCount,
     });
 
+    // **初回かどうかを、過去の配信で決める**（`customer-journey-and-copy.md` §7）。
+    // 登録日からの日数で決めない——連携が遅れた会社では、初回の週次が
+    // 「2週目」に届くことがある。**その人にとっては初回である。**
+    //
+    // 引けなければ初回として扱わない。**「初めてです」と2回書くほうが害が大きい。**
+    let isFirstWeekly = false;
+    try {
+      const past = await mustData(
+        supabase
+          .from("delivery_log")
+          .select("id")
+          .eq("company_id", companyId)
+          .eq("delivery_type", "weekly")
+          .eq("status", "sent")
+          .limit(1),
+        "deliver-weekly: 過去の週次",
+      );
+      isFirstWeekly = (past ?? []).length === 0;
+    } catch (e) {
+      console.error("deliver-weekly: 過去の配信を引けなかった:", e instanceof Error ? e.message : e);
+    }
+
     const result = await deliverOnce(
       asDeliveryDb(supabase),
       {
@@ -158,12 +182,22 @@ Deno.serve(async (req: Request) => {
         now,
       },
       (key) =>
-        sendEmail(mail.config, {
-          to: email,
-          subject: "[Sentio] 今週の会社",
-          html: renderWeeklyHtml(sections),
-          text: renderWeeklyText(sections),
-        }, fetch, key),
+        sendEmail(
+          mail.config,
+          {
+            to: email,
+            subject: weeklySubject(week.start, new Date(week.end.getTime() - 1)),
+            html: renderWeeklyHtml(sections),
+            text: renderWeeklyText(sections, {
+              period: `${formatMonthDay(week.start)}〜${formatMonthDay(new Date(week.end.getTime() - 1))}`,
+              // **初回だけ1行**。7日目の追伸と対になっている
+              firstTime: isFirstWeekly,
+              footer: renderFooterText(footerLinks(Deno.env.get("NEXT_PUBLIC_SITE_ORIGIN"))),
+            }),
+          },
+          fetch,
+          key,
+        ),
     );
 
     return deliveryResponse(result, { company_id: companyId, period, sections });

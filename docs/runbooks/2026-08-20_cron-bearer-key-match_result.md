@@ -14,9 +14,9 @@
 
 **登録は1本のみ。トークンは Vault 参照で、平文の埋め込みは無い。**
 
-| jobid | jobname | schedule (UTC) | active | token_kind |
-| --- | --- | --- | --- | --- |
-| 9 | `sync-connections` | `0 0,6,12,18 * * *` | `true` | **Vault 参照** |
+| jobid | jobname            | schedule (UTC)      | active | token_kind     |
+| ----- | ------------------ | ------------------- | ------ | -------------- |
+| 9     | `sync-connections` | `0 0,6,12,18 * * *` | `true` | **Vault 参照** |
 
 `command` は次の形（`command_redacted` と `command_raw` が同一＝
 正規表現による置換が発生していない＝**平文トークンは含まれていない**）。
@@ -38,12 +38,12 @@ Q3（リテラル埋め込み時の是正）は**該当なし**。
 
 ## Q2 と突き合わせ相手の指紋
 
-| 項目 | Vault `sentio_service_role_key` | 現行 service_role（Legacy API Keys） | 判定 |
-| --- | --- | --- | --- |
-| `len` | 219 | 219 | 一致 |
-| `tail` | `bIpk` | `bIpk` | 一致 |
-| `prefix` | `eyJ` | `eyJ` | 一致 |
-| `sha256` | — | — | **一致（同一の値）** |
+| 項目     | Vault `sentio_service_role_key` | 現行 service_role（Legacy API Keys） | 判定                 |
+| -------- | ------------------------------- | ------------------------------------ | -------------------- |
+| `len`    | 219                             | 219                                  | 一致                 |
+| `tail`   | `bIpk`                          | `bIpk`                               | 一致                 |
+| `prefix` | `eyJ`                           | `eyJ`                                | 一致                 |
+| `sha256` | —                               | —                                    | **一致（同一の値）** |
 
 > `sha256` の値そのものは**このリポジトリが public のため記載しない**。
 > 一致したという事実のみを記録する。再検証が要る場合は上記の手順で採り直すこと。

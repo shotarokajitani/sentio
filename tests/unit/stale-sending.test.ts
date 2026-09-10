@@ -52,7 +52,15 @@ describe("2時間を超えた sending だけを倒す", () => {
   });
 
   it("**陰性**: sending 以外は1行も触らない", () => {
-    for (const status of ["sent", "failed", "deferred", "skipped", "draft", "confirmed", ABANDONED]) {
+    for (const status of [
+      "sent",
+      "failed",
+      "deferred",
+      "skipped",
+      "draft",
+      "confirmed",
+      ABANDONED,
+    ]) {
       const out = planStaleSweep([row({ status, created_at: ago(99) })], NOW);
       expect(out, status).toEqual({ retry: [], abandon: [] });
     }

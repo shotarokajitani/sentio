@@ -1,0 +1,569 @@
+<title>Sentio 最初の絵 試案</title>
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500&family=Noto+Sans+JP:wght@400;500&display=swap"
+/>
+<style>
+  :root {
+    --bg: #faf8f3;
+    --ink: #1f2430;
+    --ink2: #5b6070;
+    --ink3: #8d90a0;
+    --rule: #e2ddd2;
+    --navy: #22375a;
+    --navy-soft: #e9edf4;
+    --ok: #2f6b4f;
+    --ok-soft: #e4efe8;
+    --warn: #a4651d;
+    --warn-soft: #f6ecd9;
+    --serif: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+    --sans: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181f;
+      --ink: #ebe8e0;
+      --ink2: #b3b0a6;
+      --ink3: #7d7b74;
+      --rule: #2c3039;
+      --navy: #b9c7e2;
+      --navy-soft: #252d3d;
+      --ok: #8fc7a8;
+      --ok-soft: #1f3328;
+      --warn: #dcae62;
+      --warn-soft: #3a2f1c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181f;
+    --ink: #ebe8e0;
+    --ink2: #b3b0a6;
+    --ink3: #7d7b74;
+    --rule: #2c3039;
+    --navy: #b9c7e2;
+    --navy-soft: #252d3d;
+    --ok: #8fc7a8;
+    --ok-soft: #1f3328;
+    --warn: #dcae62;
+    --warn-soft: #3a2f1c;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .mast {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 14px;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 20px;
+    letter-spacing: 0.18em;
+  }
+  .mast span:last-child {
+    font-size: 12px;
+    color: var(--ink3);
+  }
+  .note {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 12px;
+  }
+  .done {
+    margin-top: 28px;
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 12px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 28px;
+    margin: 10px 0 6px;
+    text-wrap: balance;
+  }
+  .lede {
+    color: var(--ink2);
+    font-size: 14px;
+    margin: 0 0 6px;
+  }
+  section {
+    margin-top: 40px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .cap {
+    font-size: 12px;
+    color: var(--ink3);
+    margin: 6px 0 0;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .bar {
+    fill: var(--navy);
+    opacity: 0.85;
+  }
+  .bar.zero {
+    fill: var(--rule);
+  }
+  .c-reg {
+    fill: var(--navy);
+    opacity: 0.9;
+  }
+  .c-sales {
+    fill: var(--navy);
+    opacity: 0.55;
+  }
+  .c-hire {
+    fill: var(--navy);
+    opacity: 0.32;
+  }
+  .c-ext {
+    fill: var(--warn);
+    opacity: 0.7;
+  }
+  .lg {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--ink2);
+    margin-top: 6px;
+  }
+  .lg i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    vertical-align: -1px;
+  }
+  .axis {
+    stroke: var(--rule);
+  }
+  .lab {
+    font-size: 10px;
+    fill: var(--ink3);
+    font-family: var(--sans);
+  }
+  .val {
+    font-size: 10px;
+    fill: var(--ink2);
+    font-family: var(--sans);
+  }
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .tbl th {
+    font-weight: 500;
+    color: var(--ink2);
+    font-size: 12px;
+    text-align: left;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tbl td {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+    vertical-align: top;
+  }
+  .tbl td.r,
+  .tbl th.r {
+    text-align: right;
+  }
+  .st {
+    font-size: 12px;
+  }
+  .st.ok {
+    color: var(--ok);
+  }
+  .st.wait {
+    color: var(--ink3);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 48px repeat(5, 1fr);
+    gap: 4px;
+    font-size: 11px;
+    color: var(--ink3);
+  }
+  .grid .h {
+    text-align: center;
+    padding-bottom: 2px;
+  }
+  .grid .rl {
+    text-align: right;
+    padding-right: 6px;
+    line-height: 26px;
+  }
+  .cell {
+    height: 26px;
+    border: 1px solid var(--rule);
+    background: var(--bg);
+  }
+  .cell.c1 {
+    background: var(--navy-soft);
+  }
+  .cell.c2 {
+    background: var(--navy);
+    opacity: 0.55;
+  }
+  .cell.c3 {
+    background: var(--navy);
+    opacity: 0.9;
+  }
+  .cov {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 24px;
+    font-size: 14px;
+  }
+  .cov div {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .cov span:last-child {
+    color: var(--ink2);
+    font-size: 13px;
+    text-align: right;
+  }
+  .next {
+    margin-top: 44px;
+    padding: 18px 20px;
+    border: 1px solid var(--rule);
+  }
+  .next b {
+    font-weight: 500;
+    font-family: var(--serif);
+  }
+  .btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 9px 16px;
+    background: var(--navy);
+    color: var(--bg);
+    text-decoration: none;
+    font-size: 14px;
+    border-radius: 2px;
+  }
+  .btn.o {
+    background: transparent;
+    color: var(--navy);
+    border: 1px solid var(--navy);
+    margin-left: 8px;
+  }
+  @media (max-width: 640px) {
+    .wrap {
+      padding: 28px 18px 60px;
+    }
+    h1 {
+      font-size: 23px;
+    }
+    .cov {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<div class="wrap">
+  <div class="mast"><span class="wordmark">Sentio</span><span>連携が完了しました</span></div>
+  <p class="note">
+    試案です。自社アカウント（ab73e516）のカレンダー26件（2025年9月〜2026年9月）を読み取り照会で集計しました。LLM
+    は使っていません。
+  </p>
+
+  <span class="done">Google カレンダーを読み込みました・26件</span>
+  <h1>過去1年の会議の状況</h1>
+  <p class="lede">
+    2025年9月8日から2026年9月7日まで。会議とみなした予定は18件、それ以外（セミナー・リマインダー・予約ページ）8件は会議時間に含めていません。
+  </p>
+
+  <section>
+    <h2>月ごとの会議時間（分）と内訳</h2>
+    <svg viewBox="0 0 520 160" role="img" aria-label="月ごとの会議時間（種別の内訳）">
+      <line class="axis" x1="30" y1="130" x2="516" y2="130" />
+      <!-- scale: 360 -> 100px (0.2778px/min). Sep25: ext105 / Dec25: ext60 / May: ext180 / Jun: ext120 / Aug: reg210 sales90 hire60 / Sep: reg90 sales90 hire60 ext45 -->
+      <rect class="c-ext" x="36" y="100.8" width="24" height="29.2" />
+      <rect class="bar zero" x="73" y="128" width="24" height="2" />
+      <rect class="bar zero" x="110" y="128" width="24" height="2" />
+      <rect class="c-ext" x="147" y="113.3" width="24" height="16.7" />
+      <rect class="bar zero" x="184" y="128" width="24" height="2" />
+      <rect class="bar zero" x="221" y="128" width="24" height="2" />
+      <rect class="bar zero" x="258" y="128" width="24" height="2" />
+      <rect class="bar zero" x="295" y="128" width="24" height="2" />
+      <rect class="c-ext" x="332" y="80" width="24" height="50" />
+      <rect class="c-ext" x="369" y="96.7" width="24" height="33.3" />
+      <rect class="bar zero" x="406" y="128" width="24" height="2" />
+      <rect class="c-reg" x="443" y="71.7" width="24" height="58.3" />
+      <rect class="c-sales" x="443" y="46.7" width="24" height="25" />
+      <rect class="c-hire" x="443" y="30" width="24" height="16.7" />
+      <rect class="c-reg" x="480" y="105" width="24" height="25" />
+      <rect class="c-sales" x="480" y="80" width="24" height="25" />
+      <rect class="c-hire" x="480" y="63.3" width="24" height="16.7" />
+      <rect class="c-ext" x="480" y="50.8" width="24" height="12.5" />
+      <text class="val" x="40" y="96">105</text>
+      <text class="val" x="154" y="108">60</text>
+      <text class="val" x="336" y="75">180</text>
+      <text class="val" x="373" y="92">120</text>
+      <text class="val" x="447" y="25">360</text>
+      <text class="val" x="484" y="46">285</text>
+      <text class="lab" x="36" y="146">9月</text>
+      <text class="lab" x="73" y="146">10月</text>
+      <text class="lab" x="110" y="146">11月</text>
+      <text class="lab" x="147" y="146">12月</text>
+      <text class="lab" x="184" y="146">1月</text>
+      <text class="lab" x="221" y="146">2月</text>
+      <text class="lab" x="258" y="146">3月</text>
+      <text class="lab" x="295" y="146">4月</text>
+      <text class="lab" x="332" y="146">5月</text>
+      <text class="lab" x="369" y="146">6月</text>
+      <text class="lab" x="406" y="146">7月</text>
+      <text class="lab" x="443" y="146">8月</text>
+      <text class="lab" x="480" y="146">9月</text>
+      <text class="lab" x="0" y="134">0</text>
+      <text class="lab" x="0" y="34">360</text>
+    </svg>
+    <div class="lg">
+      <span><i class="c-reg"></i>定例</span><span><i class="c-sales"></i>商談</span
+      ><span><i class="c-hire"></i>採用</span><span><i class="c-ext"></i>取引先との打ち合わせ</span>
+    </div>
+    <p class="cap" style="margin-top: 10px">
+      5〜6月は取引先との打ち合わせだけ（Hakuhodo DY
+      ONE・Statusbrew・ソニックムーブ）で、定例はありませんでした。<br />8月から始まったのは定例3本（週次経営会議・開発デイリー・顧客定例、210分）と、商談1件・採用面談1件です。9月（7日時点）は定例3件・商談1件・採用1件に、取引先との打ち合わせ1件（DATAZORA）が加わっています。
+    </p>
+    <table class="tbl" style="margin-top: 14px">
+      <tr>
+        <th>月</th>
+        <th>定例</th>
+        <th>商談</th>
+        <th>採用</th>
+        <th>取引先</th>
+        <th class="r">合計</th>
+      </tr>
+      <tr>
+        <td>2026年8月</td>
+        <td>3件・210分</td>
+        <td>1件・90分</td>
+        <td>1件・60分</td>
+        <td>—</td>
+        <td class="r">6件・360分</td>
+      </tr>
+      <tr>
+        <td>2026年9月（7日まで）</td>
+        <td>3件・90分</td>
+        <td>1件・90分</td>
+        <td>1件・60分</td>
+        <td>1件・45分</td>
+        <td class="r">5件・285分</td>
+      </tr>
+      <tr>
+        <td>2026年5〜6月</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>5件・300分</td>
+        <td class="r">5件・300分</td>
+      </tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>定例会議の候補</h2>
+    <table class="tbl">
+      <tr>
+        <th>予定</th>
+        <th>回数</th>
+        <th>間隔</th>
+        <th>最終</th>
+        <th class="r">扱い</th>
+      </tr>
+      <tr>
+        <td>週次経営会議</td>
+        <td>2回</td>
+        <td>7日</td>
+        <td>8月31日</td>
+        <td class="r"><span class="st wait">あと1回で定例として見ます</span></td>
+      </tr>
+      <tr>
+        <td>開発デイリー</td>
+        <td>2回</td>
+        <td>7日</td>
+        <td>9月2日</td>
+        <td class="r"><span class="st wait">あと1回で定例として見ます</span></td>
+      </tr>
+      <tr>
+        <td>顧客定例 — 導入レビュー</td>
+        <td>2回</td>
+        <td>7日</td>
+        <td>9月3日</td>
+        <td class="r"><span class="st wait">あと1回で定例として見ます</span></td>
+      </tr>
+      <tr>
+        <td>ソニックムーブお打ち合わせ</td>
+        <td>2回</td>
+        <td>3日</td>
+        <td>6月18日</td>
+        <td class="r"><span class="st wait">3か月空いています</span></td>
+      </tr>
+    </table>
+    <p class="cap">
+      同じ題名の予定が3回以上、ほぼ同じ間隔で続いたものを「定例」として、翌朝から状態をお知らせします。
+    </p>
+  </section>
+
+  <section>
+    <h2>取引先一覧</h2>
+    <table class="tbl">
+      <tr>
+        <th>取引先</th>
+        <th>種別・件数</th>
+        <th class="r">最終</th>
+      </tr>
+      <tr>
+        <td>Hakuhodo DY ONE（hakuhodody-one.co.jp）</td>
+        <td>取引先との打ち合わせ 1件</td>
+        <td class="r">5月29日</td>
+      </tr>
+      <tr>
+        <td>TBWA HAKUHODO（tbwahakuhodo.co.jp）</td>
+        <td>取引先との打ち合わせ 1件</td>
+        <td class="r">5月29日</td>
+      </tr>
+      <tr>
+        <td>DATAZORA（datazora.com）</td>
+        <td>取引先との打ち合わせ 1件</td>
+        <td class="r">9月7日</td>
+      </tr>
+      <tr>
+        <td>Statusbrew（statusbrew.com）</td>
+        <td>取引先との打ち合わせ 1件</td>
+        <td class="r">5月19日</td>
+      </tr>
+      <tr>
+        <td>オプト（opt.ne.jp）</td>
+        <td>取引先との打ち合わせ 1件</td>
+        <td class="r">9月8日（2025年）</td>
+      </tr>
+    </table>
+    <p class="cap">
+      出席者の記録から、社内（mdc-diseno.com）以外の会社を数えています。出席者の記録が無い予定が9件あり、相手先が分かりません（題名から推定した場合は「推定」と表示します）。
+    </p>
+  </section>
+
+  <section>
+    <h2>曜日・時間帯別の会議</h2>
+    <div class="grid">
+      <div></div>
+      <div class="h">月</div>
+      <div class="h">火</div>
+      <div class="h">水</div>
+      <div class="h">木</div>
+      <div class="h">金</div>
+      <div class="rl">9時</div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell c2"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="rl">10時</div>
+      <div class="cell c2"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="rl">11時</div>
+      <div class="cell"></div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell c1"></div>
+      <div class="rl">12時</div>
+      <div class="cell c1"></div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="rl">13時</div>
+      <div class="cell c2"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell c2"></div>
+      <div class="cell c1"></div>
+      <div class="rl">14時</div>
+      <div class="cell"></div>
+      <div class="cell c2"></div>
+      <div class="cell"></div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="rl">15時</div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="rl">16時</div>
+      <div class="cell c1"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell c2"></div>
+      <div class="rl">17時</div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell c1"></div>
+    </div>
+    <p class="cap">会議は月曜と木曜の午後に集まっています。水曜は朝のデイリーだけです。</p>
+  </section>
+
+  <section>
+    <h2>連携済み・未連携のデータ</h2>
+    <div class="cov">
+      <div><span>Googleカレンダー</span><span>読み込み済み・26件</span></div>
+      <div><span>入出金</span><span>まだ取り込んでいません</span></div>
+      <div><span>会計ソフト</span><span>準備中</span></div>
+      <div><span>メッセージの往来</span><span>まだ見ていません</span></div>
+    </div>
+  </section>
+
+  <div class="next">
+    <b>明日 7:00 に最初のメールが届きます。</b>
+    <p class="lede" style="margin-top: 6px">
+      今日の予定と、上の定例の状態をお知らせします。入出金を取り込むと、定期の入金・支払いと残高の動きが加わります。
+    </p>
+    <a class="btn" href="#">入出金の CSV を取り込む</a><a class="btn o" href="#">あとで</a>
+  </div>
+</div>

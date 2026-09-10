@@ -14,9 +14,7 @@
   "PostToolUse": [
     {
       "matcher": "Write|Edit",
-      "hooks": [
-        { "type": "command", "command": "npx prettier --write . 2>/dev/null; true" }
-      ]
+      "hooks": [{ "type": "command", "command": "npx prettier --write . 2>/dev/null; true" }]
     }
   ]
 }
@@ -36,13 +34,13 @@
 
 `https://code.claude.com/docs/en/hooks` を読んで確定させた。
 
-| 事項 | 実際 |
-| --- | --- |
-| `type: "command"` フックの入力 | **stdin に JSON**。`tool_input.file_path` に編集先が入る |
-| `$CLAUDE_FILE_PATHS` 環境変数 | **存在しない。** ドキュメント全体の `CLAUDE_*` 一覧に無い |
-| `${tool_input.file_path}` 置換 | `type: "mcp_tool"` の `input` 専用。**command フックでは使えない** |
-| exit 0 の stderr | **デバッグログにしか出ない。** Claude には見えない |
-| exit 2 の stderr | **PostToolUse では Claude に表示される。ツールは既に実行済みなのでブロックにはならない** |
+| 事項                           | 実際                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `type: "command"` フックの入力 | **stdin に JSON**。`tool_input.file_path` に編集先が入る                                 |
+| `$CLAUDE_FILE_PATHS` 環境変数  | **存在しない。** ドキュメント全体の `CLAUDE_*` 一覧に無い                                |
+| `${tool_input.file_path}` 置換 | `type: "mcp_tool"` の `input` 専用。**command フックでは使えない**                       |
+| exit 0 の stderr               | **デバッグログにしか出ない。** Claude には見えない                                       |
+| exit 2 の stderr               | **PostToolUse では Claude に表示される。ツールは既に実行済みなのでブロックにはならない** |
 
 したがって「失敗を握りつぶさない」を満たすには **exit 2** が要る。
 `; true` で 0 に丸めると、`2>/dev/null` を外しても結局見えないままになる。

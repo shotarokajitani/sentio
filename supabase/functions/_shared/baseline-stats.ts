@@ -173,9 +173,10 @@ export const OUTFLOW_BASELINE = {
  * `direction` が無い行は `amount` の符号で決める。**分からないものは捨てる**——
  * どちらの分布にも入れないほうが、間違った側に足すより害が小さい。
  */
-export function splitByDirection(
-  events: ReadonlyArray<{ metrics?: unknown }>,
-): { inflow: number[]; outflow: number[] } {
+export function splitByDirection(events: ReadonlyArray<{ metrics?: unknown }>): {
+  inflow: number[];
+  outflow: number[];
+} {
   const inflow: number[] = [];
   const outflow: number[] = [];
 

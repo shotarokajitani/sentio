@@ -162,8 +162,8 @@ describe("scheduleDayIntervals — 予定が入っている「日」の間隔", 
   });
 
   it("6日ぶんあれば間隔5件で成立し、中央値が平常の間隔になる", () => {
-    const sixWeeks = [0, 7, 14, 21, 28, 35].map(
-      (d) => new Date(Date.UTC(2026, 6, 6 + d, 1)).toISOString(),
+    const sixWeeks = [0, 7, 14, 21, 28, 35].map((d) =>
+      new Date(Date.UTC(2026, 6, 6 + d, 1)).toISOString(),
     );
     const stats = buildBaselineStats(scheduleDayIntervals(sixWeeks), 5);
     expect(stats).not.toBeNull();

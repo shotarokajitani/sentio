@@ -132,7 +132,6 @@ describe("findUnreachable — 陰性コントロール", () => {
   });
 });
 
-
 /**
  * 2026-08-31 の修理。**宣言が1件しか無いことが穴だった**が、
  * 広げようとすると到達しているエンドポイントまで `no-importer` になった。
@@ -149,7 +148,10 @@ describe("到達の見方（2026-08-31 の修理）", () => {
   it("兄弟の相対 import（`./connect-client`）を到達と認める", () => {
     const sources = [
       { file: "src/app/connect/connect-client.tsx", source: 'fetch("/api/csv/analyze")' },
-      { file: "src/app/connect/page.tsx", source: 'import { ConnectClient } from "./connect-client";' },
+      {
+        file: "src/app/connect/page.tsx",
+        source: 'import { ConnectClient } from "./connect-client";',
+      },
     ];
     expect(findUnreachable([SIBLING_SPEC], () => true, sources)).toEqual([]);
   });
@@ -183,7 +185,9 @@ describe("到達の見方（2026-08-31 の修理）", () => {
       route: "src/app/api/auth/session/route.ts",
       contract: "A-1",
     };
-    const sources = [{ file: "src/lib/auth/session-caller.ts", source: 'fetch("/api/auth/session")' }];
+    const sources = [
+      { file: "src/lib/auth/session-caller.ts", source: 'fetch("/api/auth/session")' },
+    ];
     expect(findUnreachable([spec], () => true, sources)).toEqual([
       { id: "auth-session", reason: "no-importer" },
     ]);

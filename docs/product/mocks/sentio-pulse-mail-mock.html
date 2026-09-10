@@ -1,0 +1,326 @@
+<title>Sentio 毎朝のメール試案</title>
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500&family=Noto+Sans+JP:wght@400;500&display=swap"
+/>
+<style>
+  :root {
+    --bg: #efece5;
+    --paper: #fbfaf6;
+    --ink: #1f2430;
+    --ink2: #5b6070;
+    --ink3: #8d90a0;
+    --rule: #e2ddd2;
+    --navy: #22375a;
+    --warn: #a4651d;
+    --warn-soft: #f6ecd9;
+    --ok: #2f6b4f;
+    --serif: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+    --sans: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111318;
+      --paper: #1c2028;
+      --ink: #ebe8e0;
+      --ink2: #b3b0a6;
+      --ink3: #7d7b74;
+      --rule: #2c3039;
+      --navy: #b9c7e2;
+      --warn: #dcae62;
+      --warn-soft: #3a2f1c;
+      --ok: #8fc7a8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111318;
+    --paper: #1c2028;
+    --ink: #ebe8e0;
+    --ink2: #b3b0a6;
+    --ink3: #7d7b74;
+    --rule: #2c3039;
+    --navy: #b9c7e2;
+    --warn: #dcae62;
+    --warn-soft: #3a2f1c;
+    --ok: #8fc7a8;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .inbox {
+    max-width: 640px;
+    margin: 32px auto 0;
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--ink3);
+  }
+  .inbox .row {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    display: grid;
+    grid-template-columns: 90px 1fr 60px;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .inbox .row .pre {
+    color: var(--ink3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mail {
+    max-width: 640px;
+    margin: 20px auto 60px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 36px 40px 28px;
+  }
+  .wm {
+    font-family: var(--serif);
+    letter-spacing: 0.18em;
+    font-size: 16px;
+    color: var(--ink2);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 22px;
+    margin: 24px 0 14px;
+    text-wrap: balance;
+  }
+  .sum {
+    font-size: 15.5px;
+    margin: 0 0 6px;
+  }
+  .sum p {
+    margin: 0 0 4px;
+  }
+  .state {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 1px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: var(--ink2);
+    margin: 30px 0 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+  }
+  p {
+    margin: 0 0 6px;
+  }
+  .q {
+    color: var(--ink2);
+    font-size: 14px;
+  }
+  .li {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--rule);
+    font-size: 14px;
+  }
+  .li .t {
+    color: var(--ink2);
+    font-variant-numeric: tabular-nums;
+  }
+  .chg {
+    border-left: 2px solid var(--warn);
+    padding-left: 14px;
+    margin: 8px 0;
+  }
+  .chg b {
+    font-weight: 500;
+  }
+  .chg .ev {
+    font-size: 13px;
+    color: var(--ink2);
+  }
+  .acts {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .acts a {
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1px solid var(--navy);
+    color: var(--navy);
+    text-decoration: none;
+    border-radius: 2px;
+  }
+  .acts a.p {
+    background: var(--navy);
+    color: var(--paper);
+  }
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  .tbl td {
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--rule);
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl td.r {
+    text-align: right;
+  }
+  .ok {
+    color: var(--ok);
+  }
+  .foot {
+    margin-top: 36px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink3);
+    line-height: 1.8;
+  }
+  .foot a {
+    color: var(--ink3);
+  }
+  .lbl {
+    max-width: 640px;
+    margin: 10px auto 0;
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--ink3);
+  }
+  @media (max-width: 560px) {
+    .mail {
+      padding: 26px 20px;
+    }
+    .inbox .row {
+      grid-template-columns: 70px 1fr 48px;
+    }
+  }
+</style>
+
+<div class="lbl">受信箱での見え方（件名と冒頭）</div>
+<div class="inbox">
+  <div class="row">
+    <span>Sentio</span
+    ><span
+      ><b style="font-weight: 500">【Sentio】9月8日（月）の会社</b>
+      <span class="pre">— 9月8日は会議が1件、45分でした。入出金は8月31日分まで…</span></span
+    ><span style="text-align: right">7:00</span>
+  </div>
+</div>
+
+<div class="lbl">本文（自社アカウントの本番データで組んだ試案。残高の金額は出していません）</div>
+<div class="mail">
+  <div class="wm">Sentio</div>
+  <h1>9月8日（月）の会社</h1>
+  <div class="sum">
+    <p>9月8日は会議が1件、45分でした（社外との打ち合わせ）。</p>
+    <p>入出金は8月31日分まで取り込み済みで、月末の定期入金2件は届いています。</p>
+    <p>定例の「週次経営会議」が今週はまだ入っていません。ほかは平常です。</p>
+    <span class="state">変わった動きが1件</span>
+  </div>
+
+  <h2>昨日の実績</h2>
+  <div class="li">
+    <span class="t">13:30–14:15</span><span>DATAZORA 打ち合わせ（社外2名）</span>
+  </div>
+  <p class="q" style="margin-top: 8px">入金・支払いは、9月分をまだ取り込んでいません。</p>
+
+  <h2>今日の予定</h2>
+  <p class="q">
+    予定は入っていません。先週の火曜は「新規パートナー商談（2回目）」（90分）がありました。
+  </p>
+
+  <h2>お金の動き（直近30日・8月31日まで）</h2>
+  <p>
+    入金は 3,145,068円で、前の30日（1,766,469円）より多い期間でした。定期の相手先
+    2件と、初めての相手先 2件からです。
+  </p>
+  <p>支払いは 55,250円（毎月末の返済）。自社の別口座への振替 3,460,000円は含めていません。</p>
+  <p>残高は、直近90日で最も低い水準です。月末の定期支払いまでに、定期入金が2件あります。</p>
+
+  <h2>変わった動き</h2>
+  <div class="chg">
+    <b>「週次経営会議」が今週はまだ入っていません</b>
+    <p class="ev">
+      8月24日・8月31日と7日おきに続いていましたが、9月7日の週には予定がありません（平常の間隔
+      7日、前回から9日）。
+    </p>
+    <p class="ev">
+      判断は梶谷さんがされることですが、開催しない週であれば「見送る」で、次から平常として扱います。
+    </p>
+    <div class="acts">
+      <a class="p" href="#">対応した</a><a href="#">見送る</a><a href="#">これは平常です</a
+      ><a href="#">根拠を見る</a>
+    </div>
+  </div>
+
+  <h2>定例の状態</h2>
+  <table class="tbl">
+    <tr>
+      <td>週次経営会議</td>
+      <td>平常 7日</td>
+      <td>最終 8/31</td>
+      <td class="r" style="color: var(--warn)">9日空いています</td>
+    </tr>
+    <tr>
+      <td>開発デイリー</td>
+      <td>平常 7日</td>
+      <td>最終 9/2</td>
+      <td class="r ok">平常</td>
+    </tr>
+    <tr>
+      <td>顧客定例 — 導入レビュー</td>
+      <td>平常 7日</td>
+      <td>最終 9/3</td>
+      <td class="r ok">平常</td>
+    </tr>
+    <tr>
+      <td>ハクホウドウデイーワイワン からの入金</td>
+      <td>毎月末</td>
+      <td>最終 8/31</td>
+      <td class="r ok">届きました</td>
+    </tr>
+    <tr>
+      <td>アクシスコンサルテイング からの入金</td>
+      <td>毎月末</td>
+      <td>最終 8/27</td>
+      <td class="r ok">届きました</td>
+    </tr>
+  </table>
+
+  <h2>見えているもの</h2>
+  <p class="q">
+    Googleカレンダー: 昨夜 21:00 に取り込み済み（52件）。<br />入出金:
+    8月31日分まで（CSV・59件）。9月分を取り込むと、月末の定期入金の到着をお知らせできます。<br />まだ見ていないもの:
+    会計ソフト・メッセージの往来・勤怠。
+  </p>
+
+  <div class="foot">
+    株式会社ディセーノ　〒150-0043 東京都渋谷区道玄坂1丁目10番8号 渋谷道玄坂東急ビル2F-C<br />
+    このメールへのお問い合わせ:
+    support@mdc-diseno.com　／　配信の停止をご希望の場合は、上記までご連絡ください。<br />
+    <a href="#">ダッシュボードで根拠を見る</a>　／　Sentio — 入力ゼロ。それでも、見える。
+  </div>
+</div>

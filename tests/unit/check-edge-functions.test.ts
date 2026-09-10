@@ -43,12 +43,20 @@ describe("宣言・ディレクトリ・deploy.yml が一致する", () => {
   });
 
   it("**陰性**: 宣言に居るのにディレクトリが無ければ赤くなる", () => {
-    const out = checkLocal(decl, dirs.filter((d) => d !== "day0"), deployed);
+    const out = checkLocal(
+      decl,
+      dirs.filter((d) => d !== "day0"),
+      deployed,
+    );
     expect(out.some((f) => f.includes("[dangling]"))).toBe(true);
   });
 
   it("**陰性**: deploy.yml から1本抜けると赤くなる（配り忘れ）", () => {
-    const out = checkLocal(decl, dirs, deployed.filter((d) => d !== "deliver-pulse"));
+    const out = checkLocal(
+      decl,
+      dirs,
+      deployed.filter((d) => d !== "deliver-pulse"),
+    );
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("[not-deployed]");
     expect(out[0]).toContain("deliver-pulse");
@@ -106,16 +114,35 @@ describe("削除の段の作法", () => {
     // **件数で固定しない。** 発注 ①-5 で `ingest-csv` が消す側に移り21本になった。
     // 見るべきは「20本が漏れなく入っているか」であって、一覧の長さではない
     const legacy = [
-      "analyze-financial-pdf", "check-trial-expiry", "collect-external-data",
-      "create-checkout", "create-portal-link", "deliver-question", "detect-signals",
-      "generate-question", "google-calendar-oauth", "learn-pattern",
-      "on-concern-changed", "on-integration-connected", "process-answer",
-      "register-company", "send-onboarding", "send-weekly-summary", "stripe-webhook",
-      "suggest-competitors", "sync-calendar-data", "update-company-settings",
+      "analyze-financial-pdf",
+      "check-trial-expiry",
+      "collect-external-data",
+      "create-checkout",
+      "create-portal-link",
+      "deliver-question",
+      "detect-signals",
+      "generate-question",
+      "google-calendar-oauth",
+      "learn-pattern",
+      "on-concern-changed",
+      "on-integration-connected",
+      "process-answer",
+      "register-company",
+      "send-onboarding",
+      "send-weekly-summary",
+      "stripe-webhook",
+      "suggest-competitors",
+      "sync-calendar-data",
+      "update-company-settings",
     ];
     expect(legacy).toHaveLength(20);
     for (const slug of legacy) expect(decl.remove, slug).toContain(slug);
-    for (const slug of ["stripe-webhook", "create-checkout", "create-portal-link", "process-answer"]) {
+    for (const slug of [
+      "stripe-webhook",
+      "create-checkout",
+      "create-portal-link",
+      "process-answer",
+    ]) {
       expect(decl.remove, slug).toContain(slug);
     }
   });

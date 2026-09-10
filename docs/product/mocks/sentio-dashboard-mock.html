@@ -1,0 +1,726 @@
+<title>Sentio ダッシュボード試案</title>
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+/>
+<style>
+  :root {
+    --bg: #faf8f3;
+    --ink: #1f2430;
+    --ink-2: #5b6070;
+    --ink-3: #8d90a0;
+    --rule: #e2ddd2;
+    --panel: #ffffff;
+    --navy: #22375a;
+    --navy-soft: #e9edf4;
+    --warn: #a4651d;
+    --warn-soft: #f6ecd9;
+    --ok: #2f6b4f;
+    --ok-soft: #e4efe8;
+    --serif: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --sans: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181f;
+      --ink: #ebe8e0;
+      --ink-2: #b3b0a6;
+      --ink-3: #7d7b74;
+      --rule: #2c3039;
+      --panel: #1c2028;
+      --navy: #b9c7e2;
+      --navy-soft: #252d3d;
+      --warn: #dcae62;
+      --warn-soft: #3a2f1c;
+      --ok: #8fc7a8;
+      --ok-soft: #1f3328;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181f;
+    --ink: #ebe8e0;
+    --ink-2: #b3b0a6;
+    --ink-3: #7d7b74;
+    --rule: #2c3039;
+    --panel: #1c2028;
+    --navy: #b9c7e2;
+    --navy-soft: #252d3d;
+    --warn: #dcae62;
+    --warn-soft: #3a2f1c;
+    --ok: #8fc7a8;
+    --ok-soft: #1f3328;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .mast {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 14px;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 20px;
+    letter-spacing: 0.18em;
+  }
+  .mast a {
+    color: var(--ink-3);
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .note {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 12px;
+    border-radius: 2px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 30px;
+    line-height: 1.35;
+    margin: 36px 0 8px;
+    text-wrap: balance;
+  }
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    align-items: center;
+    color: var(--ink-2);
+    font-size: 13px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .pill.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+  .pill.warn {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+  .seeing {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--ink-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .seeing b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+  section {
+    margin-top: 44px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .lede {
+    color: var(--ink-2);
+    font-size: 13px;
+    margin: 6px 0 16px;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .tile {
+    padding: 16px 14px 14px;
+    border-right: 1px solid var(--rule);
+  }
+  .tile:last-child {
+    border-right: 0;
+  }
+  .tile .l {
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .tile .v {
+    font-family: var(--serif);
+    font-size: 26px;
+    line-height: 1.2;
+    margin: 6px 0 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile .v small {
+    font-size: 13px;
+    font-family: var(--sans);
+    color: var(--ink-2);
+    margin-left: 2px;
+  }
+  .tile .c {
+    font-size: 12px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .tile.empty .v {
+    font-size: 14px;
+    font-family: var(--sans);
+    color: var(--ink-2);
+    margin-top: 10px;
+  }
+  .tile.empty a {
+    color: var(--navy);
+    font-size: 12px;
+  }
+  .day {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .day h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+    margin: 0 0 6px;
+  }
+  .ev {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 1px solid var(--rule);
+    font-size: 14px;
+  }
+  .ev:last-child {
+    border-bottom: 1px solid var(--rule);
+  }
+  .ev .t {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-2);
+  }
+  .ev .m {
+    color: var(--ink-3);
+    font-size: 12px;
+  }
+  .charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  .chart h3 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+    margin: 0 0 4px;
+  }
+  .chart .cap {
+    font-size: 12px;
+    color: var(--ink-3);
+    margin: 2px 0 0;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .bar {
+    fill: var(--navy);
+    opacity: 0.85;
+  }
+  .bar.now {
+    opacity: 1;
+  }
+  .bar.zero {
+    fill: var(--rule);
+  }
+  .axis {
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .lab {
+    font-size: 10px;
+    fill: var(--ink-3);
+    font-family: var(--sans);
+  }
+  .val {
+    font-size: 10px;
+    fill: var(--ink-2);
+    font-family: var(--sans);
+  }
+  .finding {
+    border-left: 2px solid var(--warn);
+    padding: 4px 0 4px 16px;
+    margin-top: 12px;
+  }
+  .finding .h {
+    font-weight: 500;
+  }
+  .finding p {
+    margin: 6px 0;
+    font-size: 14px;
+  }
+  .finding .ev2 {
+    font-size: 13px;
+    color: var(--ink-2);
+    margin: 6px 0;
+  }
+  .finding details summary {
+    cursor: pointer;
+    color: var(--navy);
+    font-size: 13px;
+  }
+  .finding details summary:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+  }
+  .finding table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .finding td {
+    padding: 4px 0;
+    border-top: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+  }
+  .acts {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: 1px solid var(--navy);
+    background: transparent;
+    color: var(--navy);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--navy);
+    color: var(--bg);
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+  }
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .tbl th {
+    font-weight: 500;
+    color: var(--ink-2);
+    font-size: 12px;
+    text-align: left;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tbl td {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+    vertical-align: top;
+  }
+  .tbl td.r,
+  .tbl th.r {
+    text-align: right;
+  }
+  .st {
+    font-size: 12px;
+  }
+  .st.ok {
+    color: var(--ok);
+  }
+  .st.warn {
+    color: var(--warn);
+  }
+  .mails .ev {
+    grid-template-columns: 110px 1fr;
+  }
+  .mails a {
+    color: var(--navy);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .cov {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 24px;
+    font-size: 14px;
+  }
+  .cov div {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .cov span:last-child {
+    color: var(--ink-2);
+    font-size: 13px;
+    text-align: right;
+  }
+  .cov .no span:last-child {
+    color: var(--ink-3);
+  }
+  .foot {
+    margin-top: 60px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  @media (max-width: 640px) {
+    .wrap {
+      padding: 28px 18px 60px;
+    }
+    h1 {
+      font-size: 24px;
+    }
+    .tiles {
+      grid-template-columns: 1fr 1fr;
+    }
+    .tile:nth-child(2) {
+      border-right: 0;
+    }
+    .tile:nth-child(1),
+    .tile:nth-child(2) {
+      border-bottom: 1px solid var(--rule);
+    }
+    .day,
+    .charts,
+    .cov {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .bar {
+      transition: opacity 0.2s;
+    }
+  }
+</style>
+
+<div class="wrap">
+  <div class="mast"><span class="wordmark">Sentio</span><a href="#">ログアウト</a></div>
+  <p class="note">
+    試案です。数字は自社アカウント（ab73e516）の本番データを読み取り照会で集計したもの。8月の支払いは自社間の振替
+    3,460,000円を除いています。
+  </p>
+
+  <h1>9月9日（火）の会社</h1>
+  <div class="status">
+    <span class="pill warn">前週からの変化 1件</span>
+    <span>最終取込 9月8日 21:00（カレンダー）／8月31日分まで（入出金）</span>
+  </div>
+  <div class="seeing">
+    見えているもの: <b>Googleカレンダー</b> <b>入出金（CSV）</b>
+    <span>／ まだ見ていないもの: 会計ソフト・メッセージ・勤怠</span>
+  </div>
+
+  <section>
+    <h2>今日と明日</h2>
+    <div class="day">
+      <div>
+        <h3>今日 9月9日（火）</h3>
+        <div class="ev"><span class="t">終日</span><span>予定は入っていません</span></div>
+      </div>
+      <div>
+        <h3>明日 9月10日（水）</h3>
+        <div class="ev">
+          <span class="t">終日</span
+          ><span
+            >予定は入っていません<br /><span class="m"
+              >先週の水曜は「開発デイリー」（30分）がありました</span
+            ></span
+          >
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>主要指標</h2>
+    <p class="lede">比較はすべて「前の期間の同じ曜日・同じ時刻まで」です。</p>
+    <div class="tiles">
+      <div class="tile">
+        <div class="l">今週の会議時間</div>
+        <div class="v">45<small>分</small></div>
+        <div class="c">前週同時点 150分・1件→1件</div>
+      </div>
+      <div class="tile">
+        <div class="l">社外との会議（今週）</div>
+        <div class="v">1<small>件</small></div>
+        <div class="c">平常 週2件</div>
+      </div>
+      <div class="tile">
+        <div class="l">入金（直近30日）</div>
+        <div class="v">3,145,068<small>円</small></div>
+        <div class="c">前30日 1,766,469円</div>
+      </div>
+      <div class="tile">
+        <div class="l">残高（8月31日）</div>
+        <div class="v">33,972<small>円</small></div>
+        <div class="c">直近90日の最低。9月末に定期入金2件</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>推移</h2>
+    <div class="charts">
+      <div class="chart">
+        <h3>週ごとの会議時間（分）・直近12週</h3>
+        <svg viewBox="0 0 340 150" role="img" aria-label="週ごとの会議時間の棒グラフ">
+          <line class="axis" x1="24" y1="120" x2="336" y2="120" />
+          <!-- weeks 6/15 .. 9/7 ; max 300 -> 100px -->
+          <rect class="bar" x="28" y="80" width="18" height="40" />
+          <rect class="bar zero" x="54" y="118" width="18" height="2" />
+          <rect class="bar zero" x="80" y="118" width="18" height="2" />
+          <rect class="bar zero" x="106" y="118" width="18" height="2" />
+          <rect class="bar zero" x="132" y="118" width="18" height="2" />
+          <rect class="bar zero" x="158" y="118" width="18" height="2" />
+          <rect class="bar zero" x="184" y="118" width="18" height="2" />
+          <rect class="bar zero" x="210" y="118" width="18" height="2" />
+          <rect class="bar zero" x="236" y="118" width="18" height="2" />
+          <rect class="bar" x="262" y="20" width="18" height="100" />
+          <rect class="bar" x="288" y="20" width="18" height="100" />
+          <rect class="bar now" x="314" y="105" width="18" height="15" />
+          <text class="val" x="271" y="14">300</text>
+          <text class="val" x="297" y="14">300</text>
+          <text class="val" x="326" y="99">45</text>
+          <text class="lab" x="28" y="136">6/15</text>
+          <text class="lab" x="184" y="136">7/27</text>
+          <text class="lab" x="262" y="136">8/24</text>
+          <text class="lab" x="314" y="136">9/7</text>
+          <text class="lab" x="0" y="124">0</text>
+          <text class="lab" x="0" y="24">300</text>
+        </svg>
+        <p class="cap">7月は予定の取り込みがありませんでした（0件）。今週は火曜時点の値です。</p>
+      </div>
+      <div class="chart">
+        <h3>月ごとの入金（万円）・直近6か月</h3>
+        <svg viewBox="0 0 340 150" role="img" aria-label="月ごとの入金の棒グラフ">
+          <line class="axis" x1="24" y1="120" x2="336" y2="120" />
+          <!-- Mar..Aug: 137,224,129,159,177,315 ; max 315 -> 100px -->
+          <rect class="bar" x="34" y="76.5" width="34" height="43.5" />
+          <rect class="bar" x="84" y="49" width="34" height="71" />
+          <rect class="bar" x="134" y="79" width="34" height="41" />
+          <rect class="bar" x="184" y="69.5" width="34" height="50.5" />
+          <rect class="bar" x="234" y="64" width="34" height="56" />
+          <rect class="bar now" x="284" y="20" width="34" height="100" />
+          <text class="val" x="42" y="71">137</text>
+          <text class="val" x="92" y="43">224</text>
+          <text class="val" x="142" y="73">129</text>
+          <text class="val" x="192" y="64">159</text>
+          <text class="val" x="242" y="58">177</text>
+          <text class="val" x="292" y="14">315</text>
+          <text class="lab" x="44" y="136">3月</text>
+          <text class="lab" x="94" y="136">4月</text>
+          <text class="lab" x="144" y="136">5月</text>
+          <text class="lab" x="194" y="136">6月</text>
+          <text class="lab" x="244" y="136">7月</text>
+          <text class="lab" x="294" y="136">8月</text>
+          <text class="lab" x="0" y="124">0</text>
+        </svg>
+        <p class="cap">定期の相手先 2件（月末）と、8月に初めての相手先 2件。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>見通し（10〜12月）</h2>
+    <p class="lede">
+      材料がそろっている項目だけを出しています。金額は幅で示し、根拠は行ごとに辿れます。
+    </p>
+    <table class="tbl">
+      <tr>
+        <th>項目</th>
+        <th>見込み</th>
+        <th class="r">根拠</th>
+      </tr>
+      <tr>
+        <td>定期の入金（2社の継続）</td>
+        <td>約 450万円（1社止まれば 119万〜332万円）</td>
+        <td class="r">
+          Hakuhodo DY ONE 39.6万円×3、アクシスコンサルティング 110.5万円×3（7〜8月の実績）
+        </td>
+      </tr>
+      <tr>
+        <td>商談からの新規入金</td>
+        <td>まだ出せません</td>
+        <td class="r">商談→入金の実績が6か月分たまると出ます（現在 商談2件・入金実績なし）</td>
+      </tr>
+      <tr>
+        <td>季節性（前年同期比）</td>
+        <td>まだ出せません</td>
+        <td class="r">入出金が12か月分たまると出ます（現在 6か月・3月〜8月）</td>
+      </tr>
+      <tr>
+        <td>業界の向き</td>
+        <td>横ばい（未連携）</td>
+        <td class="r">同業種の景況感（日銀短観・中小企業景況調査）は取込後に表示</td>
+      </tr>
+    </table>
+    <p class="cap">
+      定期の支払い（公庫への返済 約5.5万円×3）を差し引いた後の見込みは
+      約433万円。自社の別口座への振替は入出金に含めていません。
+    </p>
+  </section>
+
+  <section>
+    <h2>前週からの変化</h2>
+    <div class="finding">
+      <div class="h">「週次経営会議」が今週はまだ入っていません</div>
+      <p>
+        8月24日・8月31日と7日おきに続いていましたが、9月7日の週には予定がありません（平常の間隔
+        7日、前回から9日）。
+      </p>
+      <p class="ev2">
+        判断は梶谷さんがされることですが、開催しない週であれば「見送る」を押していただければ、次から平常として扱います。
+      </p>
+      <details>
+        <summary>根拠を見る</summary>
+        <table>
+          <tr>
+            <td>8月24日（日）</td>
+            <td>週次経営会議</td>
+            <td class="r">60分・社内</td>
+          </tr>
+          <tr>
+            <td>8月31日（日）</td>
+            <td>週次経営会議</td>
+            <td class="r">60分・社内2名</td>
+          </tr>
+          <tr>
+            <td>9月7日（日）</td>
+            <td>—</td>
+            <td class="r">予定なし</td>
+          </tr>
+        </table>
+      </details>
+      <div class="acts">
+        <button class="btn primary">対応した</button><button class="btn">見送る</button
+        ><button class="btn">これは平常です</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>定例会議・定期入金の状況</h2>
+    <table class="tbl">
+      <tr>
+        <th>定例</th>
+        <th>平常の間隔</th>
+        <th>最終</th>
+        <th class="r">状態</th>
+      </tr>
+      <tr>
+        <td>週次経営会議</td>
+        <td>7日</td>
+        <td>8月31日</td>
+        <td class="r"><span class="st warn">9日空いています</span></td>
+      </tr>
+      <tr>
+        <td>開発デイリー</td>
+        <td>7日</td>
+        <td>9月2日</td>
+        <td class="r"><span class="st ok">平常</span></td>
+      </tr>
+      <tr>
+        <td>顧客定例 — 導入レビュー</td>
+        <td>7日</td>
+        <td>9月3日</td>
+        <td class="r"><span class="st ok">平常</span></td>
+      </tr>
+      <tr>
+        <td>ハクホウドウデイーワイワン からの入金</td>
+        <td>毎月末</td>
+        <td>8月31日・396,000円</td>
+        <td class="r"><span class="st ok">平常</span></td>
+      </tr>
+      <tr>
+        <td>アクシスコンサルテイング からの入金</td>
+        <td>毎月末</td>
+        <td>8月27日・1,105,340円</td>
+        <td class="r"><span class="st ok">平常</span></td>
+      </tr>
+      <tr>
+        <td>公庫への返済（支払い）</td>
+        <td>毎月末</td>
+        <td>8月31日・55,250円</td>
+        <td class="r"><span class="st ok">平常</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="mails">
+    <h2>過去のメール</h2>
+    <div class="ev">
+      <span class="t">9月9日 7:00</span
+      ><span
+        ><a href="#">9月8日（月）の会社</a><br /><span class="m"
+          >会議1件・45分。入出金は8月31日分まで。</span
+        ></span
+      >
+    </div>
+    <div class="ev">
+      <span class="t">9月8日 8:00</span
+      ><span
+        ><a href="#">今週の会社（8月31日〜9月6日）</a><br /><span class="m"
+          >会議5件・300分。定期入金2件は予定どおり。</span
+        ></span
+      >
+    </div>
+    <div class="ev">
+      <span class="t">9月8日 7:00</span><span><a href="#">9月7日（日）の会社</a></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>連携済み・未連携のデータ</h2>
+    <div class="cov">
+      <div><span>Googleカレンダー</span><span>9月8日 21:00 取り込み・52件</span></div>
+      <div><span>入出金（CSV）</span><span>8月31日分まで・59件</span></div>
+      <div class="no"><span>会計ソフト（freee）</span><span>準備中</span></div>
+      <div class="no"><span>メッセージの往来</span><span>まだ見ていません</span></div>
+      <div class="no"><span>勤怠</span><span>まだ見ていません</span></div>
+      <div class="no"><span>従業員の発言や本文</span><span>取得しません</span></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    この画面は、メールで気になった点の根拠を辿る場所です。毎日見に来る必要はありません。
+  </div>
+</div>

@@ -972,17 +972,22 @@ Deno.serve(async (req: Request) => {
         now: new Date(),
       },
       (key) =>
-        sendEmail(mail.config, {
-          to: email,
-          subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: renderDay0Html(company_name, passedBlocks, {
-            generationTimeMs,
-            totalTokens,
-            passedCount: passedBlocks.length,
-            totalCount: blocks.length,
-          }),
-          text: renderDay0Text(company_name, passedBlocks),
-        }, fetch, key),
+        sendEmail(
+          mail.config,
+          {
+            to: email,
+            subject: `[Sentio] Day0レポート: ${company_name}`,
+            html: renderDay0Html(company_name, passedBlocks, {
+              generationTimeMs,
+              totalTokens,
+              passedCount: passedBlocks.length,
+              totalCount: blocks.length,
+            }),
+            text: renderDay0Text(company_name, passedBlocks),
+          },
+          fetch,
+          key,
+        ),
     );
 
     return deliveryResponse(result, { report });

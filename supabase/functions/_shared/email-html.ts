@@ -346,21 +346,56 @@ ${renderFooter()}
 </html>`;
 }
 
-export function renderWeeklyText(sections: WeeklySection[]): string {
-  const sectionTitles: Record<string, string> = {
-    digest: "状態ダイジェスト",
-    finding: "今週のFinding",
-    followup: "続報",
-    stable_coverage: "安定指標とカバレッジ",
-    nudge: "",
-  };
-  const lines = ["今週の会社", "=".repeat(40), ""];
+/**
+ * 週次の節に付ける見出し（発注 ③-3・2026-09-10 の写像で確定）。
+ *
+ * **内部の型は `docs/spec/04_act.md` の5つのまま、表に出す語だけ日本語にする。**
+ * 「今週のFinding」「状態ダイジェスト」は作り手の語で、
+ * **読んだ経営者は自社の状態ではなく道具の都合を読まされていた。**
+ *
+ *   digest          → 先週の要約
+ *   finding         → 前週からの変化
+ *   followup        → 取引先の動き
+ *   stable_coverage → 主要指標と時間の使い方（節の中でさらに割る）
+ *   nudge           → 見出しなし・末尾1行
+ */
+const WEEKLY_SECTION_TITLES: Record<string, string> = {
+  digest: "先週の要約",
+  finding: "前週からの変化",
+  followup: "取引先の動き",
+  stable_coverage: "主要指標と時間の使い方",
+  nudge: "",
+};
+
+export interface WeeklyTextOptions {
+  /** 「9月1日〜9月7日」。見出しに出す */
+  period?: string;
+  /** 初回だけ冒頭に1行足す（`customer-journey-and-copy.md` §7） */
+  firstTime?: boolean;
+  /** 差し替えるフッター。未指定なら従来の1行 */
+  footer?: string;
+}
+
+export function renderWeeklyText(
+  sections: WeeklySection[],
+  options: WeeklyTextOptions = {},
+): string {
+  const heading = options.period ? `今週の会社（${options.period}）` : "今週の会社";
+  const lines = [heading, "=".repeat(40), ""];
+
+  // **初回だけ1行。** 7日目の追伸「明日、初めての『今週の会社』が届きます」と
+  // 対になっている。片方だけ入れると尻切れになる
+  if (options.firstTime) {
+    lines.push("初めての「今週の会社」です。毎週月曜の朝に届きます。", "");
+  }
+
   for (const s of sections) {
     if (!s.content) continue;
-    const title = sectionTitles[s.type] || s.type;
+    const title = WEEKLY_SECTION_TITLES[s.type] ?? s.type;
     if (title) lines.push(`■ ${title}`);
     lines.push(s.content, "");
   }
-  lines.push("Sentio — 報告ゼロで見える");
+
+  lines.push(options.footer ?? "Sentio — 報告ゼロで見える");
   return lines.join("\n");
 }

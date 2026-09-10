@@ -20,23 +20,23 @@
 
 ## Q1. PostgreSQL バージョン（`00023:38` の NOTICE の代替）
 
-| 項目 | 実測 |
-| --- | --- |
-| `server_version` | **17.6** |
-| `server_version_num` | **170006** |
-| verdict | **OK**（`>= 150000`） |
+| 項目                 | 実測                  |
+| -------------------- | --------------------- |
+| `server_version`     | **17.6**              |
+| `server_version_num` | **170006**            |
+| verdict              | **OK**（`>= 150000`） |
 
 停止点0（`docs/checklists/env-diff.md`）の実測値と一致する。
 `00023` の版ガード（`server_version_num < 150000` で `RAISE EXCEPTION`）は発火していない。
 
 ## Q2. `00023` の索引（`00023:82` の NOTICE の代替）
 
-| 項目 | 実測 |
-| --- | --- |
-| `index_name` | `idx_baselines_natural_key` |
-| `is_unique` | **true** |
-| `nulls_not_distinct` | **true** |
-| verdict | **OK** |
+| 項目                 | 実測                        |
+| -------------------- | --------------------------- |
+| `index_name`         | `idx_baselines_natural_key` |
+| `is_unique`          | **true**                    |
+| `nulls_not_distinct` | **true**                    |
+| verdict              | **OK**                      |
 
 定義:
 
@@ -58,12 +58,12 @@ UNIQUE の意味論も `ON CONFLICT` の推論も列集合で決まるため、�
 
 ## Q3. `00024` の移行行数（`00024:41` / `:108` の NOTICE の代替）
 
-| 項目 | 実測 | 期待 |
-| --- | --- | --- |
-| `total_rows` | **0** | 0 |
-| `still_alert_deferred` | **0** | 0 |
-| `status_null` | **0** | 0 |
-| verdict | **OK** | |
+| 項目                   | 実測   | 期待 |
+| ---------------------- | ------ | ---- |
+| `total_rows`           | **0**  | 0    |
+| `still_alert_deferred` | **0**  | 0    |
+| `status_null`          | **0**  | 0    |
+| verdict                | **OK** |      |
 
 **これが本来 NOTICE で見たかった値である。**
 停止点0 で採った事前計数（`delivery_log` 0行・うち `alert_deferred` 0）と一致し、
@@ -76,12 +76,12 @@ UNIQUE の意味論も `ON CONFLICT` の推論も列集合で決まるため、�
 
 ## Q4. `00024` が足した列・制約
 
-| 項目 | verdict |
-| --- | --- |
-| `idempotency_key` 列 | **OK** |
-| `attempts` 列（NOT NULL / DEFAULT 0） | **OK** |
-| `status` が NOT NULL | **OK** |
-| `idx_delivery_log_idempotency_key`（UNIQUE） | **OK** |
+| 項目                                         | verdict |
+| -------------------------------------------- | ------- |
+| `idempotency_key` 列                         | **OK**  |
+| `attempts` 列（NOT NULL / DEFAULT 0）        | **OK**  |
+| `status` が NOT NULL                         | **OK**  |
+| `idx_delivery_log_idempotency_key`（UNIQUE） | **OK**  |
 
 4件とも実在する。`status` の NOT NULL は、CHECK 制約が NULL を素通りするため
 併せて張る必要があったもの（契約 S-D9）。
@@ -97,10 +97,10 @@ UNIQUE の意味論も `ON CONFLICT` の推論も列集合で決まるため、�
 
 本検証で `00023` / `00024` の適用確認は完了した。デプロイ後に残るのは次の2つ。
 
-| 関門 | 内容 | ブロックする範囲 |
-| --- | --- | --- |
-| **2-b** | `net._http_response.status_code` が 200（cron の実疎通） | A-2（cron 登録の migration） |
-| **S-3-5** | 本番データでの完走（findings 0件が到達点） | **スライスのクローズ** |
+| 関門      | 内容                                                     | ブロックする範囲             |
+| --------- | -------------------------------------------------------- | ---------------------------- |
+| **2-b**   | `net._http_response.status_code` が 200（cron の実疎通） | A-2（cron 登録の migration） |
+| **S-3-5** | 本番データでの完走（findings 0件が到達点）               | **スライスのクローズ**       |
 
 S-4-2 後半（本番の実 Function URL へ認証なしで 401）は
 **2026-08-20 に合格済み**（`docs/runbooks/2026-08-20_s4-2_401-verification.md`）。

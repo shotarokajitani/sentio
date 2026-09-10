@@ -25,10 +25,7 @@ const OWN = "example.com";
 
 describe("出席者は人数と内訳だけにする", () => {
   it("自社ドメインとの一致で社内 / 社外を分ける", () => {
-    const out = summarizeAttendees(
-      ["a@example.com", "b@example.com", "c@example.org"],
-      OWN,
-    );
+    const out = summarizeAttendees(["a@example.com", "b@example.com", "c@example.org"], OWN);
     expect(out).toEqual({ total: 3, internal: 2, external: 1 });
   });
 

@@ -25,6 +25,32 @@ export interface FindingRow {
   status: string;
 }
 
+/** 取引先ごとの接点と入金（発注 ③-3 の「取引先の動き」） */
+export interface PartnerRow {
+  name: string;
+  /** 「9月7日 打ち合わせ（初回）」「会議なし（最終 5月29日）」 */
+  contact: string;
+  /** 「8月31日 396,000円（定期）」。無ければ null */
+  deposit: string | null;
+}
+
+/** 主要指標の1行。**今週だけを出さず、必ず比較を添える**（発注 ③-4） */
+export interface MetricRow {
+  label: string;
+  thisWeek: string;
+  lastWeek: string;
+  /** 過去8週の平均。**`baselines` の帯とは別物**（あちらは全期間） */
+  average8w: string;
+}
+
+/** 定例会議・定期入金の状態。通常も逸脱も同じ型で出す */
+export interface RecurringRow {
+  label: string;
+  usual: string;
+  lastAt: string | null;
+  state: string;
+}
+
 export interface WeeklySectionsInput {
   /** 画面と同じ `summarizeWeek` の出力。メール側で数え直さない */
   summary: WeeklySummary;
@@ -32,6 +58,24 @@ export interface WeeklySectionsInput {
   activeProviders: string[];
   csvCount: number;
   calCount: number;
+  /**
+   * ここから下は発注 ③ で足した節の材料。**すべて任意**にしてある——
+   * 集めるのは呼び出し側の仕事で、集められない環境では節を落とす。
+   * **空の見出しだけを出さない。**
+   */
+  /** 「先週の要約」の2行目。入出金の1行 */
+  cashflowLine?: string;
+  /** 「先週の要約」の3行目。定例の1行 */
+  recurringLine?: string;
+  /** 前週からの変化に出す本文（Finding の `rendered`） */
+  renderedFindings?: string[];
+  partners?: PartnerRow[];
+  metrics?: MetricRow[];
+  recurring?: RecurringRow[];
+  /** 「見通し」。実績が足りないときは呼び出し側が null にする */
+  outlook?: string | null;
+  /** 「来週の予定」 */
+  nextWeek?: string | null;
 }
 
 /** 前週の実績が無いときの言い方。**`0%` と書かない**（WM-1-4 / WM-D5）。
@@ -96,6 +140,16 @@ function comparisonText(label: string, change: Comparison): string {
   return `${label}は前週比 ${sign}${change.changePercent}%`;
 }
 
+/**
+ * 表の1行。**全角の空白で区切る。**
+ *
+ * メールは等幅で読まれるとは限らないので、桁を揃える書き方は当てにできない。
+ * 全角の空白なら、どの書体でも列の切れ目が見える。
+ */
+function row(cells: string[]): string {
+  return cells.join("　");
+}
+
 function digestContent(input: WeeklySectionsInput): string {
   const { summary } = input;
   if (summary.meetingCount === 0) {
@@ -111,37 +165,108 @@ function digestContent(input: WeeklySectionsInput): string {
   );
 }
 
-export function buildWeeklySections(input: WeeklySectionsInput): WeeklySection[] {
-  const { summary, findings } = input;
-  const topFindings = findings.slice(0, 2);
+/**
+ * 「前週からの変化」（内部の型は `finding`）。
+ *
+ * **`rendered` があればそれを出す。** `- what` の1行は「見えたこと」しか伝えず、
+ * 根拠も選択肢も落ちる（発注 ③-3）。
+ *
+ * **0件の週も節を消さない。** 見出しごと消えると「何も見ていない」のか
+ * 「見たが何も無かった」のかが区別できない。
+ */
+function findingContent(input: WeeklySectionsInput): string {
+  const rendered = (input.renderedFindings ?? []).filter((r) => r.trim().length > 0);
+  if (rendered.length > 0) return rendered.slice(0, 2).join("\n\n");
 
+  const top = input.findings.slice(0, 2);
+  if (top.length > 0) return top.map((f) => `- ${f.what}`).join("\n");
+  return "前週から変わった動きはありませんでした。";
+}
+
+/**
+ * 「取引先の動き」（内部の型は `followup`）。
+ *
+ * 前週までに出した項目のその後を**先に**置く。**経過を見ると決めたものを
+ * 埋もれさせない。** そのあとに取引先ごとの接点と入金を並べる。
+ */
+function followupContent(input: WeeklySectionsInput): string {
+  const lines: string[] = [];
+
+  for (const f of input.findings.filter((f) => f.status === "watching")) {
+    lines.push(`経過を見ています: ${f.what}`);
+  }
+
+  const partners = input.partners ?? [];
+  if (partners.length > 0) {
+    if (lines.length > 0) lines.push("");
+    for (const p of partners) {
+      lines.push(row([p.name, p.contact, p.deposit ?? "入金なし"]));
+    }
+  }
+
+  if (lines.length === 0) return "取引先ごとの動きは、まだ数えられていません。";
+  return lines.join("\n");
+}
+
+/**
+ * 「主要指標と時間の使い方」以下（内部の型は `stable_coverage`）。
+ *
+ * 発注 ③-3 で**5つの見出しをこの1つの型に入れる**と決めた。型を増やすと
+ * `docs/spec/04_act.md` の構成順（5枠）と対応が取れなくなる。
+ */
+function stableCoverageContent(input: WeeklySectionsInput): string {
+  const { summary } = input;
+  const blocks: string[] = [];
+
+  const metrics = input.metrics ?? [];
+  if (metrics.length > 0) {
+    blocks.push(
+      [
+        row(["指標", "今週", "前週", "過去8週の平均"]),
+        ...metrics.map((m) => row([m.label, m.thisWeek, m.lastWeek, m.average8w])),
+      ].join("\n"),
+    );
+  } else {
+    blocks.push(
+      summary.meetingCount === 0
+        ? "集計できる予定がまだありません。"
+        : `終日の予定は${summary.allDayCount}件。` +
+            `${comparisonText("総会議時間", summary.meetingMinutesChange)}。`,
+    );
+  }
+
+  const recurring = input.recurring ?? [];
+  if (recurring.length > 0) {
+    blocks.push(
+      [
+        "【定例会議・定期入金の状態】",
+        ...recurring.map((r) =>
+          row([r.label, `通常 ${r.usual}`, r.lastAt ? `最終 ${r.lastAt}` : "最終 なし", r.state]),
+        ),
+      ].join("\n"),
+    );
+  }
+
+  if (input.outlook) blocks.push(`【見通し】\n${input.outlook}`);
+  if (input.nextWeek) blocks.push(`【来週の予定】\n${input.nextWeek}`);
+
+  blocks.push(`【連携済み・未連携のデータ】\n${sourceSummary(input)}`);
+
+  return blocks.join("\n\n");
+}
+
+export function buildWeeklySections(input: WeeklySectionsInput): WeeklySection[] {
   return [
     { type: "digest", content: digestContent(input) },
+    { type: "finding", content: findingContent(input) },
+    { type: "followup", content: followupContent(input) },
+    { type: "stable_coverage", content: stableCoverageContent(input) },
     {
-      type: "finding",
-      content: topFindings.length > 0 ? topFindings.map((f) => `- ${f.what}`).join("\n") : "",
-    },
-    {
-      type: "followup",
-      content:
-        findings
-          .filter((f) => f.status === "watching")
-          .map((f) => `- 経過観察中: ${f.what}`)
-          .join("\n") || "",
-    },
-    {
-      type: "stable_coverage",
-      content:
-        summary.meetingCount === 0
-          ? `${sourceSummary(input)}集計できる予定がまだありません。`
-          : `${sourceSummary(input)}うち終日 ${summary.allDayCount}件。` +
-            `${comparisonText("総会議時間", summary.meetingMinutesChange)}。`,
-    },
-    {
+      // **見出しを立てない**（発注 ③-3）。末尾に1行だけ
       type: "nudge",
       content: input.activeProviders.includes("google_calendar")
         ? ""
-        : "Google カレンダーを接続すると、今週の会議の量が見えるようになります。",
+        : "Google カレンダーをつなぐと、会議の量と内訳が見えるようになります。",
     },
   ];
 }

@@ -57,7 +57,10 @@ describe("Google OAuth のスコープ", () => {
   it("Google API を叩いている箇所が、承認された範囲に収まっている", () => {
     // 実測（2026-08-20 の runbook）でコードが叩く Google API は
     // `calendars/primary/events` の1本だけだった。ここが増えたら審査の前提が変わる
-    const callers = ["src/app/auth/callback/google/route.ts", "supabase/functions/sync-connections/index.ts"];
+    const callers = [
+      "src/app/auth/callback/google/route.ts",
+      "supabase/functions/sync-connections/index.ts",
+    ];
     for (const file of callers) {
       const source = readFileSync(file, "utf8");
       const endpoints = [...source.matchAll(/calendar\/v3\/([A-Za-z/]+)/g)].map((m) => m[1]);

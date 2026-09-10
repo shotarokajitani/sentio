@@ -49,10 +49,7 @@ describe("審査の要件", () => {
   // 見出しの平文アプリ名が無くなったので、機械可読なアプリ名はここだけになった。
   // `app/layout.tsx` は `next/font` を読むため試験からは import できない。ソースで見る
   it("ページの題にアプリ名が入る（審査の自動検証が見る位置のひとつ）", () => {
-    const layout = readFileSync(
-      path.resolve(__dirname, "../../src/app/layout.tsx"),
-      "utf8",
-    );
+    const layout = readFileSync(path.resolve(__dirname, "../../src/app/layout.tsx"), "utf8");
 
     expect(layout).toContain(`title: "${ja.brand}"`);
   });

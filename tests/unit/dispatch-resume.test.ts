@@ -124,7 +124,9 @@ describe("配信側の配線", () => {
   });
 
   it("時間切れは `finished_at` を入れない（次の再開で拾い直す）", () => {
-    expect(dispatch).toContain('await settle(target.companyId, "timeout", "deliver_timeout", false)');
+    expect(dispatch).toContain(
+      'await settle(target.companyId, "timeout", "deliver_timeout", false)',
+    );
     expect(runtime).toContain("finished_at: finished ? new Date().toISOString() : null");
   });
 

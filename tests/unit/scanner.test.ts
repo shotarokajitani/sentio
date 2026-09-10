@@ -209,9 +209,7 @@ describe("Scanner (D1-D2, D4)", () => {
       }),
     );
     const candidates = runScan(events, []);
-    const inquiryCandidate = candidates.find(
-      (c) => c.source === "web" && c.scanType === "trend",
-    );
+    const inquiryCandidate = candidates.find((c) => c.source === "web" && c.scanType === "trend");
     expect(inquiryCandidate).toBeDefined();
     expect(inquiryCandidate!.evidence_event_ids).toHaveLength(4);
   });
@@ -352,9 +350,9 @@ describe("シリーズ単位の間隔（途絶・伸長）", () => {
         metrics: { description: "ｶ)ﾃｽﾄ ﾌﾘｺﾐ" },
       }),
     );
-    expect(
-      runScan(byDescription, baselines).some((c) => c.description.includes("ｶ)ﾃｽﾄ")),
-    ).toBe(true);
+    expect(runScan(byDescription, baselines).some((c) => c.description.includes("ｶ)ﾃｽﾄ"))).toBe(
+      true,
+    );
   });
 
   it("別々の系列は混ざらない", () => {

@@ -151,7 +151,12 @@ vi.mock("@/lib/auth/company", async () => {
     ...actual,
     getAuthedContext: async () =>
       authed
-        ? { companyId: "11111111-1111-4111-8111-111111111111", email: null, siteUrl: null, supabase: null }
+        ? {
+            companyId: "11111111-1111-4111-8111-111111111111",
+            email: null,
+            siteUrl: null,
+            supabase: null,
+          }
         : null,
   };
 });

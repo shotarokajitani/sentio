@@ -10,17 +10,8 @@ import { getSupabaseAdmin } from "./supabase-client.ts";
 import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
-import {
-  COMPANY_TIMEOUT_MS,
-  planResume,
-  type ResumeRow,
-} from "./dispatch-resume.ts";
-import {
-  ABANDONED,
-  STALE_SENDING,
-  planStaleSweep,
-  type StaleRow,
-} from "./stale-sending.ts";
+import { COMPANY_TIMEOUT_MS, planResume, type ResumeRow } from "./dispatch-resume.ts";
+import { ABANDONED, STALE_SENDING, planStaleSweep, type StaleRow } from "./stale-sending.ts";
 import type {
   BillingCounts,
   CompanyTarget,
@@ -342,7 +333,6 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
 
       return { swept: plan.retry.length, abandoned: plan.abandon.length };
     },
-
 
     /**
      * 実行の記録を書く（PS-8）。**まとめて1回の insert にする。**

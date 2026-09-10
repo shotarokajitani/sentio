@@ -108,7 +108,7 @@ for (const target of targets) {
 | SB-3-3 | **cron を増やさない・書き換えない**（`00020` / `00028` に触らない）                                                                          | git diff（`supabase/migrations/` に差分なし） |
 | SB-3-4 | 既存の集計キー（`companies` / `delivered` / `skipped_*` / `failed` / `sense_failed`）の**意味を変えない**。足すのは `state_failed` の1つだけ | 既存テストが通ること                          |
 | SB-3-5 | `dispatch-*` が `resolveCaller` を通る経路を変えない（ADR-0002）                                                                             | `check:caller-guard`                          |
-| SB-3-6 | `check:endpoint-callers` の宣言に `state-baselines` の呼び出し元を追加する                                                                   | **未充足**（下記）                                            |
+| SB-3-6 | `check:endpoint-callers` の宣言に `state-baselines` の呼び出し元を追加する                                                                   | **未充足**（下記）                            |
 
 > **SB-3-6 は未充足である（2026-09-03・梶谷さん判断で別登録）。**
 >

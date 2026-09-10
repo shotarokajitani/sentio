@@ -356,7 +356,16 @@ describe("status の集合", () => {
     // **2026-09-10（発注 B-3）で `abandoned` が増えた。** 再送の上限に達した行を
     // `failed` のまま置くと `RETRYABLE` に当たり続け、毎朝拾っては上限で弾かれる
     expect([...DELIVERY_STATUSES].sort()).toEqual(
-      ["abandoned", "confirmed", "deferred", "draft", "failed", "sending", "sent", "skipped"].sort(),
+      [
+        "abandoned",
+        "confirmed",
+        "deferred",
+        "draft",
+        "failed",
+        "sending",
+        "sent",
+        "skipped",
+      ].sort(),
     );
   });
 

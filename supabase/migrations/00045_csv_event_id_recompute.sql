@@ -1,4 +1,21 @@
--- 00042: CSV 由来の events を新しい event_id 規則で1度だけ組み直す（発注 ①-5）
+-- 00045: CSV 由来の events を新しい event_id 規則で1度だけ組み直す（発注 ①-5）
+--
+-- ## 番号を 00042 から振り直した理由（2026-09-10）
+--
+-- **本番には 00043 / 00044 が先に入った。** ⑥J-4（配信の再開）の PR が
+-- ①-5（この migration）より先に merge されたためである。あとから 00042 を出すと
+-- `supabase db push` が拒否する:
+--
+--     Found local migration files to be inserted before the last migration
+--     on remote database.
+--     supabase/migrations/00042_csv_event_id_recompute.sql
+--
+-- **`--include-all` で押し込まない。** 「順序を無視して全部当てる」を既定にすると、
+-- 本当に抜けている migration も黙って通る。番号を末尾に振り直すほうが、
+-- **適用の順序が履歴のまま残る。**
+--
+-- 中身は1文字も変えていない。この migration は `events` の組み直しだけを行い、
+-- 00043 / 00044 が触る `dispatch_runs` とは無関係なので、順序を入れ替えても結果は同じ。
 --
 -- ## なぜ要るか
 --
@@ -174,7 +191,7 @@ BEGIN
   WHERE e.event_id = r.old_id AND e.event_id <> r.new_id;
   GET DIAGNOSTICS v_updated = ROW_COUNT;
 
-  RAISE NOTICE '00042: CSV の event_id を組み直した（重複削除 %件 / 書き換え %件）',
+  RAISE NOTICE '00045: CSV の event_id を組み直した（重複削除 %件 / 書き換え %件）',
     v_deleted, v_updated;
 END $$;
 
@@ -185,26 +202,26 @@ DO $$
 BEGIN
   -- 摘要の正規化が、全角・半角・空白の違いを吸収すること
   IF public.csv_normalize_description('ﾃﾞﾝｷ ﾀﾞｲ') <> public.csv_normalize_description('デンキ　ダイ') THEN
-    RAISE EXCEPTION '00042: 半角カナと全角カナが同じにならない';
+    RAISE EXCEPTION '00045: 半角カナと全角カナが同じにならない';
   END IF;
   IF public.csv_normalize_description('ａｂｃ') <> 'ABC' THEN
-    RAISE EXCEPTION '00042: 全角英字が半角・大文字にならない';
+    RAISE EXCEPTION '00045: 全角英字が半角・大文字にならない';
   END IF;
 
   -- **別の取引まで同じにしていないこと**（緩めすぎの検出）
   IF public.csv_normalize_description('A社') = public.csv_normalize_description('B社') THEN
-    RAISE EXCEPTION '00042: 別の摘要が同一に潰れている';
+    RAISE EXCEPTION '00045: 別の摘要が同一に潰れている';
   END IF;
 
   -- **数値の文字列化が JS と同じ形になること。** ここがずれると全行の鍵がずれる
   IF public.csv_number_text(396000) <> '396000' THEN
-    RAISE EXCEPTION '00042: 整数に余計な文字が付く（%）', public.csv_number_text(396000);
+    RAISE EXCEPTION '00045: 整数に余計な文字が付く（%）', public.csv_number_text(396000);
   END IF;
   IF public.csv_number_text(0) <> '0' THEN
-    RAISE EXCEPTION '00042: 0 が % になる', public.csv_number_text(0);
+    RAISE EXCEPTION '00045: 0 が % になる', public.csv_number_text(0);
   END IF;
   IF public.csv_number_text(396000.5) <> '396000.5' THEN
-    RAISE EXCEPTION '00042: 小数が % になる', public.csv_number_text(396000.5);
+    RAISE EXCEPTION '00045: 小数が % になる', public.csv_number_text(396000.5);
   END IF;
 
   -- 残高の有無で鍵が変わること（無い形式を "null" と書いていない）
@@ -212,7 +229,7 @@ BEGIN
                           396000, 'テスト', NULL)
      = public.csv_event_id('00000000-0000-0000-0000-000000000000', '2026-09-01', 'credit',
                             396000, 'テスト', 100) THEN
-    RAISE EXCEPTION '00042: 残高の有無で event_id が変わらない';
+    RAISE EXCEPTION '00045: 残高の有無で event_id が変わらない';
   END IF;
 
   -- **CSV 由来の行に重複が残っていないこと**
@@ -223,6 +240,6 @@ BEGIN
              metrics->>'balance'
     HAVING count(*) > 1
   ) THEN
-    RAISE EXCEPTION '00042: 組み直したのに同じ内容の行が残っている';
+    RAISE EXCEPTION '00045: 組み直したのに同じ内容の行が残っている';
   END IF;
 END $$;

@@ -1,0 +1,96 @@
+# Edge Function の宣言（`check:edge-functions` と deploy.yml の削除段の正本）
+#
+# ## なぜ宣言ファイルが要るか
+#
+# **本番に、リポジトリのどこにも無い関数が20本 ACTIVE で残っていた**
+# （2026-09-10・`list_edge_functions` の実測）。4月に作られたもので、
+# `entrypoint_path` が `/tmp/user_fn_…` になっているのが目印である
+# （CI からデプロイしたものは `/home/runner/work/sentio/…` になる）。
+#
+# **誰も気づけなかった。** `deploy.yml` は「配る」しかせず、
+# 配っていない関数が本番に残っていても CI はそれを見ない。
+# `check:caller-guard` も `supabase/functions` 配下しか走査しないので、
+# **リポジトリの外に居るものは全部が射程外**だった。
+#
+# 残っていた20本には `stripe-webhook` / `create-checkout` / `create-portal-link` /
+# `process-answer` / `update-company-settings` が含まれる。**課金と入力の口が、
+# 誰も見ていない実装で開いたままだった。**
+#
+# ## 3つの集合
+#
+#   deploy   … `supabase/functions/` 配下のディレクトリ。CI が配る
+#   remove   … 明示的に消す slug。**存在しなくても成功**（冪等）
+#   （どちらにも無いのに本番に居る）… CI を赤にする
+#
+# 3つ目が今回の穴を塞ぐ。**「消し忘れ」ではなく「知らないものが居る」を検出する。**
+#
+# ## 守れない範囲（設計上の限界。これは仕様であって不具合ではない）
+#
+# 1. **本番の一覧を引けない環境では走らない。** `SUPABASE_ACCESS_TOKEN` と
+#    Project Ref が要るので、`deploy` ジョブでしか動かない。PR の CI では
+#    宣言と `supabase/functions/` の突合だけを行う
+# 2. **消した関数が何をしていたかは分からない。** ソースはリポジトリに無い。
+#    消す前に呼び出し元が無いことを grep で確かめる作法（PR 本文に貼る）で補う
+# 3. **Stripe など外部の設定は見ない。** 旧 `stripe-webhook` を消しても、
+#    Stripe 側のエンドポイント登録は残る。そちらは人間が無効化する
+
+# CI が配る関数。**`supabase/functions/` 配下のディレクトリと一致していなければ赤**
+deploy:
+  - day0
+  - deliver-alert
+  - deliver-pulse
+  - deliver-weekly
+  - dispatch-daily
+  - dispatch-weekly
+  - ingest-calendar
+  - ingest-csv
+  - ingest-monitor
+  - ingest-s0
+  - investigate
+  - onetap-calendar
+  - retention-purge
+  - run-sense
+  - scan
+  - state-baselines
+  - state-memory-packet
+  - state-narratives
+  - state-summary
+  - sync-connections
+
+# **CI でしか使わない関数。** 本番には配らないし、消しもしない。
+# `run-sense` の Investigator 宛先を CI に限って差し替えるためのスタブで、
+# 本番に置くと「実LLMを呼ばない経路」が本番にできてしまう
+ci_only:
+  - investigate-stub
+
+# 本番から消す関数（2026-04 に作られ、リポジトリに存在しない20本）。
+# **存在しない slug の delete は成功扱いにする**——再実行のたびに赤くなると、
+# 削除の段そのものが「いつも赤いから見ない」ものになる。
+#
+# 削除前の参照確認（2026-09-10 実測。`src` / `supabase` / `docs` を走査）:
+#   20本中18本は参照0件。残る2件はどちらも**呼び出しではない**ので削除する。
+#     suggest-competitors    `src/app/api/competitors/suggest/route.ts:115`
+#                            `attrs.source` に入れる文字列であって、関数の呼び出しではない
+#     google-calendar-oauth  `docs/instructions/CC指示書_02_M365差分調査_20260723.md:36`
+#                            「`google-calendar-oauth` 相当」という歴史的な記述
+remove:
+  - analyze-financial-pdf
+  - check-trial-expiry
+  - collect-external-data
+  - create-checkout
+  - create-portal-link
+  - deliver-question
+  - detect-signals
+  - generate-question
+  - google-calendar-oauth
+  - learn-pattern
+  - on-concern-changed
+  - on-integration-connected
+  - process-answer
+  - register-company
+  - send-onboarding
+  - send-weekly-summary
+  - stripe-webhook
+  - suggest-competitors
+  - sync-calendar-data
+  - update-company-settings

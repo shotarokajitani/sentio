@@ -21,7 +21,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // internal 以外は対象の列挙にも到達させない（CD-3-2）
-    const result = await runDispatch("weekly", caller.caller, buildDeps());
+    const result = await runDispatch("weekly", caller.caller, buildDeps("weekly"));
 
     return new Response(JSON.stringify(result.body), {
       status: result.status,

@@ -157,13 +157,13 @@ Deno.serve(async (req: Request) => {
         content: { sections, period },
         now,
       },
-      () =>
+      (key) =>
         sendEmail(mail.config, {
           to: email,
           subject: "[Sentio] 今週の会社",
           html: renderWeeklyHtml(sections),
           text: renderWeeklyText(sections),
-        }),
+        }, fetch, key),
     );
 
     return deliveryResponse(result, { company_id: companyId, period, sections });

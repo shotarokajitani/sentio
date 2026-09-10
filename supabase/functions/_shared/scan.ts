@@ -129,23 +129,43 @@ export function runScan(
   const established = baselines.filter((b) => b.is_established);
 
   // 1. Deviation scan
+  //
+  // **`metrics.revenue` は本番のどのイベントにも存在しない**（2026-09-10 実測・発注 E-3）。
+  // 実物の `metrics` は `amount` / `direction` / `balance` / `description` で、
+  // ここは6週間ずっと0件だった——**「乖離が無かった」ではなく「見ていなかった」。**
+  //
+  // 入金と出金は**別の分布として見る。** 混ぜると中央値が0の近くに寄り、
+  // 大きな入金も大きな出金も「ふつう」に見えてしまう
   for (const event of events) {
     if (event.event_type !== "transaction") continue;
-    const revenue = (event.metrics as Record<string, unknown>)?.revenue as number | undefined;
-    if (revenue === undefined) continue;
+    const m = event.metrics as Record<string, unknown> | undefined;
+    const amount = m?.amount;
+    if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
+
+    const direction = typeof m?.direction === "string" ? m.direction : "";
+    // 向きが書かれていない形式は符号で決める。`unknown` はどちらにも入れない
+    const metricKey =
+      direction === "credit" || (!direction && amount > 0)
+        ? "inflow"
+        : direction === "debit" || (!direction && amount < 0)
+          ? "outflow"
+          : null;
+    if (!metricKey) continue;
+
+    const value = Math.abs(amount);
 
     for (const bl of established) {
-      if (bl.metric_key !== "revenue") continue;
+      if (bl.metric_key !== metricKey) continue;
       const lowerBound = bl.p25 - 1.5 * bl.iqr;
       const upperBound = bl.p75 + 1.5 * bl.iqr;
-      if (revenue < lowerBound || revenue > upperBound) {
+      if (value < lowerBound || value > upperBound) {
         candidates.push({
           scanType: "deviation",
           source: "transaction",
           suggestedUrgency: "weekly",
           evidence_event_ids: [event.event_id],
-          description: `Revenue ${revenue} outside [${lowerBound}, ${upperBound}]`,
-          score: Math.abs(revenue - bl.median) / bl.iqr,
+          description: `${metricKey} ${value} outside [${lowerBound}, ${upperBound}]`,
+          score: Math.abs(value - bl.median) / bl.iqr,
         });
       }
     }

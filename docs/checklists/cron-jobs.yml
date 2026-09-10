@@ -69,6 +69,22 @@ jobs:
       CD-D2 の理由が当てはまらない。相乗りは配信と削除を無関係に結合させる。
       **本文は {"dry_run": true}**（既定は数えるだけ）。実削除への切り替えは別 migration。
 
+  - name: dispatch-daily-resume
+    schedule: "15,30,45 22 * * *"
+    migration: "00044_cron_dispatch_resume.sql"
+    contract: "発注 ⑥J-4"
+    note: >-
+      UTC 22:15 / 22:30 / 22:45。**本体（22:00）で落ちた会社を拾い直す。**
+      同じ dispatch-daily を叩く——再開専用の関数を作ると、片方だけ直す事故が起きる。
+      関数は run_key（JST 日付）で当日ぶんを引き、finished_at が NULL の会社だけを回す。
+      全部終わっていれば0社で返るので空振りは安い。
+  - name: dispatch-daily-resume-last
+    schedule: "0 23 * * *"
+    migration: "00044_cron_dispatch_resume.sql"
+    contract: "発注 ⑥J-4"
+    note: >-
+      UTC 23:00 = JST 翌 08:00。**最後の拾い直し。** ここで残った会社は
+      dispatch_runs に pending / timeout のまま残り、翌朝の実測で見える。
   - name: dispatch-weekly
     schedule: "0 23 * * 0"
     migration: "00028_cron_dispatch.sql"

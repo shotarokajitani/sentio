@@ -14,6 +14,7 @@
 
 import type { CallerKind } from "./caller.ts";
 import { isEntitledStatus } from "./budget.ts";
+import { runKeyOf, shouldStopForDeadline } from "./dispatch-resume.ts";
 
 export type DispatchKind = "daily" | "weekly";
 
@@ -194,6 +195,48 @@ export interface DispatchDeps {
    * 「送れたのに 5xx」が起きる。失敗は値で返し、summary に出す。
    */
   recordDispatch(rows: DispatchRecord[]): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * `sending` のまま固まった行を掃除する（発注 B-1 / B-3）。**配る前に走らせる。**
+   *
+   * 倒した行は `RETRYABLE` に入るので、**同じ実行で再送の対象になる。**
+   * 掃除を配信のあとに置くと、直った行が次の日まで待たされる。
+   *
+   * **ここで throw しない。** 掃除に失敗しても配信は続ける——
+   * 掃除は「取りこぼしを拾う」機能であって、配信の前提ではない。
+   */
+  sweepStaleSending?(now: Date): Promise<{ swept: number; abandoned: number; error?: string }>;
+
+  /**
+   * 会社ごとの行を **`pending` で先に書く**（発注 ⑥J-4）。
+   *
+   * **これが無いと、時間切れで落ちたときに「誰が未処理か」が残らない。**
+   * 記録は全部終わったあとに書いていたので、途中で落ちれば1行も残らなかった。
+   *
+   * 冪等。同じ `(dispatch, run_key, company_id)` は2行にならない（00043 の一意索引）。
+   */
+  reservePending?(runKey: string, companyIds: string[]): Promise<{ ok: boolean; error?: string }>;
+
+  /**
+   * 1社の結末を**その場で**確定する（発注 ⑥J-4）。
+   *
+   * 最後にまとめて書くと、**書く前に落ちた社が全部消える。**
+   */
+  finishCompany?(
+    runKey: string,
+    companyId: string,
+    outcome: string,
+    reason?: string,
+    /** `false` なら `finished_at` を入れない（時間切れ。次の再開で拾い直す） */
+    finished?: boolean,
+  ): Promise<{ ok: boolean; error?: string }>;
+
+  /**
+   * まだ終わっていない会社を引く（発注 ⑥J-4）。**再開の入口。**
+   *
+   * 引けなければ `null` を返す。**0件と区別する**——「全部終わっている」と
+   * 「引けなかった」を同じ顔にすると、再開が黙って何もしなくなる。
+   */
+  listUnfinished?(runKey: string): Promise<string[] | null>;
 }
 
 /** `dispatch_runs`（00032）に書く1行。**列と同じ形にしてある** */
@@ -229,6 +272,29 @@ export interface DispatchSummary {
   reconnect_suppressed: number;
   /** 購読が無いので送らなかった会社数（B-4）。**0件でも必ず出す** */
   skipped_not_entitled: number;
+  /**
+   * `sending` のまま固まっていて、この実行で `failed` に倒した行数（発注 B-1）。
+   * **0件でも必ず出す。** 「掃除が要らなかった」と「掃除が走らなかった」は別である
+   */
+  stale_swept: number;
+  /**
+   * 再送の上限（3回）に達したので `abandoned` に移した行数（発注 B-3）。
+   * **黙って諦めない。** 翌朝の要約に出す
+   */
+  abandoned: number;
+  /**
+   * この実行が対象にしている期間の鍵（発注 ⑥J-4）。再開が同じ日ぶんを拾うのに使う
+   */
+  run_key?: string;
+  /**
+   * 締切に達して**手を付けずに残した**会社数（発注 ⑥J-4）。
+   * **0件でも必ず出す。** 残した事実が見えないと、再開が要ることに気づけない
+   */
+  deferred_by_deadline: number;
+  /** 90秒で返ってこなかった会社数（発注 ⑥J-4）。**失敗と分ける** */
+  timed_out: number;
+  /** 再開として走ったか（既に終わった会社を飛ばしたか） */
+  resumed: boolean;
   /**
    * 会社の一覧を取り切れたか（B-5）。**取り切れていないなら non-2xx。**
    * 一部だけ配って 200 を返すと、届かなかった会社が記録にも残らない
@@ -307,6 +373,11 @@ export async function runDispatch(
     reconnect_notice: 0,
     reconnect_suppressed: 0,
     skipped_not_entitled: 0,
+    stale_swept: 0,
+    abandoned: 0,
+    deferred_by_deadline: 0,
+    timed_out: 0,
+    resumed: false,
     recorded: false,
     ...(truncated ? { truncated: true } : {}),
   };
@@ -314,10 +385,93 @@ export async function runDispatch(
   const records: DispatchRecord[] = [];
   const now = new Date();
 
+  // **配る前に掃除する**（発注 B-1）。倒した行はこの実行の再送対象になる。
+  // 掃除の失敗で配信を止めない——取りこぼしを拾う機能であって、前提ではない
+  if (deps.sweepStaleSending) {
+    const swept = await deps.sweepStaleSending(now);
+    summary.stale_swept = swept.swept;
+    summary.abandoned = swept.abandoned;
+    if (swept.error) console.error("dispatch: sending の掃除に失敗:", swept.error);
+  }
+
   // 環境変数はここで1回だけ読む。**分岐の材料を関数の外に置かない**
   const enforceEntitlement = deps.enforceEntitlement === true;
 
-  for (const target of targets) {
+  // ── 再開できる形にする（発注 ⑥J-4）──
+  //
+  // **記録を最後にまとめて書くと、途中で落ちた実行は1行も残さない。**
+  // 先に `pending` を書いておけば、落ちても「誰が未処理か」が残る。
+  const runKey = runKeyOf({ kind, now });
+  const resumable = Boolean(deps.reservePending && deps.finishCompany);
+  summary.run_key = runKey;
+
+  let pending = targets;
+  if (resumable) {
+    // 既に終わった会社を飛ばす。**2通目を出さない**のはここである
+    const unfinished = deps.listUnfinished ? await deps.listUnfinished(runKey) : null;
+    if (unfinished !== null && unfinished !== undefined) {
+      const stillOpen = new Set(unfinished);
+      // **1社も予約されていない＝この run_key の初回**なので、全社を対象にする
+      const isFirstRun = stillOpen.size === 0 && targets.length > 0;
+      if (!isFirstRun) {
+        pending = targets.filter((t) => stillOpen.has(t.companyId));
+        summary.resumed = pending.length < targets.length;
+      }
+    }
+
+    const reserved = await deps.reservePending!(
+      runKey,
+      pending.map((t) => t.companyId),
+    );
+    // **予約に失敗しても配る。** 記録の失敗で配信を止めない（S-2-6 と同じ判断）
+    if (!reserved.ok) console.error("dispatch: pending の予約に失敗:", reserved.error);
+  }
+
+  const startedAt = now.getTime();
+
+  /**
+   * 会社1社の結末を残す。**その場で確定するのが本体で、`records` は控えである。**
+   *
+   * 最後にまとめて書く形だけだと、**書く前に落ちた社が全部消える。**
+   * `finishCompany` がある実行では即座に確定し、無い実行（既存の試験など）は
+   * 従来どおり `records` にだけ積む。
+   */
+  const settle = async (
+    companyId: string,
+    outcome: string,
+    reason?: string,
+    /**
+     * **`false` にすると `finished_at` を入れない。** 時間切れの行がこれで、
+     * 次の再開でもう一度拾われる（発注 ⑥J-4）
+     */
+    finished = true,
+  ) => {
+    records.push({
+      kind: "company",
+      dispatch: kind,
+      companyId,
+      outcome,
+      ...(reason ? { reason } : {}),
+    } as DispatchRecord);
+    if (!deps.finishCompany) return;
+    const done = await deps.finishCompany(runKey, companyId, outcome, reason, finished);
+    // **記録の失敗で配信を止めない。** ただし黙らない
+    if (!done.ok) console.error(`dispatch: ${companyId} の結末を書けなかった:`, done.error);
+  };
+
+  for (const target of pending) {
+    // **残り時間が1社分に満たなければ、始めない**（発注 ⑥J-4）。
+    // 始めてから締切に当たると `running` の行が残る。始めなければ `pending` のままで、
+    // **「触っていない」と言い切れる**
+    if (resumable && shouldStopForDeadline(startedAt, Date.now())) {
+      summary.deferred_by_deadline = pending.length - pending.indexOf(target);
+      console.warn(
+        `[sentio:dispatch] 締切に達したので ${summary.deferred_by_deadline} 社を pending のまま残す ` +
+          `run_key=${runKey} kind=${kind}`,
+      );
+      break;
+    }
+
     const plan = planCompany(target, kind, now, enforceEntitlement);
 
     // 連携ゼロの会社に空のパルスを送らない（CD-1-2）／宛先が無ければ呼ばない（CD-1-3）。
@@ -326,25 +480,14 @@ export async function runDispatch(
       if (plan.outcome === "skipped_no_connection") summary.skipped_no_connection++;
       else if (plan.outcome === "skipped_not_entitled") summary.skipped_not_entitled++;
       else summary.skipped_no_email++;
-      records.push({
-        kind: "company",
-        dispatch: kind,
-        companyId: target.companyId,
-        outcome: plan.outcome,
-      });
+      await settle(target.companyId, plan.outcome);
       continue;
     }
 
     // **送らなかった日も残す**（PS-9f）。「送り損ねた」（failed_deliver）と別の値にしてある
     if (plan.action === "suppress") {
       summary.reconnect_suppressed++;
-      records.push({
-        kind: "company",
-        dispatch: kind,
-        companyId: target.companyId,
-        outcome: plan.outcome,
-        reason: plan.reason,
-      });
+      await settle(target.companyId, plan.outcome, plan.reason);
       continue;
     }
 
@@ -366,21 +509,10 @@ export async function runDispatch(
 
       if (notice.ok) {
         summary.reconnect_notice++;
-        records.push({
-          kind: "company",
-          dispatch: kind,
-          companyId: target.companyId,
-          outcome: "reconnect_notice",
-        });
+        await settle(target.companyId, "reconnect_notice");
       } else {
         summary.failed++;
-        records.push({
-          kind: "company",
-          dispatch: kind,
-          companyId: target.companyId,
-          outcome: "failed_deliver",
-          reason: `status_${notice.status}`,
-        });
+        await settle(target.companyId, "failed_deliver", `status_${notice.status}`);
       }
       continue;
     }
@@ -402,13 +534,7 @@ export async function runDispatch(
         // ただし黙って進めない。失敗として数え、non-2xx に効かせる
         summary.state_failed++;
         summary.failed++;
-        records.push({
-          kind: "company",
-          dispatch: kind,
-          companyId: target.companyId,
-          outcome: "failed_state",
-          reason: `status_${state.status}`,
-        });
+        await settle(target.companyId, "failed_state", `status_${state.status}`);
       }
 
       const sense = await deps.invoke("run-sense", { company_id: target.companyId });
@@ -416,13 +542,7 @@ export async function runDispatch(
         // **sense の失敗で配信を止めない**（CD-2-4）。ただし失敗として数える
         summary.sense_failed++;
         summary.failed++;
-        records.push({
-          kind: "company",
-          dispatch: kind,
-          companyId: target.companyId,
-          outcome: "failed_sense",
-          reason: `status_${sense.status}`,
-        });
+        await settle(target.companyId, "failed_sense", `status_${sense.status}`);
       }
     }
 
@@ -434,21 +554,17 @@ export async function runDispatch(
 
     if (delivered.ok) {
       summary.delivered++;
-      records.push({
-        kind: "company",
-        dispatch: kind,
-        companyId: target.companyId,
-        outcome: "delivered",
-      });
+      await settle(target.companyId, "delivered");
+    } else if (delivered.status === 0) {
+      // **返事が無かった**（90秒で切った）。**「送れなかった」と分ける**——
+      // 時間切れは相手が生きている可能性があり、次の再開でもう一度試す価値がある
+      summary.timed_out++;
+      summary.failed++;
+      // **`finished_at` を入れない。** 次の再開でもう一度試す
+      await settle(target.companyId, "timeout", "deliver_timeout", false);
     } else {
       summary.failed++;
-      records.push({
-        kind: "company",
-        dispatch: kind,
-        companyId: target.companyId,
-        outcome: "failed_deliver",
-        reason: `status_${delivered.status}`,
-      });
+      await settle(target.companyId, "failed_deliver", `status_${delivered.status}`);
     }
   }
 

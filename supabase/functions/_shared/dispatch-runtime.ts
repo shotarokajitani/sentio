@@ -10,6 +10,17 @@ import { getSupabaseAdmin } from "./supabase-client.ts";
 import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
+import {
+  COMPANY_TIMEOUT_MS,
+  planResume,
+  type ResumeRow,
+} from "./dispatch-resume.ts";
+import {
+  ABANDONED,
+  STALE_SENDING,
+  planStaleSweep,
+  type StaleRow,
+} from "./stale-sending.ts";
 import type {
   BillingCounts,
   CompanyTarget,
@@ -18,6 +29,7 @@ import type {
   DispatchRecord,
   InvokeResult,
   OpsNotifyResult,
+  DispatchKind,
 } from "./dispatch.ts";
 
 /**
@@ -42,7 +54,21 @@ function subscriptionStatusOf(metadata: unknown): string | null {
   return typeof sub?.status === "string" && sub.status ? sub.status : null;
 }
 
-export function buildDeps(): DispatchDeps {
+/**
+ * 掃除で一度に引く行数の上限。
+ *
+ * **無制限に引かない。** 固まった行が大量にあるとき、全部を1回で倒そうとして
+ * Edge Function のメモリと時間を使い切ると、**配信そのものが走らなくなる。**
+ * 残りは翌日の実行が拾う（毎日走るので、放置され続けることは無い）。
+ */
+const SWEEP_LIMIT = 500;
+
+/**
+ * `dispatch` 列に書く値。**再開のときに daily と weekly を取り違えない**ため、
+ * どの実行として組み立てた deps かを引数で受け取る（発注 ⑥J-4）。
+ */
+export function buildDeps(kind: DispatchKind): DispatchDeps {
+  const kindOf = () => kind;
   const supabase = getSupabaseAdmin();
   // `listTargets` が立て、`runDispatch` が読む。**取り切れなかった事実を持ち帰る**
   let truncated = false;
@@ -159,19 +185,164 @@ export function buildDeps(): DispatchDeps {
     },
 
     invoke: async (fn: string, body: Record<string, unknown>): Promise<InvokeResult> => {
-      // `run-sense` が `scan` を呼ぶのと同じ作法（service_role で internal 経路に入る）
-      const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceRoleKey}`,
-        },
-        body: JSON.stringify(body),
-      });
+      // **返ってこない相手で全体を道連れにしない**（発注 ⑥J-4）。
+      // 1社が固まると、後ろの会社が全員届かなくなる。90秒で切って次へ進む
+      try {
+        // `run-sense` が `scan` を呼ぶのと同じ作法（service_role で internal 経路に入る）
+        const res = await fetch(`${supabaseUrl}/functions/v1/${fn}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(COMPANY_TIMEOUT_MS),
+        });
 
-      // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
-      return { ok: res.ok, status: res.status };
+        // **本文は読まない。** 失敗時の本文には会社の活動データが乗りうる（S-3-5 と同じ理由）
+        return { ok: res.ok, status: res.status };
+      } catch (e) {
+        const timedOut = e instanceof DOMException && e.name === "TimeoutError";
+        console.error(
+          `dispatch: ${fn} の呼び出しが${timedOut ? "時間切れ" : "失敗"}: ` +
+            `${e instanceof Error ? e.message : String(e)}`,
+        );
+        // **0 は「返事が無かった」**。HTTP の状態コードと衝突しない値にしてある
+        return { ok: false, status: 0 };
+      }
     },
+
+    /**
+     * 会社ごとの行を `pending` で先に書く（発注 ⑥J-4）。**冪等。**
+     *
+     * 00043 の一意索引 `(dispatch, run_key, company_id)` があるので、
+     * 同じ実行を何度叩いても行は増えない。`ignoreDuplicates` で
+     * **既にある行を pending へ戻さない**——終わった会社をやり直させない
+     */
+    reservePending: async (runKey: string, companyIds: string[]) => {
+      if (companyIds.length === 0) return { ok: true };
+      const error = await takeError(
+        supabase.from("dispatch_runs").upsert(
+          companyIds.map((companyId) => ({
+            kind: "company",
+            dispatch: kindOf(),
+            company_id: companyId,
+            outcome: "pending",
+            run_key: runKey,
+          })),
+          { onConflict: "dispatch,run_key,company_id", ignoreDuplicates: true },
+        ),
+        "dispatch: pending の予約",
+      );
+      return error ? { ok: false, error: error.message } : { ok: true };
+    },
+
+    /** 1社の結末をその場で確定する（発注 ⑥J-4） */
+    finishCompany: async (
+      runKey: string,
+      companyId: string,
+      outcome: string,
+      reason?: string,
+      finished = true,
+    ) => {
+      const error = await takeError(
+        supabase
+          .from("dispatch_runs")
+          .update({
+            outcome,
+            reason: reason ?? null,
+            // **時間切れは終わっていない。** `finished_at` を入れると再開が拾えない
+            finished_at: finished ? new Date().toISOString() : null,
+          })
+          .eq("kind", "company")
+          .eq("dispatch", kindOf())
+          .eq("run_key", runKey)
+          .eq("company_id", companyId),
+        "dispatch: 結末の確定",
+      );
+      return error ? { ok: false, error: error.message } : { ok: true };
+    },
+
+    /**
+     * まだ終わっていない会社を引く（発注 ⑥J-4）。
+     *
+     * **引けなければ `null`。** 「全部終わっている」と「引けなかった」を
+     * 同じ顔にすると、再開が黙って何もしなくなる
+     */
+    listUnfinished: async (runKey: string) => {
+      try {
+        const rows = await mustData(
+          supabase
+            .from("dispatch_runs")
+            .select("company_id, outcome, finished_at")
+            .eq("kind", "company")
+            .eq("dispatch", kindOf())
+            .eq("run_key", runKey),
+          "dispatch: 未処理の会社",
+        );
+        return planResume((rows ?? []) as unknown as ResumeRow[]);
+      } catch (e) {
+        console.error("dispatch: 未処理の会社を引けなかった:", e instanceof Error ? e.message : e);
+        return null;
+      }
+    },
+
+    /**
+     * `sending` のまま固まった行を掃除する（発注 B-1 / B-3）。
+     *
+     * **判断は `planStaleSweep` が持つ。** ここは引いて書くだけにしてある——
+     * 「どの行を倒すか」を I/O に混ぜると、壊して赤くする試験が書けなくなる。
+     *
+     * 引く範囲を `sending` に絞るのは、**それ以外を1行も触らないため**である。
+     * 2時間の判定は `planStaleSweep` が `created_at` を見て行う。
+     */
+    sweepStaleSending: async (now: Date) => {
+      // **引けなかったことを 0件と混ぜない**（`countBillingUnresolved` と同じ作法）。
+      // `mustData` は throw するので、ここで捕まえて値に落とす
+      let rows: StaleRow[];
+      try {
+        rows = (await mustData(
+          supabase
+            .from("delivery_log")
+            .select("id, status, attempts, created_at")
+            .eq("status", "sending")
+            .limit(SWEEP_LIMIT),
+          "dispatch: sending の行を引く",
+        )) as unknown as StaleRow[];
+      } catch (e) {
+        return { swept: 0, abandoned: 0, error: e instanceof Error ? e.message : String(e) };
+      }
+
+      const plan = planStaleSweep(rows, now);
+      const at = now.toISOString();
+
+      // **倒す側から先に書く。** ここで落ちても、諦めた行は次の実行で拾い直せる
+      if (plan.retry.length > 0) {
+        const e = await takeError(
+          supabase
+            .from("delivery_log")
+            .update({ status: "failed", last_error: STALE_SENDING, last_error_at: at })
+            .in("id", plan.retry),
+          "dispatch: stale sending を failed に倒す",
+        );
+        if (e) return { swept: 0, abandoned: 0, error: e.message };
+      }
+
+      if (plan.abandon.length > 0) {
+        const e = await takeError(
+          supabase
+            .from("delivery_log")
+            .update({ status: ABANDONED, last_error: STALE_SENDING, last_error_at: at })
+            .in("id", plan.abandon),
+          "dispatch: 上限到達を abandoned に移す",
+        );
+        // **倒したぶんは倒した、と数える。** 諦めた側の失敗で全部を0件にしない
+        if (e) return { swept: plan.retry.length, abandoned: 0, error: e.message };
+      }
+
+      return { swept: plan.retry.length, abandoned: plan.abandon.length };
+    },
+
 
     /**
      * 実行の記録を書く（PS-8）。**まとめて1回の insert にする。**

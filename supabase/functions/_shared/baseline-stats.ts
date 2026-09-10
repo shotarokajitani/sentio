@@ -141,6 +141,63 @@ export const REVENUE_BASELINE = {
   entityId: null,
 } as const;
 
+/**
+ * 入金・出金のベースライン（発注 E-3）。
+ *
+ * **`metrics.revenue` は本番のどのイベントにも存在しない。**
+ * 実物の `metrics` は `amount` / `direction` / `balance` / `description` で、
+ * `revenue` を読んでいた走査1とベースラインは、**6週間ずっと0件だった**——
+ * 「乖離が無かった」ではなく「見ていなかった」である。
+ *
+ * `amount` は符号付き（出金が負）で入るので、**向きで分けてから絶対値で集める。**
+ * 入金と出金を1つの分布に混ぜると、中央値が0の近くに寄って何も検知しなくなる。
+ *
+ * `REVENUE_BASELINE` は**消さない。** 過去に書いた行が残っており、
+ * 消すと「昔の観測が何だったか」が分からなくなる。新しい鍵を足すだけにする。
+ */
+export const INFLOW_BASELINE = {
+  metricKey: "inflow",
+  granularity: "event",
+  entityId: null,
+} as const;
+
+export const OUTFLOW_BASELINE = {
+  metricKey: "outflow",
+  granularity: "event",
+  entityId: null,
+} as const;
+
+/**
+ * 取引イベントを入金・出金に振り分ける（発注 E-3）。**絶対値で返す。**
+ *
+ * `direction` が無い行は `amount` の符号で決める。**分からないものは捨てる**——
+ * どちらの分布にも入れないほうが、間違った側に足すより害が小さい。
+ */
+export function splitByDirection(
+  events: ReadonlyArray<{ metrics?: unknown }>,
+): { inflow: number[]; outflow: number[] } {
+  const inflow: number[] = [];
+  const outflow: number[] = [];
+
+  for (const e of events) {
+    const m = e.metrics as Record<string, unknown> | undefined;
+    const amount = m?.amount;
+    if (typeof amount !== "number" || !Number.isFinite(amount)) continue;
+
+    const direction = typeof m?.direction === "string" ? m.direction : "";
+    if (direction === "credit") inflow.push(Math.abs(amount));
+    else if (direction === "debit") outflow.push(Math.abs(amount));
+    else if (!direction) {
+      // 向きが書かれていない形式は符号で決める
+      if (amount > 0) inflow.push(amount);
+      else if (amount < 0) outflow.push(Math.abs(amount));
+    }
+    // `unknown` と書かれている行は**どちらにも入れない**
+  }
+
+  return { inflow, outflow };
+}
+
 /** `baselines` の自然キー。`00023` の一意索引と同じ順・同じ列（契約 S-方針1 / S-D2）。 */
 export const BASELINE_NATURAL_KEY = "company_id,metric_key,entity_id,granularity";
 

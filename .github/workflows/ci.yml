@@ -64,6 +64,12 @@ jobs:
       # 実DBを要求しない静的解析なので verify に置く。
       - run: pnpm run check:dual-impl
 
+      # 配る関数・CI 専用・消す関数の宣言と実物の突合（発注 F）。
+      # 2026-09-10、リポジトリに無い関数が本番に20本 ACTIVE で残っているのが見つかった。
+      # deploy.yml は「配る」しかしておらず、配っていない関数が残っていても誰も見ていない。
+      # 本番の一覧との突合は deploy ジョブが行う（ここは実DB・本番の資格情報を持たない）
+      - run: pnpm run check:edge-functions
+
       - run: pnpm run eval:engine -- --ci # prompts/ 変更時はエンジン評価を必須実行
 
   # RLS等の統合テストを skip なしで実行する。

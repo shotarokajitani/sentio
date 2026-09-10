@@ -5,6 +5,9 @@ import {
   toFlatBaseline,
   toFlatBaselines,
   scheduleDayIntervals,
+  INFLOW_BASELINE,
+  OUTFLOW_BASELINE,
+  splitByDirection,
 } from "@edge/_shared/baseline-stats";
 import { calculateBaseline } from "@/state/baselines";
 
@@ -165,5 +168,63 @@ describe("scheduleDayIntervals — 予定が入っている「日」の間隔", 
     const stats = buildBaselineStats(scheduleDayIntervals(sixWeeks), 5);
     expect(stats).not.toBeNull();
     expect(stats!.median).toBe(7);
+  });
+});
+
+/**
+ * 入金・出金のベースライン（発注 E-3）。
+ *
+ * **`metrics.revenue` は本番のどのイベントにも存在しない**（2026-09-10 実測）。
+ * 実物は `amount` / `direction` / `balance` / `description` で、
+ * `revenue` を読んでいた走査1とベースラインは**6週間ずっと0件だった**——
+ * 「乖離が無かった」ではなく「見ていなかった」である。
+ */
+describe("入金と出金を別の分布として集める", () => {
+  it("direction で振り分け、絶対値で集める", () => {
+    const out = splitByDirection([
+      { metrics: { amount: 396000, direction: "credit" } },
+      { metrics: { amount: -50000, direction: "debit" } },
+      { metrics: { amount: 120000, direction: "credit" } },
+    ]);
+    expect(out).toEqual({ inflow: [396000, 120000], outflow: [50000] });
+  });
+
+  it("**陰性**: 入金と出金を1つの分布に混ぜない（中央値が0に寄る）", () => {
+    const out = splitByDirection([
+      { metrics: { amount: 100, direction: "credit" } },
+      { metrics: { amount: 100, direction: "debit" } },
+    ]);
+    expect(out.inflow).not.toEqual(out.outflow.concat(out.inflow));
+    expect(out.inflow).toHaveLength(1);
+    expect(out.outflow).toHaveLength(1);
+  });
+
+  it("direction が無い形式は符号で決める", () => {
+    const out = splitByDirection([{ metrics: { amount: 500 } }, { metrics: { amount: -700 } }]);
+    expect(out).toEqual({ inflow: [500], outflow: [700] });
+  });
+
+  it("**陰性**: `unknown` と書かれた行はどちらにも入れない", () => {
+    // 間違った側に足すより、捨てるほうが害が小さい
+    const out = splitByDirection([{ metrics: { amount: 900, direction: "unknown" } }]);
+    expect(out).toEqual({ inflow: [], outflow: [] });
+  });
+
+  it("**陰性**: 金額が数でない行は捨てる", () => {
+    const out = splitByDirection([
+      { metrics: { amount: "396000", direction: "credit" } },
+      { metrics: { amount: Number.NaN, direction: "credit" } },
+      { metrics: {} },
+      {},
+    ]);
+    expect(out).toEqual({ inflow: [], outflow: [] });
+  });
+
+  it("鍵は inflow / outflow で、revenue とは別に持つ", () => {
+    // `revenue` の宣言は消さない。過去に書いた行があり、消すと履歴が読めなくなる
+    expect(INFLOW_BASELINE.metricKey).toBe("inflow");
+    expect(OUTFLOW_BASELINE.metricKey).toBe("outflow");
+    expect(INFLOW_BASELINE.granularity).toBe("event");
+    expect(INFLOW_BASELINE.entityId).toBeNull();
   });
 });

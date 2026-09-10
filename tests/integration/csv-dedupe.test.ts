@@ -4,7 +4,7 @@
  * ## なぜ実DBが要るか
  *
  * 鍵の作り方は**2か所にある。** TypeScript の `csvEventId`（取り込み時）と、
- * 00042 の `csv_event_id`（既存行の組み直し）である。
+ * 00045 の `csv_event_id`（既存行の組み直し）である。
  * **この2つがずれると、migration の前と後で同じ取引が別の鍵になる。**
  *
  * 単体試験は TypeScript 側しか見ない。SQL 側と噛み合っているかは、
@@ -69,7 +69,7 @@ describe.skipIf(!canRun)("CSV の鍵が TypeScript と SQL で一致する", () 
   });
 
   it("**出金列に負の金額が入った CSV でも、前後で同じ鍵になる**（検収の指摘）", async () => {
-    // 取り込み側は `Math.abs` で非負に揃える。00042 も `abs(metrics.amount)` で
+    // 取り込み側は `Math.abs` で非負に揃える。00045 も `abs(metrics.amount)` で
     // 鍵を作るので、**符号付きのまま入れると migration の前後で鍵がずれる**
     const key = {
       date: "2026-09-02",

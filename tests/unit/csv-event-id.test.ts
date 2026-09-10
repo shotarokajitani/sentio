@@ -109,7 +109,7 @@ describe("取り込み経路が新しい規則を使っている", () => {
 
 describe("SQL 側の正規化が TypeScript と同じ順序で書かれている", () => {
   const migration = readFileSync(
-    path.resolve(__dirname, "../../supabase/migrations/00042_csv_event_id_recompute.sql"),
+    path.resolve(__dirname, "../../supabase/migrations/00045_csv_event_id_recompute.sql"),
     "utf8",
   );
 

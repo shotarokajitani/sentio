@@ -231,12 +231,17 @@ export interface DispatchDeps {
   ): Promise<{ ok: boolean; error?: string }>;
 
   /**
-   * まだ終わっていない会社を引く（発注 ⑥J-4）。**再開の入口。**
+   * この `run_key` の実行がどこまで進んでいるかを引く（発注 ⑥J-4）。**再開の入口。**
+   *
+   * **`total` と `unfinished` を別々に返す。**
+   * 未完了が0件であることは、「まだ始めていない」と「全部終わった」の両方を意味する。
+   * 区別できないと、**再開の cron が毎回3社を最初からやり直す**
+   * （2026-09-12 の本番ログで実測。毎朝5回ずつ走っていた）。
    *
    * 引けなければ `null` を返す。**0件と区別する**——「全部終わっている」と
    * 「引けなかった」を同じ顔にすると、再開が黙って何もしなくなる。
    */
-  listUnfinished?(runKey: string): Promise<string[] | null>;
+  listRunState?(runKey: string): Promise<{ total: number; unfinished: string[] } | null>;
 }
 
 /** `dispatch_runs`（00032）に書く1行。**列と同じ形にしてある** */
@@ -408,11 +413,12 @@ export async function runDispatch(
   let pending = targets;
   if (resumable) {
     // 既に終わった会社を飛ばす。**2通目を出さない**のはここである
-    const unfinished = deps.listUnfinished ? await deps.listUnfinished(runKey) : null;
-    if (unfinished !== null && unfinished !== undefined) {
-      const stillOpen = new Set(unfinished);
-      // **1社も予約されていない＝この run_key の初回**なので、全社を対象にする
-      const isFirstRun = stillOpen.size === 0 && targets.length > 0;
+    const state = deps.listRunState ? await deps.listRunState(runKey) : null;
+    if (state !== null && state !== undefined) {
+      const stillOpen = new Set(state.unfinished);
+      // **「行が1行も無い」が初回である。** 未完了が0件でも、行があるなら
+      // それは「全部終わった」——最初からやり直してはいけない
+      const isFirstRun = state.total === 0;
       if (!isFirstRun) {
         pending = targets.filter((t) => stillOpen.has(t.companyId));
         summary.resumed = pending.length < targets.length;

@@ -34,6 +34,11 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
       "@shared": path.resolve(__dirname, "shared"),
       "@edge": path.resolve(__dirname, "supabase/functions"),
+      // **Deno の指定子を Node 側で解決する。**
+      // `_shared/supabase-client.ts` が `npm:@supabase/supabase-js@2` を import しており、
+      // これが解決できないと `buildDeps` を統合試験から呼べない。
+      // 実装は1行も変えず、**試験から実物の経路を通すためだけ**の対応である
+      "npm:@supabase/supabase-js@2": "@supabase/supabase-js",
     },
   },
 });

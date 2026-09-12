@@ -15,6 +15,7 @@
 import type { CallerKind } from "./caller.ts";
 import { isEntitledStatus } from "./budget.ts";
 import { runKeyOf, shouldStopForDeadline } from "./dispatch-resume.ts";
+import { liveSources, stoppedSources, type SourceState } from "./source-state.ts";
 
 export type DispatchKind = "daily" | "weekly";
 
@@ -71,11 +72,26 @@ export interface CompanyTarget {
    * 実際に配信を止めるかどうかは `enforceEntitlement` が決める（発注 B-4）。
    */
   subscriptionStatus: string | null;
+  /**
+   * データ源ごとの状態（PS-9c の改訂・2026-09-13）。**無ければ従来の判定。**
+   *
+   * これまで対象は会社単位で決めており、Google が切れると CSV 由来の処理まで止まっていた。
+   * 渡されたときは**源ごとに**判定する。
+   */
+  sources?: SourceState[];
 }
 
 /** 1社ぶんの判断。**実行はしない** */
 export type CompanyPlan =
-  | { action: "deliver" }
+  | {
+      action: "deliver";
+      /**
+       * 生きている源と止まっている源（PS-9c の改訂）。
+       * **源の情報が無い会社（`sources` 未指定）では付かない**——従来の判定のまま
+       */
+      live?: string[];
+      stopped?: SourceState[];
+    }
   | { action: "reconnect" }
   | { action: "suppress"; outcome: "reconnect_suppressed"; reason: string }
   | {
@@ -112,6 +128,21 @@ export function planCompany(
   // 連携が無いのとは別の値にする。打つ手が違う（前者は連携の導線、後者はお申し込み）
   if (enforceEntitlement && !isEntitledStatus(target.subscriptionStatus)) {
     return { action: "skip", outcome: "skipped_not_entitled" };
+  }
+
+  // ── 源ごとの判定（PS-9c の改訂）──
+  //
+  // **生きている源が1つでもあれば配る。** 止まっている源に依存する項目は
+  // 本文から外し、代わりに「○月○日から取れていません」を1行出す（受け手の側で行う）。
+  // **再連携のお願いを別のメールで送らない**——毎朝のメールの中の1行にする。
+  // 2通届くと、どちらを読めばいいかが分からなくなる
+  if (target.sources !== undefined) {
+    const live = liveSources(target.sources);
+    if (live.length > 0) {
+      if (!target.email) return { action: "skip", outcome: "skipped_no_email" };
+      return { action: "deliver", live, stopped: stoppedSources(target.sources) };
+    }
+    // **生きている源が0なら従来どおり**（再連携のお願いだけ／源が無ければ skipped）
   }
 
   const needsReconnect =
@@ -497,12 +528,15 @@ export async function runDispatch(
       continue;
     }
 
-    // 取り消し中の会社には**再連携のお願いだけ**を送る（PS-9b）。
+    // **生きている源が1つも無い**会社には、再連携のお願いだけを送る（PS-9b）。
     //
-    // **`state-baselines` も `run-sense` も呼ばない。** 取り込みが止まっている会社に
-    // 平常の状態記述を出すと、**古い値を今の状態として提示する**ことになる。
-    // 同時に、この経路は LLM へ入らない（LLM は `run-sense` → `investigate` の先にある）。
-    // **呼ばないことが担保である**（PS-9c）
+    // **PS-9c は 2026-09-13 に改訂した**（`docs/product/ps-9c-revision.md`）。
+    // 旧: 取り込みが止まっている**会社**には `state-baselines` も `run-sense` も呼ばない。
+    // 新: 取り込みが止まっている**源**の値を、今の状態として提示しない。
+    //
+    // 生きている源がある会社はここに来ない（`planCompany` が `deliver` を返す）。
+    // ここに来るのは源が全部止まっている会社だけなので、**この経路は LLM へ入らない**
+    // という旧 PS-9c の担保はそのまま残る
     if (plan.action === "reconnect") {
       const notice = await deps.invoke("deliver-pulse", {
         company_id: target.companyId,
@@ -523,6 +557,20 @@ export async function runDispatch(
       continue;
     }
 
+    // **源の情報を受け手へ渡す**（PS-9c の改訂）。受け手は止まっている源の
+    // 値を今の状態として使わない。**渡さなければ従来どおり全部を使う**
+    const sourceBody =
+      plan.action === "deliver" && plan.live
+        ? {
+            live_sources: plan.live,
+            stopped_sources: (plan.stopped ?? []).map((st) => ({
+              provider: st.provider,
+              status: st.status,
+              last_ingested_at: st.lastIngestedAt,
+            })),
+          }
+        : {};
+
     if (kind === "daily") {
       // **State を Sense より先に回す**（SB-D1）。
       //
@@ -533,7 +581,10 @@ export async function runDispatch(
       // **ここが `state-baselines` の唯一の呼び出し元である。** 2026-09-03 の実測では、
       // 本番の `baselines` は `revenue` の1行（最終更新 08-27）だけで、
       // 08-31 に足された `schedule_interval` の upsert は一度も走っていなかった。
-      const state = await deps.invoke("state-baselines", { company_id: target.companyId });
+      const state = await deps.invoke("state-baselines", {
+        company_id: target.companyId,
+        ...sourceBody,
+      });
       if (!state.ok) {
         // **State の失敗で Sense も配信も止めない**（SB-D2）。
         // 止めると、ベースラインが崩れた日に毎朝のパルスごと消える。
@@ -543,7 +594,10 @@ export async function runDispatch(
         await settle(target.companyId, "failed_state", `status_${state.status}`);
       }
 
-      const sense = await deps.invoke("run-sense", { company_id: target.companyId });
+      const sense = await deps.invoke("run-sense", {
+        company_id: target.companyId,
+        ...sourceBody,
+      });
       if (!sense.ok) {
         // **sense の失敗で配信を止めない**（CD-2-4）。ただし失敗として数える
         summary.sense_failed++;
@@ -556,6 +610,7 @@ export async function runDispatch(
     const delivered = await deps.invoke(deliverFn, {
       company_id: target.companyId,
       email: target.email,
+      ...sourceBody,
     });
 
     if (delivered.ok) {

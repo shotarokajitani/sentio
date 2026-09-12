@@ -95,6 +95,41 @@ describe("実行の鍵は JST で決める", () => {
   });
 });
 
+/**
+ * 「まだ始めていない」と「全部終わった」を分ける（2026-09-12 の実測で追加）。
+ *
+ * **未完了が0件であることは、両方を意味する。** 区別できないと、
+ * 22:15 / 22:30 / 22:45 / 23:00 の再開 cron が**毎回3社を最初からやり直す。**
+ * 本番のログで `run-sense` / `scan` / `state-baselines` / `deliver-pulse` が
+ * 毎朝5回走っていた。二重送信は `delivery_log` の冪等キー（23505）が
+ * 止めていただけで、**枠と時間は5倍使っていた。**
+ */
+describe("初回と再開を取り違えない", () => {
+  const dispatch = readFileSync(
+    path.resolve(__dirname, "../../supabase/functions/_shared/dispatch.ts"),
+    "utf8",
+  );
+
+  it("行が1行も無いことを初回の条件にする", () => {
+    expect(dispatch).toContain("const isFirstRun = state.total === 0;");
+  });
+
+  it("**陰性**: 未完了の件数で初回を決めない", () => {
+    // これが元の実装。**予約が失敗していたので常に0件**になり、
+    // 毎回「初回」と判定されていた
+    expect(dispatch).not.toContain("stillOpen.size === 0");
+  });
+
+  it("進み具合は total と unfinished を別々に受け取る", () => {
+    expect(dispatch).toContain("listRunState?(runKey: string)");
+    expect(dispatch).toContain("{ total: number; unfinished: string[] } | null");
+  });
+
+  it("**陰性**: 引けなかったときは再開の絞り込みをしない（0件と混ぜない）", () => {
+    expect(dispatch).toContain("if (state !== null && state !== undefined) {");
+  });
+});
+
 describe("配信側の配線", () => {
   const dispatch = readFileSync(
     path.resolve(__dirname, "../../supabase/functions/_shared/dispatch.ts"),
@@ -124,7 +159,9 @@ describe("配信側の配線", () => {
   });
 
   it("時間切れは `finished_at` を入れない（次の再開で拾い直す）", () => {
-    expect(dispatch).toContain('await settle(target.companyId, "timeout", "deliver_timeout", false)');
+    expect(dispatch).toContain(
+      'await settle(target.companyId, "timeout", "deliver_timeout", false)',
+    );
     expect(runtime).toContain("finished_at: finished ? new Date().toISOString() : null");
   });
 

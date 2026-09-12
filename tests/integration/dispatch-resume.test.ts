@@ -96,7 +96,9 @@ describe.skipIf(!canRun)("再開の2回目は実物の listRunState で0社に�
           invoked.push(String(body.company_id));
           return { ok: true, status: 200 };
         },
-        countBillingUnresolved: async () => null,
+        // **null を返すと「集計が壊れている」と読まれて 502 になる**（④-a）。
+        // ここで見たいのは再開の判定なので、0件を返して課金の経路を通す
+        countBillingUnresolved: async () => ({ unresolved: 0, resolved: 0, stale: 0 }),
         notifyOpsBillingUnresolved: async () => ({ ok: true as const }),
         // 掃除はこの試験の対象ではない
         sweepStaleSending: undefined,

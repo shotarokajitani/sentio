@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
+import { createClient } from "@supabase/supabase-js";
+import { companySubject, hitRate, rateRules, tooManyRequests } from "@/lib/rate-limit";
 import { csvEventId } from "@/lib/csv/event-id";
 
 interface ColumnMapping {
@@ -23,6 +25,11 @@ export async function POST(req: NextRequest) {
   if (!ctx) return unauthorized();
   const companyId = ctx.companyId;
 
+  // **1日あたりの回数を数える**（2026-09-13 の点検・PR-2a）。
+  // 取り込みは重い処理で、上限が無いと同じ会社から大量に叩ける
+  const rate = await hitRate(companySubject(companyId), rateRules().ingest);
+  if (!rate.allowed) return tooManyRequests(rate);
+
   const { csv_text, file_name, mapping } = (await req.json()) as {
     csv_text: string;
     file_name: string;
@@ -42,8 +49,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // RLSが効くクライアント。自社スコープ外のINSERTはDB側でも弾かれる
-  const supabase = ctx.supabase;
+  // **書き込みは service_role で行う**（2026-09-13 の点検・PR-2a）。
+  //
+  // これまでは RLS の効く利用者のクライアント（`ctx.supabase`）で書いていた。
+  // その書き込みを許すために `authenticated` に `events` の INSERT / UPDATE / DELETE を
+  // 渡しており（00038）、**利用者が自分の events を API を通さず直接書き換えられた。**
+  // PR-2b でその権限を外すので、先にここを service_role に寄せる。
+  //
+  // **service_role は RLS を通らない。** 越境しないのは、書く行の `company_id` を
+  // セッション由来の `companyId` 1か所からしか入れていないためである
+  // （`rows` を組むところ）。ボディの値を `company_id` に使わない
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   const lines = csv_text.trim().split("\n");
   if (lines.length < 2) {

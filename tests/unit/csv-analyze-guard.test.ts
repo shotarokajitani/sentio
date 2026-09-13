@@ -151,9 +151,23 @@ vi.mock("@/lib/auth/company", async () => {
     ...actual,
     getAuthedContext: async () =>
       authed
-        ? { companyId: "11111111-1111-4111-8111-111111111111", email: null, siteUrl: null, supabase: null }
+        ? {
+            companyId: "11111111-1111-4111-8111-111111111111",
+            email: null,
+            siteUrl: null,
+            supabase: null,
+          }
         : null,
   };
+});
+
+/**
+ * レート制限（2026-09-13 の点検・PR-2a）は数える先が DB なので、**単体試験では常に通す。**
+ * 数え方と 429 は `tests/unit/rate-limit.test.ts` と `tests/integration/rate-limit.test.ts` が持つ
+ */
+vi.mock("@/lib/rate-limit", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/rate-limit")>("@/lib/rate-limit");
+  return { ...actual, hitRate: async () => ({ allowed: true, count: 1 }) };
 });
 
 /** モックの切り替え。既定は「認証済み」 */

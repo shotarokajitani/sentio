@@ -1,6 +1,8 @@
+import Script from "next/script";
 import { Masthead } from "@/components/Masthead";
 import { t, errorMessage } from "@/i18n";
 import { loginMode, loginView } from "@/lib/auth/login-view";
+import { TURNSTILE_SCRIPT, turnstileSiteKey } from "@/lib/auth/captcha";
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
 
@@ -38,6 +40,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const next = first(params.next) ?? "/connect";
   const view = loginView(first(params.mode), next);
   const signup = view.mode === "signup";
+  const siteKey = turnstileSiteKey(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   return (
     <main className="page">
@@ -101,6 +104,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           </label>
         )}
 
+        {/* **CAPTCHA（2026-09-13 の点検・13b）。** ウィジェットが `cf-turnstile-response` を
+            フォームに足し、`api/auth/session` が Supabase Auth に渡す。
+            サイトキーが未設定の環境では出さない（Supabase 側で有効にしていなければ要求されない） */}
+        {siteKey && (
+          <div className="cf-turnstile" data-sitekey={siteKey} style={{ marginTop: 16 }} />
+        )}
+
         {/* **主操作は1つ。** もう一方はボタンではなくリンクで置く */}
         <div className="actions">
           <button className="btn" type="submit" name="intent" value={view.intent}>
@@ -119,6 +129,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         {view.showLegalNote && <>{t.login.legalLead} </>}
         <a href="/terms">{t.login.terms}</a> ・ <a href="/privacy">{t.login.privacy}</a>
       </p>
+
+      {siteKey && <Script src={TURNSTILE_SCRIPT} strategy="afterInteractive" />}
     </main>
   );
 }

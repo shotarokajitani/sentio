@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { inspectHeaderRow } from "@shared/csv/header-guard";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
+import { companySubject, hitRate, rateRules, tooManyRequests } from "@/lib/rate-limit";
 
 interface TypeStat {
   type: string;
@@ -25,7 +26,13 @@ export async function POST(req: NextRequest) {
    * `docs/adr/0002` は **Edge Function** の認証境界を定めたもので、
    * Next の API ルートには触れていない。したがって ADR の更新は要らない。
    */
-  if (!(await getAuthedContext())) return unauthorized();
+  const ctx = await getAuthedContext();
+  if (!ctx) return unauthorized();
+
+  // **LLM に触れる前に、1日あたりの回数を数える**（2026-09-13 の点検・PR-2a）。
+  // 認証済みなら無制限に Anthropic を呼べた。上限を超えた回は LLM を呼ばずに返す
+  const rate = await hitRate(companySubject(ctx.companyId), rateRules().analyze);
+  if (!rate.allowed) return tooManyRequests(rate);
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL;

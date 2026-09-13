@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient, type PendingCookie } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/safe-next";
-import { captchaTokenFrom, signInOptions, signUpOptions } from "@/lib/auth/captcha";
+import {
+  captchaTokenFrom,
+  isCaptchaFailure,
+  routeCaptchaFailure,
+  signInOptions,
+  signUpOptions,
+} from "@/lib/auth/captcha";
 import { clientIp, hitRate, ipSubject, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -44,6 +50,19 @@ export async function POST(req: NextRequest) {
   const backToLogin = (key: string) =>
     redirect(req, `/login?e=${key}&next=${encodeURIComponent(next)}${modeParam}`, pending);
 
+  /**
+   * **CAPTCHA で断られたときの戻し先**（2026-09-13 の本番ログ・二度押し）。
+   *
+   * 1回目が成功して cookie が入ったあと、同じトークンの2回目が断られる。
+   * **この要求に有効なセッションが既にあれば、エラーにせず `next` へ進める。**
+   * 無ければ `captcha_failed`（パスワード違いと区別する）
+   */
+  const onCaptchaFailure = async () => {
+    const { data } = await supabase.auth.getUser();
+    const route = routeCaptchaFailure(Boolean(data.user));
+    return route.to === "next" ? redirect(req, next, pending) : backToLogin(route.error);
+  };
+
   if (!email || !password) {
     return backToLogin("missing_fields");
   }
@@ -64,6 +83,7 @@ export async function POST(req: NextRequest) {
     });
     if (error) {
       console.error("signUp failed:", error.message);
+      if (isCaptchaFailure(error)) return onCaptchaFailure();
       return backToLogin(
         error.message.toLowerCase().includes("already") ? "email_taken" : "unknown",
       );
@@ -83,6 +103,7 @@ export async function POST(req: NextRequest) {
   });
   if (error) {
     console.error("signIn failed:", error.message);
+    if (isCaptchaFailure(error)) return onCaptchaFailure();
     return backToLogin("invalid_credentials");
   }
 

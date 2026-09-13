@@ -3,6 +3,7 @@ import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { createClient } from "@supabase/supabase-js";
 import { companySubject, hitRate, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 import { csvEventId } from "@/lib/csv/event-id";
+import { checkCsvSize } from "@/lib/csv/limits";
 
 interface ColumnMapping {
   date: string;
@@ -38,6 +39,18 @@ export async function POST(req: NextRequest) {
 
   if (!csv_text || !mapping || !mapping.date) {
     return NextResponse.json({ error: "csv_text, mapping (date) required" }, { status: 400 });
+  }
+
+  // **大きさの上限**（2026-09-13 の点検・PR-3 の 18）。2MB・データ行 20,000 行まで。
+  // 超えたら行に分ける前に 413 で断る（`lib/csv/limits.ts`）
+  const size = checkCsvSize(String(csv_text));
+  if (!size.ok) {
+    return NextResponse.json(
+      size.reason === "too_many_bytes"
+        ? { error: "csv_too_large", reason: size.reason, bytes: size.bytes }
+        : { error: "csv_too_large", reason: size.reason, rows: size.rows },
+      { status: 413 },
+    );
   }
 
   const hasAmount = !!mapping.amount;
@@ -268,10 +281,10 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase.from("events").upsert(batch, { onConflict: "event_id" });
 
     if (error) {
-      return NextResponse.json(
-        { error: `取込失敗 (行${i}〜): ${error.message}`, count: totalInserted },
-        { status: 500 },
-      );
+      // **DB のエラー文は返さない**（2026-09-13 の点検・PR-3 の 18）。
+      // 本文には制約名や列名が入り、表の作りを外に教える。理由はサーバのログにだけ残す
+      console.error(`csv/ingest: upsert failed at row ${i}:`, error.message);
+      return NextResponse.json({ error: "ingest_failed", count: totalInserted }, { status: 500 });
     }
     totalInserted += batch.length;
   }
@@ -328,8 +341,24 @@ function parseNumber(val: string | undefined): number {
 }
 
 /**
+ * 年・月・日が暦に実在するときだけ `YYYY-MM-DD` を返す（2026-09-13 の点検・PR-3 の 18）。
+ *
+ * それまでは形だけを見ていたので、`2026-99-99` も `2026-02-30` もそのまま通り、
+ * `occurred_at` に実在しない日付（Postgres で弾かれるか、別の日に繰り上がる）が入りえた。
+ */
+function realDate(y: string, m: string, d: string): string | null {
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const exists =
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return exists ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : null;
+}
+
+/**
  * Normalize date string to YYYY-MM-DD.
- * Returns null for unparseable formats (caller records skip reason).
+ * Returns null for unparseable formats or dates that do not exist (caller records skip reason).
  * Returns "era_unsupported" for Japanese era dates (和暦).
  */
 export function normalizeDate(val: string): string | null {
@@ -339,21 +368,21 @@ export function normalizeDate(val: string): string | null {
   const ymdMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (ymdMatch) {
     const [, y, m, d] = ymdMatch;
-    return `${y}-${m}-${d}`;
+    return realDate(y, m, d);
   }
 
   // 2. YYYY/MM/DD or YYYY-MM-DD
   const slashMatch = trimmed.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
   if (slashMatch) {
     const [, y, m, d] = slashMatch;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return realDate(y, m, d);
   }
 
   // 3. YYYY年M月D日
   const jpMatch = trimmed.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日?/);
   if (jpMatch) {
     const [, y, m, d] = jpMatch;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return realDate(y, m, d);
   }
 
   // 4. M/D (year-less) — cannot resolve without context, skip

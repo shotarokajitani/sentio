@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { inspectHeaderRow } from "@shared/csv/header-guard";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { companySubject, hitRate, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
+import { checkHeaderSize } from "@/lib/csv/limits";
 
 interface TypeStat {
   type: string;
@@ -52,6 +53,13 @@ export async function POST(req: NextRequest) {
 
   if (!headers || headers.length === 0) {
     return NextResponse.json({ error: "headers required" }, { status: 400 });
+  }
+
+  // **見出しの大きさの上限**（2026-09-13 の点検・PR-3 の 18）。100 列・1列 200 文字まで。
+  // 見出しはそのままプロンプトに入る。**断った本文に見出しの中身を載せない**
+  const headerSize = checkHeaderSize(headers);
+  if (!headerSize.ok) {
+    return NextResponse.json({ error: "headers_too_large", ...headerSize }, { status: 413 });
   }
 
   /**

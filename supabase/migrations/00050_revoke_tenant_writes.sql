@@ -136,6 +136,3 @@ BEGIN
   DELETE FROM retention_purge_runs WHERE kind = 'api_rate_limits' AND counted = 0 AND dry_run
     AND created_at >= now() - interval '1 minute';
 END $$;
-
--- 陰性コントロール（直後に revert する）: 自表検証の後で書き込み権限を戻す
-GRANT INSERT, UPDATE, DELETE ON connections, entities, events TO authenticated;

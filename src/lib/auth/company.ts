@@ -8,7 +8,9 @@ export interface AuthedContext {
   /**
    * 登録時に受け取った自社サイトのURL。**任意項目なので null を許す。**
    *
-   * 置き場所は `auth.users.app_metadata`（service_role だけが書ける）。**新しいテーブルを作っていない。**
+   * 置き場所は `auth.users.user_metadata`（**本人が書いてよい値**）。**新しいテーブルを作っていない。**
+   * 購読の置き場所（`app_metadata`・service_role だけが書ける）とは**別である。**
+   * `site_url` は本人が自分で入れる値なので、本人が書き換えられても害が無い。
    * `company_id` が `auth.uid()` そのものなので、会社の属性とユーザーの属性が
    * 1対1で対応し、専用のテーブルを持つ理由が無い。
    * 将来ほかの会社属性が増えるなら、そのとき表に出すか決める。

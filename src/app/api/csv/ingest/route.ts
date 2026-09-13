@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   // **service_role は RLS を通らない。** 越境しないのは、書く行の `company_id` を
   // セッション由来の `companyId` 1か所からしか入れていないためである
   // （`rows` を組むところ）。ボディの値を `company_id` に使わない
-  const supabase = ctx.supabase;
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   const lines = csv_text.trim().split("\n");
   if (lines.length < 2) {

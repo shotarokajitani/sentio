@@ -82,6 +82,8 @@ export async function POST(req: NextRequest) {
    * **`entities` を消しても回数は戻らない。** 実行した事実そのものを判定に使う。
    * 上限を超えた回は LLM を呼ばずに返すので、費用も発生しない
    */
+  const rate = await hitRate(companySubject(companyId), rateRules().suggest);
+  if (!rate.allowed) return rateLimitedResponse(rate);
 
   // S0共有行（company_id = null）は設計上 service_role でしか書けない（00019）
   const shared = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);

@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
   //
   // 登録にもログインにも関門が無く、総当たりもアカウントの量産もできた。
   // ログイン前なので会社は分からない。数える単位は送信元の IP にする
+  const rate = await hitRate(ipSubject(clientIp(req.headers)), rateRules().session);
+  if (!rate.allowed) return rateLimitedResponse(rate);
 
   const form = await req.formData();
   const email = String(form.get("email") ?? "").trim();

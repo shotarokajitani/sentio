@@ -2662,7 +2662,11 @@ Next 側（`src/lib/billing/plan.ts`）はそれを呼ぶ。**二重に持たな
 適用したプランは `investigate` の応答（`budget.plan_id` / `budget.limit`）と
 `findings.eval_log` に残る。**「枠のせいで見えなかった」を後から判別できる。**
 
-## `events` / `entities` / `connections` の書き込みを service_role に寄せるか（**未判断**・2026-09-09）
+## `events` / `entities` / `connections` の書き込みを service_role に寄せるか（**決定・実施済み**・2026-09-09 登録 → 2026-09-13 決定）
+
+> **2026-09-13 の不正利用の点検で決定し、実施した。**
+> PR-2a（#126）で下の3経路を service_role に寄せて本番で確かめ、
+> PR-2b（00050）で `authenticated` の INSERT / UPDATE / DELETE を外した。以下は登録時の記述。
 
 `00036` で12表の権限を締めたが、**この3表だけは `authenticated` の書き込みを残した。**
 RLS クライアント経由の書き込みが実際にあるためである（2026-09-09 の実測）。
@@ -2903,6 +2907,8 @@ REVOKE ALL ON events, entities, connections, known_explanations, connector_limit
 
 ### 残る未判断
 
-`events` / `entities` / `connections` の書き込みを `service_role` に寄せるかは
+~~`events` / `entities` / `connections` の書き込みを `service_role` に寄せるかは
 **まだ決めていない**（00036 で登録済み。ここでも変えていない）。
-寄せるまでは `authenticated` の `SELECT / INSERT / UPDATE / DELETE` を残す。
+寄せるまでは `authenticated` の `SELECT / INSERT / UPDATE / DELETE` を残す。~~
+
+→ 2026-09-13 に決定・実施（PR-2a #126 / PR-2b 00050）。`authenticated` に残るのは SELECT だけ。

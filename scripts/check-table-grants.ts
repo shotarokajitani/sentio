@@ -34,7 +34,11 @@ import { parse } from "yaml";
 import { PROBES, probe } from "./probe-table-grants";
 
 const CHECKLIST = "docs/checklists/table-grants.yml";
-const MIGRATION = "supabase/migrations/00038_revoke_write_grants.sql";
+/**
+ * 自表検証の配列を持つ最新の migration。**分類を変える migration を足したら、ここも移す。**
+ * 00038 → 00050（2026-09-13 の点検・PR-2b。writable を空にし、no_access を足した）
+ */
+export const MIGRATION = "supabase/migrations/00050_revoke_tenant_writes.sql";
 
 /** insufficient_privilege。**3本の試行はこれで断られなければならない** */
 const INSUFFICIENT_PRIVILEGE = "42501";
@@ -53,9 +57,12 @@ const DENIED_BY_GRANT = /permission denied for table/;
 
 interface Declaration {
   read_only: string[];
+  /** 2026-09-13（00050）から空。**空であることは宣言として正しい**（キーが無いのとは区別する） */
   writable: string[];
   /** `writable` の表で `authenticated` に**残す**権限。許可を明示側に持つ */
   writable_privileges: string[];
+  /** `authenticated` にも `anon` にも1つも渡さない表（00050） */
+  no_access: string[];
   never_granted: string[];
 }
 
@@ -63,14 +70,19 @@ export function loadDeclaration(path = CHECKLIST): Declaration {
   const doc = parse(readFileSync(path, "utf8")) as Partial<Declaration>;
   if (
     !doc.read_only?.length ||
-    !doc.writable?.length ||
     !doc.writable_privileges?.length ||
+    !doc.no_access?.length ||
     !doc.never_granted?.length
   ) {
     // **空の一覧を「一致した」と読ませない。** fail-closed
     throw new Error(
-      `${path}: read_only / writable / writable_privileges / never_granted のいずれかが空である`,
+      `${path}: read_only / writable_privileges / no_access / never_granted のいずれかが空である`,
     );
+  }
+  // **`writable` だけは空を許す**（00050 で0表になった）。ただし**キーが消えたのは許さない**——
+  // 「書き込みを残す表は無い」と「宣言を書き忘れた」を同じ顔にしない
+  if (!Array.isArray(doc.writable)) {
+    throw new Error(`${path}: writable が無い（空なら writable: [] と明示する）`);
   }
   return doc as Declaration;
 }
@@ -78,7 +90,7 @@ export function loadDeclaration(path = CHECKLIST): Declaration {
 /** migration の `DECLARE` にある配列を読む。**人が書き写した一覧がずれていないか** */
 export function migrationArrays(source: string): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  for (const name of ["read_only", "writable", "never"]) {
+  for (const name of ["read_only", "writable", "no_access", "never"]) {
     const pattern = String.raw`\s+TEXT\[\]\s*:=\s*ARRAY\[([^\]]*)\]`;
     const m = new RegExp(name + pattern, "s").exec(source);
     if (!m) throw new Error(`${MIGRATION}: 配列 ${name} が見つからない`);
@@ -115,6 +127,7 @@ export function compareDeclarationToMigration(decl: Declaration, source: string)
   const pairs: [string, string[], string[]][] = [
     ["read_only", decl.read_only, arrays.read_only],
     ["writable", decl.writable, arrays.writable],
+    ["no_access", decl.no_access, arrays.no_access],
     ["never_granted", decl.never_granted, arrays.never],
   ];
   for (const [label, declared, inMigration] of pairs) {
@@ -127,7 +140,10 @@ export function compareDeclarationToMigration(decl: Declaration, source: string)
   return findings;
 }
 
-function compareDeclarationToLive(decl: Declaration, grants: Map<string, Set<string>>): string[] {
+export function compareDeclarationToLive(
+  decl: Declaration,
+  grants: Map<string, Set<string>>,
+): string[] {
   const findings: string[] = [];
   const writes = ["INSERT", "UPDATE", "DELETE"];
 
@@ -146,6 +162,18 @@ function compareDeclarationToLive(decl: Declaration, grants: Map<string, Set<str
     for (const p of decl.writable_privileges) {
       if (!held.has(p))
         findings.push(`[missing] authenticated が ${t} に ${p} できない（残す約束）`);
+    }
+  }
+
+  // **何も渡さない表は、authenticated も anon も1つも持っていない**
+  for (const t of decl.no_access) {
+    for (const grantee of ["authenticated", "anon"]) {
+      const held = [...(grants.get(`${grantee}:${t}`) ?? new Set<string>())].sort();
+      if (held.length > 0) {
+        findings.push(
+          `[extra] ${grantee} が ${t} に ${held.join(",")} を持っている（何も渡さない表）`,
+        );
+      }
     }
   }
 
@@ -200,7 +228,8 @@ function main() {
   }
 
   console.log(
-    `\ncheck:table-grants — 読むだけ ${decl.read_only.length}表 / 書き込みあり ${decl.writable.length}表が` +
+    `\ncheck:table-grants — 読むだけ ${decl.read_only.length}表 / 書き込みあり ${decl.writable.length}表 / ` +
+      `何も渡さない ${decl.no_access.length}表が` +
       `宣言どおり（${decl.never_granted.join(" / ")} はどの表にも無い。実試行 ${PROBES.length}本すべて 42501）`,
   );
 }

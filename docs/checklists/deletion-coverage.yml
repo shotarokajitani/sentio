@@ -78,3 +78,12 @@ beyond_company_id:
       残るのは Stripe の customer id と event id だけだが、privacy §6 は
       「当該アカウントに紐づくすべてのデータ」を消すと公開している。
       手順書に stripe_customer_id で引いて消す1手順を足した（2026-09-08）。
+      2026-09-13（点検 PR-2b）: 購読の置き場所が app_metadata に移った（00048）ので、
+      手順書の読み先を raw_app_meta_data に直した。
+  - table: api_rate_limits
+    via: subject
+    reason: >-
+      レート制限の回数（00049・2026-09-13 の点検 PR-2a）。company_id 列を持たず、
+      subject に 'company:<uuid>'（ログイン後の経路）か 'ip:<addr>'（ログイン前）を持つ。
+      会社に紐づくのは前者だけなので、手順書は subject = 'company:' || id で消す。
+      後者は retention-purge が2日より前の窓を消す。

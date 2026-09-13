@@ -131,45 +131,104 @@ if (mode === "run") {
       expect(data).toHaveLength(1);
     });
 
-    it("陽性: 自社スコープでINSERTできる", async () => {
+    // ---------- 陰性: 自社の行でも書けない（2026-09-13 の点検・PR-2b・00050） ----------
+    //
+    // **00038 までは、ここは「陽性: 自社の行を INSERT / UPDATE / DELETE できる」だった。**
+    // RLS は自社の行を通すので、ログインした利用者は API を通さず PostgREST を直に叩いて
+    // 自社の events を書き換えられた。書き込みは service_role の route（PR-2a）に寄せ、
+    // `authenticated` の INSERT / UPDATE / DELETE を外した。
+    //
+    // **42501 だけでは足りない。** RLS の違反も 42501 になる。GRANT の層で止まっていること
+    // （`permission denied for table`）まで見る（`check:table-grants` と同じ理由）
+
+    it("(f) **陰性**: 自社スコープでも events に INSERT できない（GRANT の層で 42501）", async () => {
       const { error } = await tenantA.client
         .from("events")
         .insert(eventRow(tenantA.id, "a_insert"));
-      expect(error).toBeNull();
+
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/permission denied for table events/);
 
       const { data } = await admin
         .from("events")
-        .select("company_id")
+        .select("event_id")
         .eq("event_id", eventId("a_insert"));
-      expect(data?.[0]?.company_id).toBe(tenantA.id);
+      expect(data).toHaveLength(0);
     });
 
-    it("陽性: 自社の行をUPDATEできる", async () => {
+    it("**陰性**: 自社の events を UPDATE できない（値が変わらない）", async () => {
       const { error } = await tenantA.client
         .from("events")
         .update({ source: "rls-test-updated" })
         .eq("event_id", eventId("a_update"));
-      expect(error).toBeNull();
+
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/permission denied for table events/);
 
       const { data } = await admin
         .from("events")
         .select("source")
         .eq("event_id", eventId("a_update"));
-      expect(data?.[0]?.source).toBe("rls-test-updated");
+      expect(data?.[0]?.source).toBe("rls-test");
     });
 
-    it("陽性: 自社の行をDELETEできる", async () => {
+    it("**陰性**: 自社の events を DELETE できない（行が残る）", async () => {
       const { error } = await tenantA.client
         .from("events")
         .delete()
         .eq("event_id", eventId("a_delete"));
-      expect(error).toBeNull();
+
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/permission denied for table events/);
 
       const { data } = await admin
         .from("events")
         .select("event_id")
         .eq("event_id", eventId("a_delete"));
-      expect(data).toHaveLength(0);
+      expect(data).toHaveLength(1);
+    });
+
+    it("(g) **陰性**: 自社の connections.status を UPDATE できない（切れた連携を active にできない）", async () => {
+      const { error: seedErr } = await admin
+        .from("connections")
+        .insert({ company_id: tenantA.id, provider: `rls_g_${RUN_ID}`, status: "revoked" });
+      if (seedErr) throw new Error(`connections 投入に失敗: ${seedErr.message}`);
+
+      const { error } = await tenantA.client
+        .from("connections")
+        .update({ status: "active" })
+        .eq("company_id", tenantA.id)
+        .eq("provider", `rls_g_${RUN_ID}`);
+
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/permission denied for table connections/);
+
+      const { data } = await admin
+        .from("connections")
+        .select("status")
+        .eq("company_id", tenantA.id)
+        .eq("provider", `rls_g_${RUN_ID}`);
+      expect(data).toEqual([{ status: "revoked" }]);
+
+      await admin.from("connections").delete().eq("provider", `rls_g_${RUN_ID}`);
+    });
+
+    it("(h) **陰性**: 自社の entities を DELETE できない（消して suggest の冪等ガードを外せない）", async () => {
+      const { data: seeded, error: seedErr } = await admin
+        .from("entities")
+        .insert({ company_id: tenantA.id, type: "competitor", canonical_name: `rls_h_${RUN_ID}` })
+        .select("id");
+      if (seedErr || !seeded?.[0]) throw new Error(`entities 投入に失敗: ${seedErr?.message}`);
+
+      const { error } = await tenantA.client.from("entities").delete().eq("id", seeded[0].id);
+
+      expect(error?.code).toBe("42501");
+      expect(error?.message).toMatch(/permission denied for table entities/);
+
+      const { data } = await admin.from("entities").select("id").eq("id", seeded[0].id);
+      expect(data).toHaveLength(1);
+
+      await admin.from("entities").delete().eq("id", seeded[0].id);
     });
 
     it("陽性: NULLスコープ（S0共有）行は読める — 設計意図の維持", async () => {
@@ -209,15 +268,16 @@ if (mode === "run") {
       expect(data).toHaveLength(0);
     });
 
-    it("陰性: 他社の行はUPDATEできない（0件更新かつ実データが不変）", async () => {
-      const { data: updated, error } = await tenantA.client
+    it("陰性: 他社の行はUPDATEできない（実データが不変）", async () => {
+      const { error } = await tenantA.client
         .from("events")
         .update({ source: "hijacked" })
         .eq("event_id", eventId("b_update"))
         .select();
 
-      expect(error).toBeNull();
-      expect(updated).toHaveLength(0); // RLSで対象行が見えないため0件
+      // **00050 から断り方が変わった。** それまでは RLS が行を絞って「0件更新」を返していた。
+      // いまは GRANT が無いので、表に到達する前に 42501 で断る。強くなった側への変化である
+      expect(error?.code).toBe("42501");
 
       // 0件返却を「成功」と読み違えないよう、実データ側でも不変を確認する
       const { data } = await admin
@@ -227,15 +287,15 @@ if (mode === "run") {
       expect(data?.[0]?.source).toBe("rls-test");
     });
 
-    it("陰性: 他社の行はDELETEできない（0件削除かつ行が残存）", async () => {
-      const { data: deleted, error } = await tenantA.client
+    it("陰性: 他社の行はDELETEできない（行が残存）", async () => {
+      const { error } = await tenantA.client
         .from("events")
         .delete()
         .eq("event_id", eventId("b_delete"))
         .select();
 
-      expect(error).toBeNull();
-      expect(deleted).toHaveLength(0);
+      // 00050 から GRANT の層で 42501（上の UPDATE と同じ）
+      expect(error?.code).toBe("42501");
 
       const { data } = await admin
         .from("events")
@@ -288,14 +348,14 @@ if (mode === "run") {
     });
 
     it("陰性: NULLスコープ行をUPDATEできない（読めても書けない）", async () => {
-      const { data: updated, error } = await tenantA.client
+      const { error } = await tenantA.client
         .from("events")
         .update({ source: "hijacked-s0" })
         .eq("event_id", eventId("shared_s0"))
         .select();
 
-      expect(error).toBeNull();
-      expect(updated).toHaveLength(0);
+      // 00050 から GRANT の層で 42501（それまでは RLS が0件更新にしていた）
+      expect(error?.code).toBe("42501");
 
       const { data } = await admin
         .from("events")
@@ -384,18 +444,23 @@ if (mode === "run") {
         expect(count).toBe(0);
       });
 
-      it("**connections.status に不正値を書けない**（切れていないことにできない）", async () => {
-        // 書き込みそのものは残してある表なので、止めるのは CHECK である
+      it("**connections に INSERT できない**（切れていないことにできない）", async () => {
+        // 00038 までは書き込みが残っていたので、止めていたのは CHECK（不正な status）だった。
+        // **00050 から GRANT の層で止まる**——正しい status でも書けない
         const { error } = await tenantA.client.from("connections").insert({
           company_id: tenantA.id,
           provider: "rls_check",
-          status: "definitely_connected",
+          status: "active",
         });
 
-        expect(error).not.toBeNull();
-        expect(String(error?.message ?? "")).toMatch(/check|constraint/i);
+        expect(error?.code).toBe("42501");
+        expect(error?.message).toMatch(/permission denied for table connections/);
 
-        await admin.from("connections").delete().eq("provider", "rls_check");
+        const { count } = await admin
+          .from("connections")
+          .select("provider", { count: "exact", head: true })
+          .eq("provider", "rls_check");
+        expect(count).toBe(0);
       });
 
       it("読むのは残す（**止めたいのは書き込みだけ**）", async () => {

@@ -8,6 +8,9 @@
 //   retention_months … `ingested_at` が24ヶ月より古い行（会社ごと）
 //   revoked_grace    … `revoked_at` から30日経った連携の、その provider 由来の行
 //
+// 2026-09-13（点検・PR-2b）に3つ目を足した。
+//   api_rate_limits  … レート制限の回数（00049）の、2日より前の窓。会社に紐づかない
+//
 // 危険の向きが他の Function と違う。deliver 系の事故は「勝手に送る」だが、
 // ここの事故は「消しすぎる」で、取り返しがつかない。したがって:
 //   - **会社ごとに**数えてから消す（company_id 無しでは1行も消さない）
@@ -33,6 +36,11 @@ import {
   type DeletionOutcome,
   type PurgePlan,
 } from "../_shared/retention.ts";
+import {
+  RATE_LIMIT_RETENTION_DAYS,
+  planRateLimitPurge,
+  rateLimitCutoff,
+} from "../_shared/rate-limit-retention.ts";
 
 /**
  * `getSupabaseAdmin()` が返すクライアントの型。
@@ -44,7 +52,7 @@ import {
  */
 type Db = ReturnType<typeof getSupabaseAdmin>;
 
-type PurgeKind = "run" | "retention_months" | "revoked_grace";
+type PurgeKind = "run" | "retention_months" | "revoked_grace" | "api_rate_limits";
 
 /**
  * 記録に残す判断。`planPurge` の結果に、**Edge 側にしか無い理由**を1つ足したもの。
@@ -218,6 +226,41 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ------------------------------------------------------------------
+    // 3. レート制限の古い窓（2026-09-13 の点検・PR-2b）
+    //
+    // `ip:<addr>` の行には IP アドレスが残る。窓は最長1日なので、2日より前は判定に使われない。
+    // **会社に絞らない削除である。** 絞り込みは `window_start < cutoff` の1条件だけで、
+    // 規律（既定は数えるだけ・数えられなければ消さない・上限を超えたら消さない）は上と同じ
+    // ------------------------------------------------------------------
+    const rateLimitBefore = rateLimitCutoff(now).toISOString();
+    {
+      const counted = await mustCount(
+        supabase
+          .from("api_rate_limits")
+          .select("subject", { count: "exact", head: true })
+          .lt("window_start", rateLimitBefore),
+        "retention-purge: rate limit count",
+      );
+
+      const plan = planRateLimitPurge({ counted, max: MAX_DELETE_ROWS, dryRun });
+
+      let outcome = reconcileDeletion({ planned: plan.count, observed: null, attempted: false });
+
+      if (plan.decision === "deleted") {
+        const observed = await mustCount(
+          supabase
+            .from("api_rate_limits")
+            .delete({ count: "exact" })
+            .lt("window_start", rateLimitBefore),
+          "retention-purge: rate limit delete",
+        );
+        outcome = reconcileDeletion({ planned: plan.count, observed, attempted: true });
+      }
+
+      results.push(await record(supabase, { kind: "api_rate_limits", plan, outcome, dryRun }));
+    }
+
     const deleted = results.reduce((sum, r) => sum + r.deleted, 0);
     const planned = results.reduce((sum, r) => sum + r.planned, 0);
     const blocked = results.filter((r) => r.decision === "blocked").length;
@@ -245,6 +288,7 @@ Deno.serve(async (req: Request) => {
     console.log(
       `[sentio:retention] purge 完了 dry_run=${dryRun} cutoff=${cutoff} ` +
         `revoked_before=${revokedBefore} months=${RETENTION_MONTHS} days=${REVOKED_GRACE_DAYS} ` +
+        `rate_limit_before=${rateLimitBefore} rate_limit_days=${RATE_LIMIT_RETENTION_DAYS} ` +
         `targets=${results.length} planned=${planned} deleted=${deleted} blocked=${blocked} ` +
         `mismatched=${mismatched}`,
     );
@@ -258,6 +302,8 @@ Deno.serve(async (req: Request) => {
         revoked_before: revokedBefore,
         retention_months: RETENTION_MONTHS,
         revoked_grace_days: REVOKED_GRACE_DAYS,
+        rate_limit_before: rateLimitBefore,
+        rate_limit_retention_days: RATE_LIMIT_RETENTION_DAYS,
         // 全社数ではなく「対象になった（会社×種別）の数」。0 は正常（消すものが無い）
         targets: results.length,
         // **予定と観測を同じ名前で持たない**（dry_run の数字と実削除の数字は別物）
@@ -303,7 +349,7 @@ async function resolveDryRun(req: Request): Promise<boolean> {
 async function record(
   supabase: Db,
   input: {
-    /** `kind: "run"` のときだけ省く。会社に紐づかない行である */
+    /** `kind: "run"` と `"api_rate_limits"` のときだけ省く。会社に紐づかない行である */
     companyId?: string;
     kind: PurgeKind;
     provider?: string;

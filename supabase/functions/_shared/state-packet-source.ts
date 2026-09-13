@@ -81,6 +81,13 @@ export async function loadPacketInput(
   supabase: unknown,
   companyId: string,
   now: Date,
+  /**
+   * 止まっている源（PS-9c の改訂）。**その源のイベントを材料に入れない。**
+   *
+   * 取り込みが止まっている源の値を、今の状態として提示しないためである。
+   * 件数の上限判定は除外する前の全件で行う——**上限の意味を変えない。**
+   */
+  excludeSources: readonly string[] = [],
 ): Promise<PacketInput> {
   const db = asPacketDb(supabase);
 
@@ -100,7 +107,7 @@ export async function loadPacketInput(
     );
   }
 
-  const events = await mustData<PacketEvent[]>(
+  const allEvents = await mustData<PacketEvent[]>(
     db
       .from("events")
       .select<PacketEvent[]>(
@@ -111,6 +118,9 @@ export async function loadPacketInput(
       .limit(PACKET_EVENT_LIMIT),
     "state-packet: events",
   );
+  // **止まっている源の値を材料に入れない**（PS-9c の改訂・fail-closed）
+  const excluded = new Set(excludeSources);
+  const events = excluded.size === 0 ? allEvents : allEvents.filter((e) => !excluded.has(e.source));
 
   const connections = await mustData<PacketConnection[]>(
     db

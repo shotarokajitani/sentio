@@ -23,7 +23,7 @@ import {
   stoppedLine,
   stoppedSources,
 } from "@edge/_shared/source-state";
-import { planCompany, type CompanyTarget } from "@edge/_shared/dispatch";
+import { planCompany, runDispatch, type CompanyTarget } from "@edge/_shared/dispatch";
 
 const NOW = new Date("2026-09-13T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
@@ -174,6 +174,85 @@ describe("配信の判定（PS-9c の改訂）", () => {
       NOW,
     );
     expect(plan).toEqual({ action: "skip", outcome: "skipped_no_email" });
+  });
+});
+
+describe("止まっている源がある会社を LLM へ入れない（fail-closed）", () => {
+  const dispatch = readFileSync(
+    path.resolve(__dirname, "../../supabase/functions/_shared/dispatch.ts"),
+    "utf8",
+  );
+  const pulse = readFileSync(
+    path.resolve(__dirname, "../../supabase/functions/deliver-pulse/index.ts"),
+    "utf8",
+  );
+  const weekly = readFileSync(
+    path.resolve(__dirname, "../../supabase/functions/deliver-weekly/index.ts"),
+    "utf8",
+  );
+
+  /**
+   * **文字列を探すだけの試験にしない。** 最初はそう書いていて、
+   * `const hasStopped = false;` に壊しても緑のままだった（2026-09-13 に実測）。
+   * `runDispatch` を実際に呼び、`run-sense` が呼ばれたかを数える
+   */
+  async function runWith(sources: CompanyTarget["sources"]) {
+    const calls: string[] = [];
+    const result = await runDispatch(
+      "daily",
+      { kind: "internal" },
+      {
+        listTargets: async () => [target({ sources })],
+        invoke: async (fn: string) => {
+          calls.push(fn);
+          return { ok: true, status: 200 };
+        },
+        countBillingUnresolved: async () => ({ unresolved: 0, resolved: 0, stale: 0 }),
+        notifyOpsBillingUnresolved: async () => ({ ok: true as const }),
+        recordDispatch: async () => ({ ok: true }),
+      },
+    );
+    return { calls, body: result.body as { sense_skipped_stopped_source: number } };
+  }
+
+  it("(f) **陰性**: 止まっている源が1つでもあれば run-sense を呼ばない", async () => {
+    const { calls, body } = await runWith([
+      { provider: "google_calendar", status: "revoked", lastIngestedAt: daysAgo(5) },
+      { provider: "csv:accounting", status: "live", lastIngestedAt: daysAgo(3) },
+    ]);
+
+    expect(calls).not.toContain("run-sense");
+    expect(calls).toContain("state-baselines");
+    expect(calls).toContain("deliver-pulse");
+    expect(body.sense_skipped_stopped_source).toBe(1);
+  });
+
+  it("全部の源が生きていれば run-sense を呼ぶ（**止めすぎない**）", async () => {
+    const { calls, body } = await runWith([
+      { provider: "google_calendar", status: "live", lastIngestedAt: daysAgo(1) },
+      { provider: "csv:accounting", status: "live", lastIngestedAt: daysAgo(3) },
+    ]);
+
+    expect(calls).toContain("run-sense");
+    expect(body.sense_skipped_stopped_source).toBe(0);
+  });
+
+  it("(f) 呼ばなかった会社数を要約に出す（**0件でも必ず出す**）", () => {
+    expect(dispatch).toContain("sense_skipped_stopped_source: 0");
+  });
+
+  it("(g) 毎朝の配信は、止まっている源のイベントを材料に入れない", () => {
+    expect(pulse).toContain("stopped.map((st) => st.provider)");
+  });
+
+  it("(g) 週次は、カレンダーが止まっていたら会議を読まない", () => {
+    expect(weekly).toContain("calendarStopped");
+    expect(weekly).toMatch(/calendarStopped\s*\?\s*\[\]/);
+  });
+
+  it("(h) 止まっている源の1行を本文に足す（**黙って項目を消さない**）", () => {
+    expect(pulse).toContain("stopped.map(stoppedLine)");
+    expect(weekly).toContain("stopped.map(stoppedLine)");
   });
 });
 

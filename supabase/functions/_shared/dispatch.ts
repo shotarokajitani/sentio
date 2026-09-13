@@ -332,6 +332,11 @@ export interface DispatchSummary {
   /** 再開として走ったか（既に終わった会社を飛ばしたか） */
   resumed: boolean;
   /**
+   * 止まっている源があるので `run-sense` を呼ばなかった会社数（PS-9c の改訂）。
+   * **0件でも必ず出す。** 「走査が0件だった」と「走査を呼ばなかった」を分ける
+   */
+  sense_skipped_stopped_source: number;
+  /**
    * 会社の一覧を取り切れたか（B-5）。**取り切れていないなら non-2xx。**
    * 一部だけ配って 200 を返すと、届かなかった会社が記録にも残らない
    */
@@ -414,6 +419,7 @@ export async function runDispatch(
     deferred_by_deadline: 0,
     timed_out: 0,
     resumed: false,
+    sense_skipped_stopped_source: 0,
     recorded: false,
     ...(truncated ? { truncated: true } : {}),
   };
@@ -594,10 +600,19 @@ export async function runDispatch(
         await settle(target.companyId, "failed_state", `status_${state.status}`);
       }
 
-      const sense = await deps.invoke("run-sense", {
-        company_id: target.companyId,
-        ...sourceBody,
-      });
+      // **止まっている源が1つでもあれば、LLM へ入る経路を呼ばない**（PS-9c の改訂・fail-closed）。
+      //
+      // `run-sense` の先に `investigate`（LLM）がある。止まっている源の値が
+      // 走査の材料に混ざると、**古い値を今の状態として LLM に渡す**ことになる。
+      // 源ごとに走査を絞る対応表ができるまでは、呼ばないことで担保する
+      const hasStopped = plan.action === "deliver" && (plan.stopped?.length ?? 0) > 0;
+      const sense = hasStopped
+        ? { ok: true, status: 204 }
+        : await deps.invoke("run-sense", {
+            company_id: target.companyId,
+            ...sourceBody,
+          });
+      if (hasStopped) summary.sense_skipped_stopped_source++;
       if (!sense.ok) {
         // **sense の失敗で配信を止めない**（CD-2-4）。ただし失敗として数える
         summary.sense_failed++;

@@ -8,6 +8,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { renderWeeklyHtml, renderWeeklyText } from "../_shared/email-html.ts";
+import { stoppedLine, type SourceState } from "../_shared/source-state.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustCount, mustData } from "../_shared/db.ts";
 import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
@@ -44,7 +45,20 @@ Deno.serve(async (req: Request) => {
   if (!caller.ok) return caller.response;
 
   try {
-    const { company_id, email, target_week } = await req.json();
+    const { company_id, email, target_week, stopped_sources } = await req.json();
+
+    // **止まっている源**（PS-9c の改訂）。dispatch が渡す。無ければ空
+    const stopped: SourceState[] = Array.isArray(stopped_sources)
+      ? stopped_sources.map(
+          (x: { provider: string; status: string; last_ingested_at: string | null }) => ({
+            provider: x.provider as SourceState["provider"],
+            status: x.status as SourceState["status"],
+            lastIngestedAt: x.last_ingested_at ?? null,
+          }),
+        )
+      : [];
+    // 週次は会議の集計が中心。**カレンダーが止まっていたら会議を読まない**
+    const calendarStopped = stopped.some((st) => st.provider === MEETING_SOURCE);
 
     const scope = resolveCompanyId(caller.caller, company_id);
     if (!scope.ok) return scope.response;
@@ -94,17 +108,21 @@ Deno.serve(async (req: Request) => {
     const from = jstWeekRange(new Date(week.start.getTime() - 1)).start;
 
     // `*` を書かない。`check:schema`（S-5-1）が参照列を静的に読めなくなる（契約 落とし穴3）
-    const weeklyEvents = await mustData(
-      supabase
-        .from("events")
-        .select("source, event_type, period_start, period_end, metrics")
-        .eq("company_id", companyId)
-        .eq("source", MEETING_SOURCE)
-        .eq("event_type", MEETING_EVENT_TYPE)
-        .gte("period_start", from.toISOString())
-        .lt("period_start", week.end.toISOString()),
-      "deliver-weekly: weekly events",
-    );
+    // **止まっている源の値を読まない**（fail-closed）。空で集計すると
+    // 「今週は会議の予定がありませんでした」と出て、会議が無かったと読まれる
+    const weeklyEvents = calendarStopped
+      ? []
+      : await mustData(
+          supabase
+            .from("events")
+            .select("source, event_type, period_start, period_end, metrics")
+            .eq("company_id", companyId)
+            .eq("source", MEETING_SOURCE)
+            .eq("event_type", MEETING_EVENT_TYPE)
+            .gte("period_start", from.toISOString())
+            .lt("period_start", week.end.toISOString()),
+          "deliver-weekly: weekly events",
+        );
 
     const connections = await mustData(
       supabase.from("connections").select("provider, status").eq("company_id", companyId),
@@ -139,13 +157,22 @@ Deno.serve(async (req: Request) => {
     // 画面（`/report`）と同じ `summarizeWeek` を使う。メール側で数え直さない（WM-1-2）
     const summary = summarizeWeek(weeklyEvents as EventRow[], reference);
 
-    const sections = buildWeeklySections({
+    const built = buildWeeklySections({
       summary,
       findings,
       activeProviders,
       csvCount,
       calCount,
     });
+
+    // **カレンダーが止まっていたら、会議に依存する節を出さない**（PS-9c の改訂）。
+    // 代わりに「○月○日から取れていません」を1行出す。**黙って消さない**
+    const sections = calendarStopped
+      ? [
+          { type: "digest", content: stopped.map(stoppedLine).join("\n") },
+          ...built.filter((sec) => sec.type !== "digest" && sec.type !== "stable_coverage"),
+        ]
+      : built;
 
     const result = await deliverOnce(
       asDeliveryDb(supabase),
@@ -158,12 +185,17 @@ Deno.serve(async (req: Request) => {
         now,
       },
       (key) =>
-        sendEmail(mail.config, {
-          to: email,
-          subject: "[Sentio] 今週の会社",
-          html: renderWeeklyHtml(sections),
-          text: renderWeeklyText(sections),
-        }, fetch, key),
+        sendEmail(
+          mail.config,
+          {
+            to: email,
+            subject: "[Sentio] 今週の会社",
+            html: renderWeeklyHtml(sections),
+            text: renderWeeklyText(sections),
+          },
+          fetch,
+          key,
+        ),
     );
 
     return deliveryResponse(result, { company_id: companyId, period, sections });

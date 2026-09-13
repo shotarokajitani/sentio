@@ -27,6 +27,7 @@ import {
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import { jstDateKey } from "../_shared/jst.ts";
 import { buildStatePacket, renderPacketText } from "../_shared/state-packet.ts";
+import { stoppedLine, type SourceState } from "../_shared/source-state.ts";
 import { loadPacketInput, PacketSourceError } from "../_shared/state-packet-source.ts";
 import { takeError } from "../_shared/db.ts";
 import { reconnectDeliveryContent, renderReconnectNotice } from "../_shared/reconnect-notice.ts";
@@ -54,7 +55,19 @@ Deno.serve(async (req: Request) => {
       intent: requestedIntent,
       kind: requestedKind,
       detected_at,
+      stopped_sources,
     } = await req.json();
+
+    // **止まっている源**（PS-9c の改訂）。dispatch が渡す。無ければ空
+    const stopped: SourceState[] = Array.isArray(stopped_sources)
+      ? stopped_sources.map(
+          (x: { provider: string; status: string; last_ingested_at: string | null }) => ({
+            provider: x.provider as SourceState["provider"],
+            status: x.status as SourceState["status"],
+            lastIngestedAt: x.last_ingested_at ?? null,
+          }),
+        )
+      : [];
 
     const scope = resolveCompanyId(caller.caller, company_id);
     if (!scope.ok) return scope.response;
@@ -99,8 +112,19 @@ Deno.serve(async (req: Request) => {
 
       let packetText: string;
       try {
-        const input = await loadPacketInput(supabase, companyId, now);
+        // **止まっている源の値を材料に入れない**（PS-9c の改訂・fail-closed）
+        const input = await loadPacketInput(
+          supabase,
+          companyId,
+          now,
+          stopped.map((st) => st.provider),
+        );
         packetText = renderPacketText(buildStatePacket(input));
+        // **見えていないことを1行で書く。** 黙って項目を消すと、
+        // 読み手は「会議が無かった」と読む
+        if (stopped.length > 0) {
+          packetText = [...stopped.map(stoppedLine), "", packetText].join("\n");
+        }
       } catch (e) {
         // **組めなかった日は、組めなかった理由を残す**（12-2）。200 で終わらせない
         const reason = e instanceof PacketSourceError ? e.reason : "source_error";
@@ -125,12 +149,17 @@ Deno.serve(async (req: Request) => {
           now,
         },
         (key) =>
-          sendEmail(mailConfig.config, {
-            to: email,
-            subject: `【Sentio】状態パケット（${period}）`,
-            html: renderAlertHtml(`状態パケット（${period}）`, packetText, NOTICE_HEADING),
-            text: packetText,
-          }, fetch, key),
+          sendEmail(
+            mailConfig.config,
+            {
+              to: email,
+              subject: `【Sentio】状態パケット（${period}）`,
+              html: renderAlertHtml(`状態パケット（${period}）`, packetText, NOTICE_HEADING),
+              text: packetText,
+            },
+            fetch,
+            key,
+          ),
       );
 
       // **送らなかった日と送り損ねた日を区別する**（12-3）
@@ -196,13 +225,18 @@ Deno.serve(async (req: Request) => {
           now,
         },
         (key) =>
-          sendEmail(mailConfig.config, {
-            to: email,
-            subject: notice.subject,
-            // **赤い「アラート」にしない**（2026-09-09）。連携切れは異常ではなく状態である
-            html: renderAlertHtml(notice.subject, notice.body, NOTICE_HEADING),
-            text: renderAlertText(notice.subject, notice.body),
-          }, fetch, key),
+          sendEmail(
+            mailConfig.config,
+            {
+              to: email,
+              subject: notice.subject,
+              // **赤い「アラート」にしない**（2026-09-09）。連携切れは異常ではなく状態である
+              html: renderAlertHtml(notice.subject, notice.body, NOTICE_HEADING),
+              text: renderAlertText(notice.subject, notice.body),
+            },
+            fetch,
+            key,
+          ),
       );
 
       return deliveryResponse(noticeResult, { company_id: companyId, kind: "reconnect", period });

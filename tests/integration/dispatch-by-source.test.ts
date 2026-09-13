@@ -138,6 +138,8 @@ describe.skipIf(!canRun)("源ごとの判定を実物の経路で通す", () => 
     const fns = calls.map((c) => c.fn);
     expect(fns).toContain("state-baselines");
     expect(fns).toContain("deliver-pulse");
+    // **run-sense は呼ばない**（(f)。止まっている源がある会社は LLM へ入れない）
+    expect(fns).not.toContain("run-sense");
 
     const state = calls.find((c) => c.fn === "state-baselines");
     expect(state?.body.live_sources).toEqual(["csv:accounting"]);
@@ -163,6 +165,67 @@ describe.skipIf(!canRun)("源ごとの判定を実物の経路で通す", () => 
     const pulse = calls.find((c) => c.fn === "deliver-pulse");
     const stopped = pulse?.body.stopped_sources as Array<{ provider: string; status: string }>;
     expect(stopped?.map((s) => [s.provider, s.status])).toEqual([["google_calendar", "revoked"]]);
+  });
+
+  it("(f) **陰性**: 止まっている源がある会社では run-sense を呼ばない（LLM へ入れない）", async () => {
+    calls.length = 0;
+    const result = await runOnce([revokedCompany]);
+
+    // `run-sense` の先に LLM がある。**止まっている源の値を材料に混ぜない**
+    expect(calls.map((c) => c.fn)).not.toContain("run-sense");
+    const body = result.body as { sense_skipped_stopped_source: number };
+    expect(body.sense_skipped_stopped_source).toBe(1);
+  });
+
+  it("(g) **陰性**: 止まっている源のイベントを材料に入れない（実DBの読み込み）", async () => {
+    // Google 由来のイベントを1件入れる。止まっている源なので読まれてはいけない
+    const googleRow = {
+      event_id: `source-test-${revokedCompany}-google`,
+      company_id: revokedCompany,
+      occurred_at: new Date(Date.now() - 6 * 86_400_000).toISOString(),
+      ingested_at: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+      source: "google_calendar",
+      event_type: "schedule",
+      entity_refs: [],
+      metrics: { title: "週次経営会議", attendees: [] },
+      sensitivity: "S1",
+    };
+    const ins = await admin.from("events").insert(googleRow);
+    expect(ins.error).toBeNull();
+
+    const { loadPacketInput } = await import("@edge/_shared/state-packet-source");
+    const withAll = await loadPacketInput(admin, revokedCompany, new Date());
+    const withoutStopped = await loadPacketInput(admin, revokedCompany, new Date(), [
+      "google_calendar",
+    ]);
+
+    // 除外しなければ読まれる（**試験が効いていることの確認**）
+    expect(withAll.events.some((e) => e.source === "google_calendar")).toBe(true);
+    // 除外すると1件も入らない
+    expect(withoutStopped.events.some((e) => e.source === "google_calendar")).toBe(false);
+    // 生きている源は残る
+    expect(withoutStopped.events.some((e) => e.source === "csv:accounting")).toBe(true);
+
+    await admin.from("events").delete().eq("event_id", googleRow.event_id);
+  });
+
+  it("(h) 止まっている源の1行が、本文の材料として渡る", async () => {
+    calls.length = 0;
+    await runOnce([revokedCompany]);
+
+    const { stoppedLine } = await import("@edge/_shared/source-state");
+    const pulse = calls.find((c) => c.fn === "deliver-pulse");
+    const stopped = (pulse?.body.stopped_sources ?? []) as Array<{
+      provider: "google_calendar";
+      status: "revoked";
+      last_ingested_at: string | null;
+    }>;
+    const lines = stopped.map((st) =>
+      stoppedLine({ provider: st.provider, status: st.status, lastIngestedAt: st.last_ingested_at }),
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^カレンダーは .*取れていません（再連携はこちら）$/);
   });
 
   it("(e) **陰性**: 源も連携も無い会社は skipped のまま（何も呼ばない）", async () => {

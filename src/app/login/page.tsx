@@ -3,6 +3,7 @@ import { Masthead } from "@/components/Masthead";
 import { t, errorMessage } from "@/i18n";
 import { loginMode, loginView } from "@/lib/auth/login-view";
 import { TURNSTILE_SCRIPT, turnstileSiteKey } from "@/lib/auth/captcha";
+import { LoginForm } from "./login-form";
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
 
@@ -64,7 +65,18 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </div>
       )}
 
-      <form method="post" action="/api/auth/session" className="section">
+      {/* **送信は1回だけ**（2026-09-13 の二度押し）。送信後はボタンを押せなくし「送信中…」にする。
+          `intent` はボタンではなく hidden で送る（押せなくしたボタンの値は送信から落ちる） */}
+      <LoginForm
+        intent={view.intent}
+        label={signup ? t.login.signUp : t.login.submit}
+        pendingLabel={t.login.submitting}
+        after={
+          <p className="field-hint" style={{ marginTop: 16 }}>
+            <a href={view.switchHref}>{signup ? t.login.toLogin : t.login.toSignup}</a>
+          </p>
+        }
+      >
         <input type="hidden" name="next" value={next} />
 
         <label className="field">
@@ -111,17 +123,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <div className="cf-turnstile" data-sitekey={siteKey} style={{ marginTop: 16 }} />
         )}
 
-        {/* **主操作は1つ。** もう一方はボタンではなくリンクで置く */}
-        <div className="actions">
-          <button className="btn" type="submit" name="intent" value={view.intent}>
-            {signup ? t.login.signUp : t.login.submit}
-          </button>
-        </div>
-
-        <p className="field-hint" style={{ marginTop: 16 }}>
-          <a href={view.switchHref}>{signup ? t.login.toLogin : t.login.toSignup}</a>
-        </p>
-      </form>
+        {/* **主操作は1つ。** もう一方はボタンではなくリンクで置く（ボタンは LoginForm が置く） */}
+      </LoginForm>
 
       {/* **同意の文はログイン側に出さない。** ログインするだけの人は、
           いま同意を求められていない。規約とポリシーへのリンクは両方に残す */}

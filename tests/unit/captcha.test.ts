@@ -7,6 +7,8 @@
 import { describe, it, expect } from "vitest";
 import {
   captchaTokenFrom,
+  isCaptchaFailure,
+  routeCaptchaFailure,
   signInOptions,
   signUpOptions,
   turnstileSiteKey,
@@ -69,5 +71,30 @@ describe("サイトキー", () => {
   it("未設定・空ならウィジェットを出さない", () => {
     expect(turnstileSiteKey(undefined)).toBeNull();
     expect(turnstileSiteKey("")).toBeNull();
+  });
+});
+
+describe("CAPTCHA で断られたかの判定", () => {
+  it("エラーコード captcha_failed なら true", () => {
+    expect(isCaptchaFailure({ code: "captcha_failed", message: "x" })).toBe(true);
+  });
+
+  it("本番ログの本文（コードが無い応答）でも true", () => {
+    expect(
+      isCaptchaFailure({
+        message: "captcha protection: request disallowed (timeout-or-duplicate)",
+      }),
+    ).toBe(true);
+  });
+
+  it("**陰性**: パスワード違いは false（captcha_failed に振り替えない）", () => {
+    expect(
+      isCaptchaFailure({ code: "invalid_credentials", message: "Invalid login credentials" }),
+    ).toBe(false);
+  });
+
+  it("戻し先: セッションがあれば next、無ければ captcha_failed", () => {
+    expect(routeCaptchaFailure(true)).toEqual({ to: "next" });
+    expect(routeCaptchaFailure(false)).toEqual({ to: "login", error: "captcha_failed" });
   });
 });

@@ -10,6 +10,7 @@ import { getSupabaseAdmin } from "./supabase-client.ts";
 import { mustCount, mustData, takeError } from "./db.ts";
 import { resolveMailConfig, sendEmail } from "./mailer.ts";
 import { STRIPE_RETRY_WINDOW_DAYS } from "./dispatch.ts";
+import { sourceStates } from "./source-state.ts";
 import { COMPANY_TIMEOUT_MS, planResume, type ResumeRow } from "./dispatch-resume.ts";
 import { ABANDONED, STALE_SENDING, planStaleSweep, type StaleRow } from "./stale-sending.ts";
 import type {
@@ -110,7 +111,7 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
       // 連携の状態は provider ごとではなく**会社ごとに1つへ畳む**（CD-D3 の後継）。
       // **`active` が1つでもあれば `active`。** 無ければ revoked / reauth_required を拾う
       const connections = await mustData(
-        supabase.from("connections").select("company_id, status"),
+        supabase.from("connections").select("company_id, provider, status"),
         "dispatch: connections",
       );
 
@@ -163,6 +164,43 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
         if (!detectedAt.has(companyId)) detectedAt.set(companyId, t.occurred_at as string);
       }
 
+      // **源ごとの最後の取り込み時刻**（PS-9c の改訂・00047）。
+      // 引けなければ源の判定をしない——`sources` を付けずに従来の会社単位の判定へ戻す。
+      // **「源が無い」と「引けなかった」を同じ顔にしない**
+      let lastBySource: Map<string, Record<string, string>> | null = new Map();
+      try {
+        const rows = await mustData(
+          supabase.rpc("last_ingested_by_source"),
+          "dispatch: 源ごとの最後の取り込み",
+        );
+        for (const r of (rows ?? []) as Array<{
+          company_id: string;
+          source: string;
+          last_ingested_at: string | null;
+        }>) {
+          if (!r.last_ingested_at) continue;
+          const m = lastBySource.get(r.company_id) ?? {};
+          m[r.source] = r.last_ingested_at;
+          lastBySource.set(r.company_id, m);
+        }
+      } catch (e) {
+        console.error(
+          "dispatch: 源ごとの取り込み時刻を引けなかった:",
+          e instanceof Error ? e.message : e,
+        );
+        lastBySource = null;
+      }
+
+      const connectionsByCompany = new Map<string, Array<{ provider: string; status: string }>>();
+      for (const c of connections) {
+        const id = c.company_id as string;
+        const list = connectionsByCompany.get(id) ?? [];
+        list.push({ provider: c.provider as string, status: c.status as string });
+        connectionsByCompany.set(id, list);
+      }
+
+      const now = new Date();
+
       return (data?.users ?? []).map((user) => ({
         companyId: user.id,
         email: user.email ?? null,
@@ -172,6 +210,15 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
         // 購読の状態（B-4）。**正本は webhook が書く `user_metadata` だけ**で、
         // ここでも Stripe には問い合わせない（BU-D2 と同じ判断）
         subscriptionStatus: subscriptionStatusOf(user.user_metadata),
+        ...(lastBySource === null
+          ? {}
+          : {
+              sources: sourceStates({
+                connections: connectionsByCompany.get(user.id) ?? [],
+                lastIngestedBySource: lastBySource.get(user.id) ?? {},
+                now,
+              }),
+            }),
       }));
     },
 

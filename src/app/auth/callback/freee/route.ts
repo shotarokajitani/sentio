@@ -83,17 +83,19 @@ export async function GET(req: NextRequest) {
   // 以前は毎回 store_vault_secret を固定名 `freee:<company_id>` で呼んでいたので、
   // **2回目の連携から vault.secrets.name の一意制約で失敗し、connect_failed になっていた。**
   // 既存の接続があれば、その vault_secret_id の中身を更新する（古い secret を残さない）
-  const {
-    vaultId,
-    action: vaultAction,
-    error: vaultErr,
-  } = await upsertVaultToken(supabase, companyId, tokenPayload, FREEE_PROVIDER);
+  // 陰性コントロール（直後に revert する）: 修正前の固定名の store に戻す
+  const { data: vaultId, error: vaultErr } = await supabase.rpc("store_vault_secret", {
+    p_name: `freee:${companyId}`,
+    p_secret: tokenPayload,
+    p_description: "freee OAuth token",
+  });
 
-  if (vaultErr || !vaultId) {
-    console.error("Vault store failed:", vaultErr);
+  if (vaultErr) {
+    console.error("Vault store failed:", vaultErr.message);
     return redirect("/connect?e=connect_failed");
   }
-  console.log(`freee: Vault token ${vaultAction} for company ${companyId}`);
+  void upsertVaultToken;
+  void FREEE_PROVIDER;
 
   // 3. Register connection
   const expiresAt = new Date(Date.now() + (tokenData.expires_in || 86400) * 1000).toISOString();

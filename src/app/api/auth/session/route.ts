@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient, type PendingCookie } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/safe-next";
 import { captchaTokenFrom, signInOptions, signUpOptions } from "@/lib/auth/captcha";
-import { clientIp, hitRate, ipSubject, rateRules, tooManyRequests } from "@/lib/rate-limit";
+import { clientIp, hitRate, ipSubject, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   // 登録にもログインにも関門が無く、総当たりもアカウントの量産もできた。
   // ログイン前なので会社は分からない。数える単位は送信元の IP にする
   const rate = await hitRate(ipSubject(clientIp(req.headers)), rateRules().session);
-  if (!rate.allowed) return tooManyRequests(rate);
+  if (!rate.allowed) return rateLimitedResponse(rate);
 
   const form = await req.formData();
   const email = String(form.get("email") ?? "").trim();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { createClient } from "@supabase/supabase-js";
-import { companySubject, hitRate, rateRules, tooManyRequests } from "@/lib/rate-limit";
+import { companySubject, hitRate, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 import { csvEventId } from "@/lib/csv/event-id";
 
 interface ColumnMapping {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   // **1日あたりの回数を数える**（2026-09-13 の点検・PR-2a）。
   // 取り込みは重い処理で、上限が無いと同じ会社から大量に叩ける
   const rate = await hitRate(companySubject(companyId), rateRules().ingest);
-  if (!rate.allowed) return tooManyRequests(rate);
+  if (!rate.allowed) return rateLimitedResponse(rate);
 
   const { csv_text, file_name, mapping } = (await req.json()) as {
     csv_text: string;

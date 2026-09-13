@@ -24,6 +24,13 @@ export interface RateRule {
   windowSeconds: number;
   /** 窓の中で許す回数 */
   limit: number;
+  /**
+   * **数えられなかったときに止めるか。**
+   *
+   * LLM の費用が出る経路（analyze / suggest）は止める（503）。
+   * 取り込みとログインは止めない——制限の障害で業務と入口が止まる形にしない
+   */
+  failClosed: boolean;
 }
 
 const DAY = 86_400;
@@ -42,21 +49,25 @@ export function rateRules(): Record<"analyze" | "suggest" | "ingest" | "session"
       route: "csv/analyze",
       windowSeconds: DAY,
       limit: envLimit("RATE_LIMIT_ANALYZE_PER_DAY", 20),
+      failClosed: true,
     },
     suggest: {
       route: "competitors/suggest",
       windowSeconds: DAY,
       limit: envLimit("RATE_LIMIT_SUGGEST_PER_DAY", 5),
+      failClosed: true,
     },
     ingest: {
       route: "csv/ingest",
       windowSeconds: DAY,
       limit: envLimit("RATE_LIMIT_INGEST_PER_DAY", 20),
+      failClosed: false,
     },
     session: {
       route: "auth/session",
       windowSeconds: 600,
       limit: envLimit("RATE_LIMIT_SESSION_PER_10MIN", 30),
+      failClosed: false,
     },
   };
 }
@@ -68,7 +79,11 @@ export function rateWindowStart(now: Date, windowSeconds: number): Date {
 }
 
 export type RateDecision =
-  { allowed: true; count: number } | { allowed: false; count: number; retryAfterSeconds: number };
+  | { allowed: true; count: number }
+  /** 上限を超えた（429） */
+  | { allowed: false; reason: "limited"; count: number; retryAfterSeconds: number }
+  /** 数えられず、`failClosed` の経路なので止めた（503） */
+  | { allowed: false; reason: "unavailable" };
 
 /**
  * 数えた件数から、通すかを決める。**判断だけを持つ。**
@@ -79,7 +94,18 @@ export function decideRate(count: number, rule: RateRule, now: Date): RateDecisi
   if (count <= rule.limit) return { allowed: true, count };
   const end = rateWindowStart(now, rule.windowSeconds).getTime() + rule.windowSeconds * 1000;
   const retryAfterSeconds = Math.max(1, Math.ceil((end - now.getTime()) / 1000));
-  return { allowed: false, count, retryAfterSeconds };
+  return { allowed: false, reason: "limited", count, retryAfterSeconds };
+}
+
+/**
+ * 数えられなかったときの判断。**経路ごとに違う**（`RateRule.failClosed`）。
+ *
+ * - analyze / suggest: 止める。数えられないまま通すと、DB の障害の間は
+ *   **上限なしで Anthropic を呼べる**
+ * - ingest / session: 通す。制限の障害で取り込みとログインを止めない
+ */
+export function decideUnavailable(rule: RateRule): RateDecision {
+  return rule.failClosed ? { allowed: false, reason: "unavailable" } : { allowed: true, count: 0 };
 }
 
 /** 数える対象。**会社単位か IP 単位か**を文字列の接頭辞で分ける（00049） */
@@ -106,8 +132,8 @@ export function clientIp(headers: Headers): string {
 /**
  * 1回数えて判断する。**数えるのは service_role**（利用者は件数を触れない）。
  *
- * 数えられなかったとき（DB に届かない）は**通す。** レート制限の障害で
- * 取り込みも登録も止まる形にしない。ただし黙らない——ログに残す。
+ * 数えられなかったとき（DB に届かない）は `decideUnavailable` に従う。
+ * どちらの場合も黙らない——ログに残す。
  */
 export async function hitRate(
   subject: string,
@@ -122,17 +148,29 @@ export async function hitRate(
   });
 
   if (error || typeof data !== "number") {
+    const decision = decideUnavailable(rule);
     console.error(
-      `rate-limit: 数えられなかった route=${rule.route}:`,
+      `rate-limit: 数えられなかった route=${rule.route} → ${decision.allowed ? "通す" : "止める"}:`,
       error?.message ?? "no count",
     );
-    return { allowed: true, count: 0 };
+    return decision;
   }
   return decideRate(data, rule, now);
 }
 
-/** 止めたときの応答。**429 と Retry-After** */
-export function tooManyRequests(decision: Extract<RateDecision, { allowed: false }>): NextResponse {
+/**
+ * 止めたときの応答。上限超えは **429 と Retry-After**、
+ * 数えられずに止めたときは **503（reason: rate_limit_unavailable）**
+ */
+export function rateLimitedResponse(
+  decision: Extract<RateDecision, { allowed: false }>,
+): NextResponse {
+  if (decision.reason === "unavailable") {
+    return NextResponse.json(
+      { error: "service_unavailable", reason: "rate_limit_unavailable" },
+      { status: 503 },
+    );
+  }
   return NextResponse.json(
     { error: "rate_limited", retry_after_seconds: decision.retryAfterSeconds },
     { status: 429, headers: { "Retry-After": String(decision.retryAfterSeconds) } },

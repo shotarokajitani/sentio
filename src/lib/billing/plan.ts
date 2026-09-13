@@ -8,7 +8,7 @@
  *
  * ## 購読をどこに持つか
  *
- * `auth.users.user_metadata` に置く。**新しいテーブルを作らない。**
+ * `auth.users.app_metadata` に置く（service_role だけが書ける）。**新しいテーブルを作らない。**
  * `company_id` は `auth.uid()` そのもの（RLS 00019）なので、
  * 会社の属性とユーザーの属性が1対1で対応する。`site_url` と同じ扱いである。
  *
@@ -26,7 +26,7 @@
  */
 import { isEntitledStatus, planFromSubscriptionMetadata, type Plan } from "@edge/_shared/budget.ts";
 
-/** `user_metadata` に入れる購読の形。**Stripe の識別子以外は持たない** */
+/** `app_metadata` に入れる購読の形。**Stripe の識別子以外は持たない** */
 export interface Subscription {
   /** `PLANS` の id（`trial` / `standard`） */
   plan_id: string;
@@ -39,7 +39,7 @@ export interface Subscription {
 }
 
 /**
- * `user_metadata` からプランを解決する。**実体は `_shared/budget.ts`。**
+ * `app_metadata` からプランを解決する。**実体は `_shared/budget.ts`。**
  *
  * 支払いが滞っている購読（`past_due` / `canceled`）では枠を与えず、`TRIAL_PLAN` に落ちる。
  */

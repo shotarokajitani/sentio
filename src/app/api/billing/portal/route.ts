@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
+import { decidePortal } from "@/lib/billing/portal-guard";
 
 /**
  * Stripe のカスタマーポータルを開く（④-b・2026-09-08 決定）。
@@ -16,7 +17,7 @@ import { getAuthedContext, unauthorized } from "@/lib/auth/company";
  *
  * `customer` をボディで受け取ると、他社のポータルを開けてしまう。
  * 会社の識別は `getAuthedContext()` だけを使い、
- * Stripe の customer id は**購読を書いた時点の値**（`user_metadata.subscription`）を読む。
+ * Stripe の customer id は**購読を書いた時点の値**（`app_metadata.subscription`）を読む。
  * **ここで Stripe に検索をかけない**（メールで引くと、Stripe 側で変えられる値が鍵になる）。
  */
 export async function POST() {
@@ -34,14 +35,24 @@ export async function POST() {
     );
   }
 
-  const customerId = ctx.stripeCustomerId;
-  if (!customerId) {
-    // **購読が無い会社にポータルは開けない。** 画面側も購読中のときしか出さないが、
-    // 直接叩かれたときにここで止める（fail-closed）
-    return NextResponse.json({ error: "no_subscription" }, { status: 404 });
-  }
-
   const stripe = new Stripe(secret);
+
+  // **開いてよいかは `decidePortal` が決める**（2026-09-13 の点検で追加）。
+  // customer id は `app_metadata` から読み、さらに購読の本当の customer を
+  // Stripe から取り直して一致しなければ開かない（二重の守り）
+  const decision = await decidePortal(
+    { customerId: ctx.stripeCustomerId, subscriptionId: ctx.stripeSubscriptionId },
+    async (subscriptionId) => {
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      return typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+    },
+  );
+
+  if (!decision.ok) {
+    console.error(`billing portal: 開かない（${decision.error}）`);
+    return NextResponse.json({ error: decision.error }, { status: decision.status });
+  }
+  const customerId = decision.customerId;
 
   try {
     const session = await stripe.billingPortal.sessions.create({

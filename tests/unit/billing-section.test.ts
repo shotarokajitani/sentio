@@ -1,7 +1,7 @@
 /**
  * `/connect` の「プラン」の節（契約 `docs/contracts/slice-billing-ui.md`・BU-1 系）。
  *
- * **状態の正本は `auth.users.user_metadata.subscription.status` だけ**（BU-D2）。
+ * **状態の正本は `auth.users.app_metadata.subscription.status` だけ**（BU-D2）。
  * Webhook が書いている場所であり、画面から Stripe API は叩かない。
  *
  * ここは**描画結果の文字列**を直接見る（`report-view.test.ts` / `connect-timezone.test.ts`

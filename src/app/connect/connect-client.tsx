@@ -86,7 +86,7 @@ export function ConnectClient({
   // 登録時に受け取った自社サイト。任意項目なので null がありうる
   siteUrl: string | null;
   /**
-   * 購読の状態（契約 スライスBU・BU-D2）。`user_metadata.subscription.status` をそのまま渡す。
+   * 購読の状態（契約 スライスBU・BU-D2）。`app_metadata.subscription.status` をそのまま渡す。
    * **Webhook が書いている値がここに来る。** 画面から Stripe に問い合わせない
    * （遅く、失敗しうる。落ちたときに購読者へ購読ボタンを見せることになる）。
    * 購読が一度も無ければ null。

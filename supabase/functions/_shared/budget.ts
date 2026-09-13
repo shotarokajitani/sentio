@@ -135,7 +135,9 @@ export function isEntitledStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * `auth.users.user_metadata` からプランを解決する（**Next と Edge の共通実体**）。
+ * `auth.users.app_metadata` からプランを解決する（**Next と Edge の共通実体**）。
+ *
+ * **`user_metadata` を渡さない。** 利用者本人が書けるので、購読を名乗って枠を増やせる
  *
  * Edge は `supabase/functions/` の外を import できないので、実体をここに置き、
  * Next 側（`src/lib/billing/plan.ts`）はこれを呼ぶ。**二重に実装しない。**

@@ -26,7 +26,7 @@ export async function POST() {
   // **二重課金の入口をここで塞ぐ。**
   // `checkout.sessions.create` に `customer` を渡していないため、
   // 既に購読がある会社が押すと**新しい Customer と2本目の購読ができる**。
-  // さらに webhook が `user_metadata.subscription` をまるごと上書きするので、
+  // さらに webhook が `app_metadata.subscription` をまるごと上書きするので、
   // **古い購読はこちらから辿れなくなる**（2026-09-08 に判明）。
   //
   // **判定は否定リストである**（`lib/billing/subscription-state.ts`）。

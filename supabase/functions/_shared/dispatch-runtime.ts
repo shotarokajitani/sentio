@@ -40,7 +40,12 @@ const TARGET_PAGE_SIZE = 200;
  */
 const MAX_TARGET_PAGES = 25;
 
-/** `user_metadata` から購読の状態だけを取り出す（B-4）。**引けなければ null** */
+/**
+ * `app_metadata` から購読の状態だけを取り出す（B-4）。**引けなければ null**
+ *
+ * **`user_metadata` を渡さない**（2026-09-13 の点検で見つかった欠陥の修正）。
+ * `user_metadata` は利用者本人が書けるので、そこを見ると購読を名乗って配信を受けられる
+ */
 function subscriptionStatusOf(metadata: unknown): string | null {
   const sub = (metadata as { subscription?: { status?: unknown } } | null)?.subscription;
   return typeof sub?.status === "string" && sub.status ? sub.status : null;
@@ -79,7 +84,7 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
       // **全ページ取る**（発注 B-5）。1ページ固定だと、会社が 200 を超えた日から
       // **超えたぶんに毎朝1通も届かない。しかもその事実がどこにも残らない。**
       // 取り切れなかったときは `targetsTruncated` を立て、呼び出し側が non-2xx にする
-      const users: Array<{ id: string; email?: string | null; user_metadata?: unknown }> = [];
+      const users: Array<{ id: string; email?: string | null; app_metadata?: unknown }> = [];
       let page = 1;
       truncated = false;
 
@@ -207,9 +212,9 @@ export function buildDeps(kind: DispatchKind): DispatchDeps {
         connectionState: stateByCompany.get(user.id) ?? "none",
         lastReconnectNoticeAt: lastNotice.get(user.id) ?? null,
         detectedAt: detectedAt.get(user.id) ?? null,
-        // 購読の状態（B-4）。**正本は webhook が書く `user_metadata` だけ**で、
+        // 購読の状態（B-4）。**正本は webhook が書く `app_metadata` だけ**で、
         // ここでも Stripe には問い合わせない（BU-D2 と同じ判断）
-        subscriptionStatus: subscriptionStatusOf(user.user_metadata),
+        subscriptionStatus: subscriptionStatusOf(user.app_metadata),
         ...(lastBySource === null
           ? {}
           : {

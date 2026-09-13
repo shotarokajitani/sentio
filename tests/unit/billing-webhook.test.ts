@@ -118,7 +118,7 @@ vi.mock("stripe", () => ({
   },
 }));
 
-type UpdateCall = [string, { user_metadata: { subscription: Record<string, string> } }];
+type UpdateCall = [string, { app_metadata: { subscription: Record<string, string> } }];
 type UpsertCall = [
   Record<string, string | null>,
   { onConflict: string; ignoreDuplicates: boolean },
@@ -269,7 +269,7 @@ describe("署名が通ったとき", () => {
     expect(updateUserById).toHaveBeenCalledTimes(1);
     const [id, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
     expect(id).toBe(COMPANY);
-    expect(payload.user_metadata.subscription).toMatchObject({
+    expect(payload.app_metadata.subscription).toMatchObject({
       plan_id: STANDARD_PLAN.id,
       status: "active",
     });
@@ -282,7 +282,7 @@ describe("署名が通ったとき", () => {
     await POST(post(PAYLOAD, sign(PAYLOAD)));
 
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(Object.keys(payload.user_metadata.subscription).sort()).toEqual([
+    expect(Object.keys(payload.app_metadata.subscription).sort()).toEqual([
       "plan_id",
       "status",
       "stripe_customer_id",
@@ -300,7 +300,7 @@ describe("署名が通ったとき", () => {
     await POST(post(canceled, sign(canceled)));
 
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("canceled");
+    expect(payload.app_metadata.subscription.status).toBe("canceled");
   });
 
   it("会社を引けない通知は 200 で受け取り、購読を書かない（再送を滞留させない）", async () => {
@@ -336,7 +336,7 @@ describe("BS-1 何を status として書くか", () => {
 
     expect(res.status).toBe(200);
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("active");
+    expect(payload.app_metadata.subscription.status).toBe("active");
   });
 
   it("BS-1-2 **object.status が complete でも、書かれる値は active である**", async () => {
@@ -347,8 +347,8 @@ describe("BS-1 何を status として書くか", () => {
     await POST(post(PAYLOAD, sign(PAYLOAD)));
 
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).not.toBe("complete");
-    expect(payload.user_metadata.subscription.status).toBe("active");
+    expect(payload.app_metadata.subscription.status).not.toBe("complete");
+    expect(payload.app_metadata.subscription.status).toBe("active");
   });
 
   it("BS-1-3 **陽性**: payment_status=no_payment_required では書く（無料期間つきは0円になる）", async () => {
@@ -367,7 +367,7 @@ describe("BS-1 何を status として書くか", () => {
 
     expect(res.status).toBe(200);
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("trialing");
+    expect(payload.app_metadata.subscription.status).toBe("trialing");
   });
 
   it.each(["unpaid", "processing", null])(
@@ -393,7 +393,7 @@ describe("BS-1 何を status として書くか", () => {
     await POST(post(updated, sign(updated)));
 
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("past_due");
+    expect(payload.app_metadata.subscription.status).toBe("past_due");
   });
 
   it("実物の Subscription からも会社を引けること（customer id で引く）", async () => {
@@ -436,7 +436,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
 
     expect(retrieve).toHaveBeenCalledWith("sub_ref");
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("active");
+    expect(payload.app_metadata.subscription.status).toBe("active");
   });
 
   it("5-1 識別子は**取り直した Subscription の値**を書く", async () => {
@@ -445,7 +445,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
     await POST(post(PAYLOAD, sign(PAYLOAD)));
 
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription).toMatchObject({
+    expect(payload.app_metadata.subscription).toMatchObject({
       stripe_customer_id: "cus_true",
       stripe_subscription_id: "sub_true",
     });
@@ -561,7 +561,7 @@ describe("④-a 逆引きと、引けなかったイベントの扱い", () => {
 
     expect(res.status).toBe(200);
     const [, payload] = updateUserById.mock.calls[0] as unknown as UpdateCall;
-    expect(payload.user_metadata.subscription.status).toBe("canceled");
+    expect(payload.app_metadata.subscription.status).toBe("canceled");
     // 書けているので、引けなかった表には入れない
     expect(upsert).not.toHaveBeenCalled();
   });

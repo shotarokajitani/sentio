@@ -139,8 +139,16 @@ export async function POST(req: NextRequest) {
     return unresolvedResponse(eventType, "retrieve_failed", "stripe_unavailable");
   }
 
+  // **購読は `app_metadata` に書く**（2026-09-13 の点検で見つかった欠陥の修正）。
+  //
+  // 以前は `user_metadata` に書いていた。**Supabase Auth の仕様で、`user_metadata` は
+  // 利用者本人が `auth.updateUser({ data })` で自由に書ける。** 書き換えられると
+  // 購読していない会社が `active` を名乗って LLM の枠を増やせ、他社の `cus_` を
+  // 書けば他社のカスタマーポータル（請求書・支払い方法・解約）が開けた。
+  //
+  // `app_metadata` は **service_role からしか書けない**。形は変えていない。
   const { error } = await admin.auth.admin.updateUserById(companyId, {
-    user_metadata: {
+    app_metadata: {
       subscription: {
         plan_id: STANDARD_PLAN.id,
         stripe_customer_id: resolved.customerId,

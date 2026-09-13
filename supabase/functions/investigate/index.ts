@@ -513,7 +513,9 @@ async function resolvePlan(
       console.warn(`[sentio:budget] plan を引けないので試用に落とす company_id=${companyId}`);
       return TRIAL_PLAN;
     }
-    return planFromSubscriptionMetadata(data.user.user_metadata ?? null);
+    // **`app_metadata` から読む**（2026-09-13 の点検で見つかった欠陥の修正）。
+    // `user_metadata` は利用者本人が書けるので、そこを見ると LLM の枠を増やせてしまう
+    return planFromSubscriptionMetadata(data.user.app_metadata ?? null);
   } catch (e) {
     console.warn(
       `[sentio:budget] plan の解決に失敗したので試用に落とす company_id=${companyId} ` +

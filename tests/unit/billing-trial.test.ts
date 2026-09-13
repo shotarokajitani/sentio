@@ -207,8 +207,8 @@ describe("無料期間つきの申し込みが記録される（A-2）", () => {
     expect(res.status).toBe(200);
     expect(updateUserById).toHaveBeenCalledTimes(1);
     const payload = (updateUserById.mock.calls[0] as unknown[])[1] as {
-      user_metadata: { subscription: { status: string } };
+      app_metadata: { subscription: { status: string } };
     };
-    expect(payload.user_metadata.subscription.status).toBe("trialing");
+    expect(payload.app_metadata.subscription.status).toBe("trialing");
   });
 });

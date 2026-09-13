@@ -66,7 +66,7 @@ export interface CompanyTarget {
    */
   detectedAt: string | null;
   /**
-   * 購読の状態（`user_metadata.subscription.status`）。**引けなければ null。**
+   * 購読の状態（`app_metadata.subscription.status`）。**引けなければ null。**
    *
    * 判定に使うのは `isEntitledStatus`（`active` / `trialing`）で、
    * 実際に配信を止めるかどうかは `enforceEntitlement` が決める（発注 B-4）。

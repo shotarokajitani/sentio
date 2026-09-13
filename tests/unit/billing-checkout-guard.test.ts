@@ -3,7 +3,7 @@
  *
  * **押せない画面を作っただけでは足りない。** `checkout.sessions.create` に
  * `customer` を渡していないので、直接叩かれると**新しい Customer と2本目の購読**ができる。
- * さらに webhook が `user_metadata.subscription` を**まるごと上書き**するため、
+ * さらに webhook が `app_metadata.subscription` を**まるごと上書き**するため、
  * 古い購読はこちらから辿れなくなる。だからサーバ側でも止める（二重の関門の内側）。
  *
  * **関門は否定リストである**（2026-09-08 決定）。列挙式だと列挙漏れと

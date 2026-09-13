@@ -68,7 +68,9 @@ if (mode === "run") {
         email: `${RUN_ID}-${label}@example.test`,
         password: `Bwu!${RUN_ID}${label}9x`,
         email_confirm: true,
-        user_metadata: customerId
+        // **購読は `app_metadata` に置く**（2026-09-13 の点検・00048）。
+        // 逆引き（`company_id_by_stripe_customer`）はこちらだけを見る
+        app_metadata: customerId
           ? {
               subscription: {
                 plan_id: "standard",

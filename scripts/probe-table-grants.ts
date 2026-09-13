@@ -80,6 +80,37 @@ export const PROBES: { label: string; body: string }[] = [
       `${AS_AUTHENTICATED}\n` +
       `UPDATE known_explanations SET source = 'tampered' WHERE company_id IS NULL;`,
   },
+  // ---- 2026-09-13 の点検・PR-2b（00050）。**自社の行でも書けない**ことを見る ----
+  // RLS は自社の行を通すので、ここで「permission denied for table」になるのは
+  // GRANT の層で止めているときだけである
+  {
+    label: "(f) INSERT events（自社の行）",
+    body:
+      `${AS_AUTHENTICATED}
+` +
+      `INSERT INTO events (event_id, company_id, occurred_at, source, event_type, sensitivity)
+` +
+      `  VALUES ('probe_f', '${SUB}', now(), 'csv:accounting', 'transaction', 'S1');`,
+  },
+  {
+    label: "(g) UPDATE connections.status（自社の行）",
+    // 行は postgres で入れてから、authenticated に降りて自社の行を書き換えにいく
+    body:
+      `INSERT INTO connections (company_id, provider, status) VALUES ('${SUB}', 'probe_g', 'revoked');
+` +
+      `${AS_AUTHENTICATED}
+` +
+      `UPDATE connections SET status = 'active' WHERE company_id = '${SUB}' AND provider = 'probe_g';`,
+  },
+  {
+    label: "(h) DELETE entities（自社の行）",
+    body:
+      `INSERT INTO entities (company_id, type, canonical_name) VALUES ('${SUB}', 'competitor', 'probe_h');
+` +
+      `${AS_AUTHENTICATED}
+` +
+      `DELETE FROM entities WHERE company_id = '${SUB}' AND canonical_name = 'probe_h';`,
+  },
 ];
 
 export function runProbes(dbUrl = process.env.SUPABASE_DB_URL): ProbeOutcome[] {

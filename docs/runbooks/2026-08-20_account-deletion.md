@@ -52,12 +52,18 @@ select
   (select count(*) from public.misjudgments  m, target t where m.company_id = t.id) as misjudgments,
   (select count(*) from public.known_explanations k, target t where k.company_id = t.id) as known_explanations,
   (select count(*) from public.retention_purge_runs r, target t where r.company_id = t.id) as retention_purge_runs,
+  (select count(*) from public.dispatch_runs     p, target t where p.company_id = t.id) as dispatch_runs,
+  (select count(*) from public.connection_events v, target t where v.company_id = t.id) as connection_events,
   -- company_id を持たない経路（stripe_customer_id で引く）
+  -- **購読は app_metadata にある**（2026-09-13 の点検・PR-1 / 00048 で user_metadata から移した）
   (select count(*) from public.billing_webhook_unresolved b
     where b.stripe_customer_id in (
-      select raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id'
+      select raw_app_meta_data -> 'subscription' ->> 'stripe_customer_id'
         from auth.users where email = '<EMAIL>'
-    )) as billing_webhook_unresolved;
+    )) as billing_webhook_unresolved,
+  -- company_id を持たない経路（subject = 'company:' || id で引く・2026-09-13 追記）
+  (select count(*) from public.api_rate_limits a, target t
+    where a.subject = 'company:' || t.id::text) as api_rate_limits;
 ```
 
 **この件数を依頼メールのスレッドに控えてから消す。** 消した後では数えられない。
@@ -104,21 +110,31 @@ delete from public.connection_events where company_id in (select id from auth.us
 -- billing_webhook_unresolved は「会社を引けなかった事実」の記録なので company_id を持たない。
 -- 残るのは Stripe の customer id と event id だけだが、§6 は「すべてのデータ」を消すと公開している。
 -- **auth.users を消す前に**行うこと（消したあとでは customer id を引けない）。
+-- **購読は app_metadata にある**（2026-09-13 の点検・PR-1 / 00048）。
+-- それまでこの手順は raw_user_meta_data を読んでいたが、00048 で user_metadata の購読は消したので、
+-- **古い手順のままだと1行も消えない。**
 delete from public.billing_webhook_unresolved
  where stripe_customer_id is not null
    and stripe_customer_id in (
-     select raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id'
+     select raw_app_meta_data -> 'subscription' ->> 'stripe_customer_id'
        from auth.users
       where email = '<EMAIL>'
-        and raw_user_meta_data -> 'subscription' ->> 'stripe_customer_id' is not null
+        and raw_app_meta_data -> 'subscription' ->> 'stripe_customer_id' is not null
    );
+
+-- **api_rate_limits（2026-09-13 追記・点検 PR-2b）。** レート制限の回数（00049）。
+-- company_id 列を持たず、subject に 'company:<uuid>' の形で会社を持つ。
+-- ログイン前の回数（'ip:<addr>'）は会社に紐づかないので、ここでは消さない
+-- （retention-purge が2日より前の窓を消す）
+delete from public.api_rate_limits
+ where subject in (select 'company:' || id::text from auth.users where email = '<EMAIL>');
 
 -- ここで手順5の確認クエリを流し、全部 0 になっていることを見てから commit する
 -- 想定と違ったら rollback;
 commit;
 ```
 
-> **この1経路は `check:deletion-coverage` の射程外である。**
+> **この2経路（billing_webhook_unresolved / api_rate_limits）は `check:deletion-coverage` の射程外である。**
 > あの検査器が見るのは `company_id` を持つテーブルの列挙だけで、
 > `stripe_customer_id` のような紐づけは見ない。
 > **見えないまま消し残さないよう**、`docs/checklists/deletion-coverage.yml` の

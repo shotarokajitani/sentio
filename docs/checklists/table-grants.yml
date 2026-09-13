@@ -16,6 +16,9 @@
 # read_only  … `authenticated` は SELECT だけ。書き込みは service_role が持つ
 # writable   … `authenticated` の SELECT/INSERT/UPDATE/DELETE を残す表。
 #              **それでも TRUNCATE / REFERENCES / TRIGGER は渡さない**
+#              （2026-09-13 の点検・PR-2b で0表になった）
+# no_access  … `authenticated` にも `anon` にも1つも渡さない表。
+#              RLS 有効・ポリシー無しで、service_role だけが読み書きする
 #
 # `TRUNCATE` を全表で外すのは、**RLS を素通しするから**である。
 # `connections` の DELETE は RLS のポリシーで自社の行に絞られるが、
@@ -34,8 +37,11 @@ read_only:
   - budget_usage
   - company_summary
   - connection_events
+  - connections # PR-2b（00050）で writable から移した
   - connector_limits # 00036 の実装漏れ。全社共通の枠を顧客が書き換えられてよい理由が無い
   - delivery_log
+  - entities # PR-2b（00050）で writable から移した
+  - events # PR-2b（00050）で writable から移した
   - findings
   - known_explanations # 00036 の実装漏れ。共有行（company_id IS NULL）を持つ表である
   - misjudgments
@@ -43,23 +49,22 @@ read_only:
 
 # `authenticated` の書き込みを残す表。**ここは「漏れ」ではなく明示的な許可である。**
 #
-# この3表を書いているのは Next 側の Route Handler で、いずれも `createRouteClient`
-# （`ANON_KEY` ＋ 利用者のセッション）を通す。つまり **service_role ではなく
-# `authenticated` の権限で書いている。**
+# 2026-09-13 の点検・PR-2b（00050）で **0表になった。** それまでは
+# events / entities / connections の3表がここにあった。Next の Route Handler が
+# 利用者のクライアント（`ANON_KEY` ＋ セッション）でこの3表を書いていたためである。
 #
-#   events        src/app/api/csv/ingest         取り込んだ明細の upsert
+#   events        src/app/api/csv/ingest              取り込んだ明細の upsert
 #   events        src/app/api/connections/disconnect  解除時の delete
 #   entities      src/app/api/competitors/suggest     競合候補の insert
 #   connections   src/app/api/connections/disconnect  解除時の delete
 #
-# **この3表の INSERT / UPDATE / DELETE を REVOKE すると、本番の CSV 取り込みと
-# 連携の解除がその場で止まる。** 締めるなら、先に上記の経路を service_role
-# （Edge Function 側）に寄せること。順序を逆にしない。
-#   → 寄せるかどうかは未判断（`docs/spec/07_open_items.md` に登録済み）
-writable:
-  - connections
-  - entities
-  - events
+# PR-2a（#126）でこの4経路を service_role に寄せ、本番で確かめてから外した
+# （順序を逆にすると、本番の CSV 取り込みと連携の解除がその場で止まる）。
+#
+# **ここに表を足すときは、利用者が API を通さず PostgREST を直に叩いて
+# 自社の行を書き換えられてよいか**を先に決めること。RLS は行を絞るだけで、
+# 自社の行の書き換えは止めない。
+writable: []
 
 # `writable` の表で `authenticated` に**残す**権限。検査器はこの一覧を
 # 「持っていなければならないもの」として突き合わせる（欠けたら missing で赤くなる）
@@ -68,6 +73,28 @@ writable_privileges:
   - INSERT
   - UPDATE
   - DELETE
+
+# `authenticated` にも `anon` にも、1つも権限を渡さない表（2026-09-13 の点検・PR-2b で追加）。
+#
+# いずれも RLS 有効・ポリシー無しで、service_role だけが読み書きする。
+# **ポリシーが無いので、GRANT が残っていても行は見えない。** それでも GRANT を持たせないのは、
+# ポリシーを1本足した瞬間に読める・書ける形を作らないためである（`connector_limits` の件と同じ）。
+#
+#   api_rate_limits             00049 レート制限の回数。利用者が触れると自分の件数を0に戻せる
+#   billing_webhook_events      00028 課金 webhook の処理済み記録
+#   billing_webhook_unresolved  00029 会社を引けなかった課金 webhook
+#   dispatch_runs               00032 配信の実行記録
+#   retention_purge_runs        00030 削除の実行記録
+#
+# **`connection_events` はここに入れていない。** 同じく RLS 有効・ポリシー無しだが、
+# 00036 が「画面から読む予定はあるので SELECT だけ残す」として SELECT を渡している。
+# 移すかどうかは検収の判断待ち（PR-2b の本文に記載）。
+no_access:
+  - api_rate_limits
+  - billing_webhook_events
+  - billing_webhook_unresolved
+  - dispatch_runs
+  - retention_purge_runs
 
 # どの表でも `authenticated` に渡さない権限
 never_granted:

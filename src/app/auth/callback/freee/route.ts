@@ -3,6 +3,7 @@ import { getAuthedContext } from "@/lib/auth/company";
 import { oauthStateCookieName, isMatchingState } from "@/lib/auth/oauth-state";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { FREEE_PROVIDER, upsertVaultToken } from "@/security/vault-token";
 
 const FREEE_TOKEN_URL = "https://accounts.secure.freee.co.jp/public_api/token";
 const FREEE_API_BASE = "https://api.freee.co.jp/api/1";
@@ -78,16 +79,21 @@ export async function GET(req: NextRequest) {
     expires_in: tokenData.expires_in,
   });
 
-  const { data: vaultId, error: vaultErr } = await supabase.rpc("store_vault_secret", {
-    p_name: `freee:${companyId}`,
-    p_secret: tokenPayload,
-    p_description: "freee OAuth token",
-  });
+  // **Google 側と同じ関数を通す**（2026-09-13 の点検・PR-3 の 19）。
+  // 以前は毎回 store_vault_secret を固定名 `freee:<company_id>` で呼んでいたので、
+  // **2回目の連携から vault.secrets.name の一意制約で失敗し、connect_failed になっていた。**
+  // 既存の接続があれば、その vault_secret_id の中身を更新する（古い secret を残さない）
+  const {
+    vaultId,
+    action: vaultAction,
+    error: vaultErr,
+  } = await upsertVaultToken(supabase, companyId, tokenPayload, FREEE_PROVIDER);
 
-  if (vaultErr) {
-    console.error("Vault store failed:", vaultErr.message);
+  if (vaultErr || !vaultId) {
+    console.error("Vault store failed:", vaultErr);
     return redirect("/connect?e=connect_failed");
   }
+  console.log(`freee: Vault token ${vaultAction} for company ${companyId}`);
 
   // 3. Register connection
   const expiresAt = new Date(Date.now() + (tokenData.expires_in || 86400) * 1000).toISOString();

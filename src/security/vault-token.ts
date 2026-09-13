@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
+export const FREEE_PROVIDER = "freee";
+
+/** Vault にトークンを置く連携。**(company_id, provider) で connections の1行に対応する** */
+export type VaultTokenProvider = typeof GOOGLE_CALENDAR_PROVIDER | typeof FREEE_PROVIDER;
+
+const DESCRIPTIONS: Record<VaultTokenProvider, string> = {
+  [GOOGLE_CALENDAR_PROVIDER]: "Google Calendar OAuth token",
+  [FREEE_PROVIDER]: "freee OAuth token",
+};
 
 /**
  * 新規作成するVaultシークレットの名前。
@@ -12,8 +21,11 @@ export const GOOGLE_CALENDAR_PROVIDER = "google_calendar";
  * name はもう検索キーではない（正本は connections.vault_secret_id）ので、
  * 人間が読める識別子＋一意サフィックスで足りる。
  */
-export function vaultSecretName(companyId: string): string {
-  return `${GOOGLE_CALENDAR_PROVIDER}:${companyId}:${crypto.randomUUID()}`;
+export function vaultSecretName(
+  companyId: string,
+  provider: VaultTokenProvider = GOOGLE_CALENDAR_PROVIDER,
+): string {
+  return `${provider}:${companyId}:${crypto.randomUUID()}`;
 }
 
 export type UpsertVaultTokenResult = {
@@ -41,17 +53,22 @@ export type UpsertVaultTokenResult = {
  * 接続行だけが失われ、シークレットが孤児として残った場合も新規作成側で回復する
  * （名前を一意にしてあるため衝突しない）。孤児シークレットはVaultに残るが、
  * 参照されないだけで実害はない。
+ *
+ * **freee も同じ関数を通す**（2026-09-13 の点検・PR-3 の 19）。freee の callback は
+ * 毎回 `store_vault_secret` を固定名（`freee:<company_id>`）で呼んでいたので、
+ * **2回目の連携から name の一意制約で失敗し、connect_failed になっていた。**
  */
 export async function upsertVaultToken(
   supabase: SupabaseClient,
   companyId: string,
   tokenPayload: string,
+  provider: VaultTokenProvider = GOOGLE_CALENDAR_PROVIDER,
 ): Promise<UpsertVaultTokenResult> {
   const { data: existing, error: selErr } = await supabase
     .from("connections")
     .select("vault_secret_id")
     .eq("company_id", companyId)
-    .eq("provider", GOOGLE_CALENDAR_PROVIDER)
+    .eq("provider", provider)
     .maybeSingle();
 
   if (selErr) {
@@ -73,9 +90,9 @@ export async function upsertVaultToken(
   }
 
   const { data: newId, error: storeErr } = await supabase.rpc("store_vault_secret", {
-    p_name: vaultSecretName(companyId),
+    p_name: vaultSecretName(companyId, provider),
     p_secret: tokenPayload,
-    p_description: "Google Calendar OAuth token",
+    p_description: DESCRIPTIONS[provider],
   });
 
   if (storeErr) {

@@ -36,7 +36,6 @@ read_only:
   - baselines
   - budget_usage
   - company_summary
-  - connection_events
   - connections # PR-2b（00050）で writable から移した
   - connector_limits # 00036 の実装漏れ。全社共通の枠を顧客が書き換えられてよい理由が無い
   - delivery_log
@@ -83,16 +82,18 @@ writable_privileges:
 #   api_rate_limits             00049 レート制限の回数。利用者が触れると自分の件数を0に戻せる
 #   billing_webhook_events      00028 課金 webhook の処理済み記録
 #   billing_webhook_unresolved  00029 会社を引けなかった課金 webhook
+#   connection_events           00032 連携の状態の遷移
 #   dispatch_runs               00032 配信の実行記録
 #   retention_purge_runs        00030 削除の実行記録
 #
-# **`connection_events` はここに入れていない。** 同じく RLS 有効・ポリシー無しだが、
-# 00036 が「画面から読む予定はあるので SELECT だけ残す」として SELECT を渡している。
-# 移すかどうかは検収の判断待ち（PR-2b の本文に記載）。
+# **`connection_events` は 00036 で SELECT を渡していたが、00050 で外した**（#127 の検収で決定）。
+# 「画面から読む予定はある」という理由だったが、読む画面は0件で、ポリシーが無いので0行しか返らない。
+# **読む画面を作る PR で、GRANT SELECT と RLS ポリシーを一緒に足す**（ここから read_only に移す）。
 no_access:
   - api_rate_limits
   - billing_webhook_events
   - billing_webhook_unresolved
+  - connection_events
   - dispatch_runs
   - retention_purge_runs
 

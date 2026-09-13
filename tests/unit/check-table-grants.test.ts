@@ -154,11 +154,12 @@ describe("何も渡さない表の突合", () => {
     return map;
   }
 
-  it("api_rate_limits と RLS 有効・ポリシー無しの4表が宣言に入っている", () => {
+  it("api_rate_limits と RLS 有効・ポリシー無しの既存5表が宣言に入っている", () => {
     expect(decl.no_access).toEqual([
       "api_rate_limits",
       "billing_webhook_events",
       "billing_webhook_unresolved",
+      "connection_events",
       "dispatch_runs",
       "retention_purge_runs",
     ]);

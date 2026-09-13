@@ -19,6 +19,11 @@
 -- ## 2. 何も渡さない表を宣言に載せる
 --
 -- RLS 有効・ポリシー無しで、`authenticated` / `anon` に1つも権限を持たせない表。
+--
+-- **`connection_events` の SELECT もここで外す**（#127 の検収で決定）。00036 が
+-- 「画面から読む予定はあるので SELECT だけ残す」として渡していたが、読む画面は0件で、
+-- ポリシーが無いので SELECT を残しても0行しか返らない。
+-- **読む画面を作る PR で、GRANT SELECT と RLS ポリシーを一緒に足す。**
 -- 自表検証の配列に載せ、`docs/checklists/table-grants.yml` の `no_access` と
 -- `scripts/check-table-grants.ts` が突き合わせる。
 --
@@ -48,6 +53,9 @@ REVOKE ALL ON api_rate_limits, billing_webhook_events, billing_webhook_unresolve
               dispatch_runs, retention_purge_runs
   FROM anon, authenticated;
 
+-- 00036 が渡した SELECT を外す（読む画面が無い。作るときにポリシーと一緒に足す）
+REVOKE SELECT ON connection_events FROM authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 3. retention_purge_runs の種別
 -- ---------------------------------------------------------------------------
@@ -71,13 +79,13 @@ ALTER TABLE retention_purge_runs ADD CONSTRAINT retention_purge_runs_company_che
 DO $$
 DECLARE
   read_only  TEXT[] := ARRAY['baselines', 'budget_usage', 'company_summary',
-                             'connection_events', 'connections', 'connector_limits',
+                             'connections', 'connector_limits',
                              'delivery_log', 'entities', 'events', 'findings',
                              'known_explanations', 'misjudgments', 'narratives'];
   writable   TEXT[] := ARRAY[]::TEXT[];
   no_access  TEXT[] := ARRAY['api_rate_limits', 'billing_webhook_events',
-                             'billing_webhook_unresolved', 'dispatch_runs',
-                             'retention_purge_runs'];
+                             'billing_webhook_unresolved', 'connection_events',
+                             'dispatch_runs', 'retention_purge_runs'];
   never      TEXT[] := ARRAY['TRUNCATE', 'REFERENCES', 'TRIGGER'];
   t TEXT;
   p TEXT;

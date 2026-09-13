@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient, type PendingCookie } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/safe-next";
+import { captchaTokenFrom, signInOptions, signUpOptions } from "@/lib/auth/captcha";
+import { clientIp, hitRate, ipSubject, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -15,6 +17,13 @@ function redirect(req: NextRequest, path: string, pending: PendingCookie[]): Nex
 }
 
 export async function POST(req: NextRequest) {
+  // **IP あたりの回数を数える**（2026-09-13 の点検・PR-2a）。**フォームを読む前に止める。**
+  //
+  // 登録にもログインにも関門が無く、総当たりもアカウントの量産もできた。
+  // ログイン前なので会社は分からない。数える単位は送信元の IP にする
+  const rate = await hitRate(ipSubject(clientIp(req.headers)), rateRules().session);
+  if (!rate.allowed) return rateLimitedResponse(rate);
+
   const form = await req.formData();
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
@@ -22,6 +31,11 @@ export async function POST(req: NextRequest) {
   const next = safeNext(form.get("next"));
 
   const { supabase, pending } = createAuthClient(req);
+
+  // **CAPTCHA のトークン**（2026-09-13 の点検・13b）。確かめるのは Supabase Auth。
+  // 無ければ送らない——Supabase で CAPTCHA を有効にしていなければ要求されない。
+  // 有効にしたあとは、トークンの無い要求を Supabase が拒否する（`lib/auth/captcha.ts`）
+  const captchaToken = captchaTokenFrom(form);
 
   // **失敗して戻すとき、入口（mode）を保つ。**
   // 登録で失敗したのに mode が外れると、**ログインの画面にエラーだけが出る**形になり、
@@ -46,7 +60,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      ...(siteUrl ? { options: { data: { site_url: siteUrl } } } : {}),
+      options: signUpOptions(siteUrl, captchaToken),
     });
     if (error) {
       console.error("signUp failed:", error.message);
@@ -62,7 +76,11 @@ export async function POST(req: NextRequest) {
     return redirect(req, next, pending);
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+    options: signInOptions(captchaToken),
+  });
   if (error) {
     console.error("signIn failed:", error.message);
     return backToLogin("invalid_credentials");

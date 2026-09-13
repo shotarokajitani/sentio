@@ -90,8 +90,15 @@ export async function POST(request: Request) {
   const vaultSecretId = connection.vault_secret_id as string | null;
   let tokenDestroyed = false;
 
+  // **削除は service_role で行う**（2026-09-13 の点検・PR-2a）。
+  // 利用者のクライアントで消すために `authenticated` に `events` / `connections` の
+  // DELETE を渡していた（00038）。PR-2b で外すので、先にここを寄せる。
+  //
+  // **service_role の削除は RLS を通らない。** 越境を防ぐのは、下の2か所の削除に
+  // 必ず付けている `.eq("company_id", ctx.companyId)` だけである。**これを外すと全社を消す。**
+  const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
   if (vaultSecretId) {
-    const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     const { data: destroyed, error: vaultErr } = await admin.rpc("delete_vault_secret", {
       p_id: vaultSecretId,
     });
@@ -106,7 +113,7 @@ export async function POST(request: Request) {
   }
 
   if (guard.count > 0) {
-    const { error: delErr } = await ctx.supabase
+    const { error: delErr } = await admin
       .from("events")
       .delete()
       .eq("company_id", ctx.companyId)
@@ -122,7 +129,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const { error: rowErr } = await ctx.supabase
+  const { error: rowErr } = await admin
     .from("connections")
     .delete()
     .eq("company_id", ctx.companyId)

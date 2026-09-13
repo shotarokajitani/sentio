@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
+import { companySubject, hitRate, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 
@@ -43,15 +44,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 自社スコープの書き込みはRLSクライアントで行う
-  const supabase = ctx.supabase;
+  // **書き込みは service_role で行う**（PR-2a）。利用者のクライアントで書くために
+  // `authenticated` に `entities` / `events` の書き込みを渡していた（00038）。PR-2b で外す。
+  // **越境しないのは、読む行も書く行も `company_id` をセッション由来の `companyId` からしか
+  // 入れていないためである**（下の `.eq` と `entityRows`）
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   /**
    * **既に競合を持っていれば何もしない（冪等）。**
    *
-   * 呼び出し元は画面の読み込みごとに叩きうるので、ここが無いと
+   * 呼び出し元（`/connect`）は画面の読み込みごとに叩くので、ここが無いと
    * **開くたびに Anthropic と gBizInfo を叩き、entities が重複して増える。**
-   * LLM に触れる前に返すので、費用も発生しない。
+   * LLM に触れる前に返すので、費用も発生しない。回数にも数えない。
    */
   const { data: existing, error: existingErr } = await supabase
     .from("entities")
@@ -67,6 +71,20 @@ export async function POST(req: NextRequest) {
   if (existing && existing.length > 0) {
     return NextResponse.json({ status: "already", count: existing.length });
   }
+
+  /**
+   * **LLM に触れる前に、1日あたりの回数を数える**（2026-09-13 の点検・PR-2a）。
+   *
+   * 上の冪等ガードだけでは足りなかった。**`entities` は利用者が DELETE できた**（00038）ので、
+   * 消せば何度でも Anthropic と gBizInfo を叩けた。
+   *
+   * 回数の記録（`api_rate_limits`）は service_role しか触れないので、
+   * **`entities` を消しても回数は戻らない。** 実行した事実そのものを判定に使う。
+   * 上限を超えた回は LLM を呼ばずに返すので、費用も発生しない
+   */
+  const rate = await hitRate(companySubject(companyId), rateRules().suggest);
+  if (!rate.allowed) return rateLimitedResponse(rate);
+
   // S0共有行（company_id = null）は設計上 service_role でしか書けない（00019）
   const shared = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 

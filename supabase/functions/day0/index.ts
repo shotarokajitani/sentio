@@ -128,7 +128,18 @@ async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
     const fetched = await safeFetch(url, {
       headers: { "User-Agent": "Sentio/1.0", Accept: "text/html" },
     });
-    if (!fetched.ok) return { error: `fetch_rejected: ${fetched.reason}` };
+    if (!fetched.ok) {
+      // **断った理由をログに残す**（本番で dns_failed / blocked_address を見分けるため）。
+      // URL の全体ではなくホスト名だけを出す（パスやクエリに利用者の値が入りうる）
+      let host = "(解析できない URL)";
+      try {
+        host = new URL(fetched.url).hostname;
+      } catch {
+        // host は既定の文言のまま
+      }
+      console.warn(`[sentio:safe-fetch] day0 のサイト取得を拒否した reason=${fetched.reason} host=${host}`);
+      return { error: `fetch_rejected: ${fetched.reason}` };
+    }
     if (fetched.status < 200 || fetched.status >= 300) return { error: `HTTP ${fetched.status}` };
     if (fetched.body === null) return { error: "unsupported_content_type" };
 

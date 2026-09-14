@@ -2912,3 +2912,14 @@ REVOKE ALL ON events, entities, connections, known_explanations, connector_limit
 寄せるまでは `authenticated` の `SELECT / INSERT / UPDATE / DELETE` を残す。~~
 
 → 2026-09-13 に決定・実施（PR-2a #126 / PR-2b 00050）。`authenticated` に残るのは SELECT だけ。
+
+## safeFetch の DNS rebinding（**未対応**・2026-09-14 登録・PR-3 の 22 / #136）
+
+`supabase/functions/_shared/safe-fetch.ts` は、ホストを DNS で解決して**解決後の IP が内部の範囲なら拒否する**。
+しかし、**確かめた IP と、fetch が実際につなぐ IP が同じとは限らない。**
+Deno の fetch は接続先の IP を固定できないので、検査の直後に DNS の答えが変われば（TTL の短い答えを使った DNS rebinding）、内部の宛先に届きうる。
+
+- 影響する経路: day0 の `analyzeUrl`（登録時の自社サイトの URL を取りに行く）。現時点ではこの1か所
+- 塞ぐ形の候補: 解決した IP に直接つなぎ、`Host` ヘッダと TLS の SNI を元のホスト名にする。HTTPS の証明書の検証と両立させる作りが要る
+- 当面の緩和: 取れた本文はプロンプトに入る前に囲み（題名 80 文字・説明文 300 文字）、2MB・10秒で打ち切り、HTML などの文字の応答だけを読む
+- **対応するかは未判断。** 判断は検収者が出す

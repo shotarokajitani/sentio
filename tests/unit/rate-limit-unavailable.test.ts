@@ -100,12 +100,13 @@ describe("DB に届かず回数を数えられないとき", () => {
 
   it("auth/session は通す（ログインの入口を止めない）", async () => {
     vi.stubEnv("SUPABASE_ANON_KEY", "unit-test-placeholder");
+    vi.stubEnv("NEXT_PUBLIC_SITE_ORIGIN", "http://localhost");
     const { POST } = await import("@/app/api/auth/session/route");
     // 欄を空で送る。Supabase Auth まで行かず、入力不足でログイン画面に戻る
     const res = await POST(
       new NextRequest("http://localhost/api/auth/session", {
         method: "POST",
-        headers: { "x-forwarded-for": "203.0.113.9" },
+        headers: { "x-forwarded-for": "203.0.113.9", origin: "http://localhost" },
         body: new FormData(),
       }),
     );

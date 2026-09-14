@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthClient, type PendingCookie } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/safe-next";
+import { checkOrigin } from "@/lib/auth/origin";
 import {
   captchaTokenFrom,
   isCaptchaFailure,
@@ -23,6 +24,14 @@ function redirect(req: NextRequest, path: string, pending: PendingCookie[]): Nex
 }
 
 export async function POST(req: NextRequest) {
+  // **自分のサイトから来た POST だけを受ける**（2026-09-13 の点検・PR-3 の 16・login CSRF）。
+  // 回数を数える前・フォームを読む前に断る。理由はログにだけ残し、応答には載せない
+  const origin = checkOrigin(req.headers.get("origin"), process.env.NEXT_PUBLIC_SITE_ORIGIN);
+  if (!origin.ok) {
+    console.warn(`auth/session: Origin で断った reason=${origin.reason}`);
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   // **IP あたりの回数を数える**（2026-09-13 の点検・PR-2a）。**フォームを読む前に止める。**
   //
   // 登録にもログインにも関門が無く、総当たりもアカウントの量産もできた。

@@ -81,12 +81,14 @@ if (mode === "run") {
       return { companyId: t.id, email: t.email, siteUrl: null, supabase: null };
     }
 
+    /** 自分のサイトからの POST（Origin が `NEXT_PUBLIC_SITE_ORIGIN` と一致する・PR-3 の 16） */
     function sessionPost(fields: Record<string, string>, ip: string) {
+      vi.stubEnv("NEXT_PUBLIC_SITE_ORIGIN", "http://localhost");
       const form = new FormData();
       for (const [k, v] of Object.entries(fields)) form.set(k, v);
       return new NextRequest("http://localhost/api/auth/session", {
         method: "POST",
-        headers: { "x-forwarded-for": ip },
+        headers: { "x-forwarded-for": ip, origin: "http://localhost" },
         body: form,
       });
     }

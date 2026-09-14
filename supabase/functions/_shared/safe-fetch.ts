@@ -224,20 +224,30 @@ async function readCapped(
   return { body, truncated };
 }
 
-/** 本番の依存。DNS は Deno で A と AAAA を引く */
+/**
+ * 本番の依存。DNS は **Deno.resolveDns（A と AAAA）** で引き、使えなければ **node:dns** で引く。
+ *
+ * Supabase の Edge Runtime で `Deno.resolveDns` が使えるかは、公開の文書で確かめられなかった（未検証）。
+ * 使えない環境で解決がすべて失敗すると、利用者のサイトが1件も取れなくなる。
+ * **どちらでも引けなければ解決の失敗として拒否する**（fail-closed は変えない）。
+ */
 export function denoDeps(): SafeFetchDeps {
   return {
     resolve: async (hostname: string) => {
-      const d = (
-        globalThis as unknown as {
-          Deno: { resolveDns(h: string, t: "A" | "AAAA"): Promise<string[]> };
-        }
-      ).Deno;
-      const results = await Promise.allSettled([
-        d.resolveDns(hostname, "A"),
-        d.resolveDns(hostname, "AAAA"),
-      ]);
-      return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+      const d = (globalThis as unknown as {
+        Deno?: { resolveDns?: (h: string, t: "A" | "AAAA") => Promise<string[]> };
+      }).Deno;
+      if (typeof d?.resolveDns === "function") {
+        const results = await Promise.allSettled([
+          d.resolveDns(hostname, "A"),
+          d.resolveDns(hostname, "AAAA"),
+        ]);
+        const found = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+        if (found.length > 0) return found;
+      }
+      const dns = await import("node:dns");
+      const all = await dns.promises.lookup(hostname, { all: true });
+      return all.map((entry: { address: string }) => entry.address);
     },
     fetch: (input, init) => fetch(input, init),
   };

@@ -7,7 +7,7 @@
  * 予定の題名・会議相手のドメイン・法人名・補助金の題名は利用者由来または外部の値なので、
  * `fenceUntrusted`（制御文字の除去・80 文字・区切り）を通してから文字列に入れる。
  */
-import { fenceUntrusted } from "./prompt-safety.ts";
+import { SITE_DESCRIPTION_MAX_CHARS, fenceUntrusted } from "./prompt-safety.ts";
 
 export function summarizeCalendar(events: Record<string, unknown>[]): string {
   const calEvents = events.filter((e) => e.event_type === "schedule");
@@ -130,4 +130,31 @@ export function summarizeGbiz(events: Record<string, unknown>[]): string {
       return JSON.stringify(m);
     })
     .join("\n");
+}
+
+/**
+ * 外部サイトの解析の結果を、プロンプトに載せる形にする（#134 の検収で決定）。
+ *
+ * **外部サイトは誰でも書ける。** `<title>` や meta description に指示の形をした文を置けば、
+ * そのまま Day0 のプロンプトに入っていた。題名（title・H1・og:title）は 80 文字、
+ * 説明文（description・og:description）は 300 文字で囲む。**取れなかった値は null のまま返す**
+ * （呼び出し側が「取得不可」「なし」を出す）。
+ */
+export function siteAnalysisForPrompt(site: Record<string, string | null>): {
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+} {
+  const title = (v: string | null | undefined) => (v ? fenceUntrusted(v) : null);
+  const text = (v: string | null | undefined) =>
+    v ? fenceUntrusted(v, SITE_DESCRIPTION_MAX_CHARS) : null;
+  return {
+    title: title(site.title),
+    description: text(site.description),
+    h1: title(site.h1),
+    ogTitle: title(site.ogTitle),
+    ogDescription: text(site.ogDescription),
+  };
 }

@@ -14,6 +14,7 @@ import { deliveryResponse } from "../_shared/delivery-response.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
 import { fenceUntrusted, UNTRUSTED_DATA_RULE } from "../_shared/prompt-safety.ts";
 import {
+  siteAnalysisForPrompt,
   summarizeCalendar,
   summarizeGbiz,
   summarizeTransactions,
@@ -368,13 +369,15 @@ async function generateBlock(
   // Build block-specific data context
   let dataContext = "";
   switch (plan.key) {
-    case "external_view":
+    case "external_view": {
+      // **外部サイトの値は囲んでから載せる**（#134 の検収で決定。題名 80・説明文 300）
+      const site = siteAnalysisForPrompt(context.siteAnalysis);
       dataContext = `## URL分析結果（${context.url}）
-タイトル: ${context.siteAnalysis.title || "取得不可"}
-説明: ${context.siteAnalysis.description || "なし"}
-H1: ${context.siteAnalysis.h1 || "なし"}
-OGタイトル: ${context.siteAnalysis.ogTitle || "なし"}
-OG説明: ${context.siteAnalysis.ogDescription || "なし"}
+タイトル: ${site.title || "取得不可"}
+説明: ${site.description || "なし"}
+H1: ${site.h1 || "なし"}
+OGタイトル: ${site.ogTitle || "なし"}
+OG説明: ${site.ogDescription || "なし"}
 ${context.siteAnalysis.error ? `(サイト取得エラー: ${context.siteAnalysis.error})` : ""}
 
 ## カレンダーデータ概要
@@ -386,6 +389,7 @@ ${context.transactionSummary}
 ## 推定競合
 ${context.competitorsSummary || "推定なし"}`;
       break;
+    }
     case "public_records":
       dataContext = `## gBizINFO取得データ
 ${context.gbizSummary || "データなし"}

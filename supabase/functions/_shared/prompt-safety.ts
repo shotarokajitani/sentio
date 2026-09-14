@@ -35,6 +35,12 @@ export const DATA_FENCE = "<<<DATA>>>";
 export const UNTRUSTED_MAX_CHARS = 80;
 
 /**
+ * 外部サイトの説明文（meta description / og:description）の上限（#134 の検収で決定）。
+ * 説明文は 100〜160 文字が多く、80 では意味が切れる。**題名は 80 のまま**
+ */
+export const SITE_DESCRIPTION_MAX_CHARS = 300;
+
+/**
  * システム指示に入れる1文（2026-09-13 の点検・PR-3 の 17）。
  *
  * 囲むだけでは、LLM が囲みの意味を知らない。**区切りの内側はデータだと明示する。**
@@ -96,14 +102,15 @@ export function stripUntrusted(raw: unknown): string {
  * （2026-09-13 の点検・PR-3 の 17 と 21）。
  *
  * 1. `stripUntrusted`（制御文字と区切り文字を落とす）
- * 2. **80 文字で切る**（超えた分は捨てる。「…」は付けない）。文字はコードポイントで数える
+ * 2. **80 文字で切る**（超えた分は捨てる。「…」は付けない）。文字はコードポイントで数える。
+ *    上限は `maxChars` で変えられる（外部サイトの説明文だけ 300。ほかは既定の 80）
  * 3. **区切り文字で囲む**
  *
  * 修正前は区切り文字を削るだけで、**囲んでいなかった**。
  * **プロンプトに入れる直前の値にだけ使う。** 表示用の値には使わない（切り詰めが表示に出る）。
  */
-export function fenceUntrusted(raw: unknown): string {
-  const cut = Array.from(stripUntrusted(raw)).slice(0, UNTRUSTED_MAX_CHARS).join("");
+export function fenceUntrusted(raw: unknown, maxChars: number = UNTRUSTED_MAX_CHARS): string {
+  const cut = Array.from(stripUntrusted(raw)).slice(0, maxChars).join("");
   return `${DATA_FENCE}${cut}${DATA_FENCE}`;
 }
 

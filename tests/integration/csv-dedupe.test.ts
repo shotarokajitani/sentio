@@ -132,6 +132,24 @@ describe.skipIf(!canRun)("CSV の鍵が TypeScript と SQL で一致する", () 
     );
   });
 
+  it("**陰性**: 同じ Shift_JIS のバイトから来る5対を、SQL 側も同一と読み、TypeScript と同じ鍵になる（00051）", async () => {
+    const base = { date: "2026-08-06", direction: "debit" as const, amount: 1100, balance: null };
+    const pairs: Array<[number, number]> = [
+      [0x301c, 0xff5e],
+      [0x2016, 0x2225],
+      [0x00a2, 0xffe0],
+      [0x00a3, 0xffe1],
+      [0x00ac, 0xffe2],
+    ];
+    for (const [iconv, cp932] of pairs) {
+      const a = `ﾌﾘｺﾐ${String.fromCharCode(iconv)}ﾃｽﾄ`;
+      const b = `ﾌﾘｺﾐ${String.fromCharCode(cp932)}ﾃｽﾄ`;
+      const sqlA = await sqlKey({ ...base, description: a });
+      expect(await sqlKey({ ...base, description: b }), `U+${iconv.toString(16)}`).toBe(sqlA);
+      expect(csvEventId({ companyId, ...base, description: b }), `U+${cp932.toString(16)}`).toBe(sqlA);
+    }
+  });
+
   it("**陰性**: 別の取引は SQL 側でも別の鍵になる（潰しすぎない）", async () => {
     const base = {
       date: "2026-09-04",

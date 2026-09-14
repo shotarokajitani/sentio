@@ -30,6 +30,25 @@ import { createHash } from "node:crypto";
 /** U+2212 MINUS SIGN。ソースに見分けにくい文字を直接書かない */
 const MINUS_SIGN = String.fromCharCode(0x2212);
 
+/**
+ * 同じ Shift_JIS のバイトから来る対（#135 の検収で決定）。**左を右に寄せる。**
+ *
+ * - 0x8160 波ダッシュ: U+301C（iconv）→ '~'（U+FF5E は全角→半角で既に '~' になる）
+ * - 0x8161 双柱: U+2225（CP932）→ U+2016（iconv）
+ * - 0x8191 セント: U+FFE0（CP932）→ U+00A2（iconv）
+ * - 0x8192 ポンド: U+FFE1（CP932）→ U+00A3（iconv）
+ * - 0x81CA 否定: U+FFE2（CP932）→ U+00AC（iconv）
+ *
+ * 見分けにくい文字をソースに直接書かないので、コードポイントで作る
+ */
+const SJIS_VARIANT_PAIRS: Array<[string, string]> = [
+  [String.fromCharCode(0x301c), "~"],
+  [String.fromCharCode(0x2225), String.fromCharCode(0x2016)],
+  [String.fromCharCode(0xffe0), String.fromCharCode(0x00a2)],
+  [String.fromCharCode(0xffe1), String.fromCharCode(0x00a3)],
+  [String.fromCharCode(0xffe2), String.fromCharCode(0x00ac)],
+];
+
 /** 半角カナ → 全角カナ（濁点なし） */
 const KANA_BASE: Record<string, string> = {
   ｱ: "ア",
@@ -153,6 +172,11 @@ export function normalizeDescription(raw: string): string {
   // U+FF0D は上の全角→半角で既に `-` になるので、**U+2212 だけが別の鍵のまま残っていた。**
   // 2026-09-13 に同じ明細の19行が別の行として入った（検収側の再取り込みで実測）
   s = s.split(MINUS_SIGN).join("-");
+
+  // 1-3. **同じ Shift_JIS のバイトが、読み方で別の文字になる対を寄せる**（#135 の検収で決定）。
+  //      iconv（SHIFT_JIS）とブラウザ（CP932）で割り当てが分かれる。**同じバイトから来た文字どうし**
+  //      なので、寄せても別の取引が同じにはならない。長音符・ダッシュ類は寄せない
+  for (const [from, to] of SJIS_VARIANT_PAIRS) s = s.split(from).join(to);
 
   // 2. 半角カナを全角へ。**濁点・半濁点は次の文字を見てから合成する**
   let out = "";

@@ -98,6 +98,29 @@ describe("摘要の正規化", () => {
     );
   });
 
+  /** 同じ Shift_JIS のバイトから来る対（#135 の検収で決定）。[説明, iconv 側, CP932 側] */
+  const SJIS_PAIRS: Array<[string, number, number]> = [
+    ["0x8160 波ダッシュ", 0x301c, 0xff5e],
+    ["0x8161 双柱", 0x2016, 0x2225],
+    ["0x8191 セント", 0x00a2, 0xffe0],
+    ["0x8192 ポンド", 0x00a3, 0xffe1],
+    ["0x81CA 否定", 0x00ac, 0xffe2],
+  ];
+
+  for (const [label, iconv, cp932] of SJIS_PAIRS) {
+    it(`**陰性**: ${label}（U+${iconv.toString(16).toUpperCase()} と U+${cp932.toString(16).toUpperCase()}）を同じにする`, () => {
+      const a = `振込${String.fromCharCode(iconv)}手数料`;
+      const b = `振込${String.fromCharCode(cp932)}手数料`;
+      expect(normalizeDescription(a)).toBe(normalizeDescription(b));
+      expect(csvEventId({ ...KEY, description: a })).toBe(csvEventId({ ...KEY, description: b }));
+    });
+  }
+
+  it("**陰性**: 波ダッシュは消さない（'A~B' と 'AB' を同じにしない）", () => {
+    expect(normalizeDescription("A~B")).not.toBe(normalizeDescription("AB"));
+    expect(normalizeDescription(`A${String.fromCharCode(0x301c)}B`)).toBe("A~B");
+  });
+
   it("**陰性**: 長音符（U+30FC）はハイフンにしない。ハイフンは消さない（潰しすぎない）", () => {
     const choon = String.fromCharCode(0x30fc);
     expect(normalizeDescription(`コ${choon}ヒ`)).not.toBe(normalizeDescription("コ-ヒ"));
@@ -178,6 +201,18 @@ describe("00051 が SQL 側にも同じ1行を足している（2026-09-13 の�
     path.resolve(__dirname, "../../supabase/migrations/00051_csv_normalize_minus_sign.sql"),
     "utf8",
   );
+
+  it("同じ Shift_JIS のバイトから来る5対も、SQL 側に同じ向きで書いてある", () => {
+    for (const line of [
+      "s := replace(s, chr(12316), '~');",
+      "s := replace(s, chr(8741), chr(8214));",
+      "s := replace(s, chr(65504), chr(162));",
+      "s := replace(s, chr(65505), chr(163));",
+      "s := replace(s, chr(65506), chr(172));",
+    ]) {
+      expect(m00051).toContain(line);
+    }
+  });
 
   it("U+2212 を '-' に寄せる（見分けにくい文字は chr(8722) で書く）", () => {
     expect(m00051).toContain("s := replace(s, chr(8722), '-');");

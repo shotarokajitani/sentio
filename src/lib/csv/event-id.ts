@@ -152,7 +152,7 @@ export function normalizeDescription(raw: string): string {
   // iconv の SHIFT_JIS は U+2212（−）に、ブラウザの TextDecoder（CP932）は U+FF0D（－）にする。
   // U+FF0D は上の全角→半角で既に `-` になるので、**U+2212 だけが別の鍵のまま残っていた。**
   // 2026-09-13 に同じ明細の19行が別の行として入った（検収側の再取り込みで実測）
-  void MINUS_SIGN; // 陰性コントロール（直後に revert する）
+  s = s.split(MINUS_SIGN).join("-");
 
   // 2. 半角カナを全角へ。**濁点・半濁点は次の文字を見てから合成する**
   let out = "";

@@ -79,6 +79,31 @@ describe("摘要の正規化", () => {
     expect(normalizeDescription("振込#01")).toContain("#01");
   });
 
+  /**
+   * ハイフン類（2026-09-13 の点検・PR-3 の 22b）。
+   *
+   * Shift_JIS の 0x817C は、iconv では U+2212（マイナス記号）、ブラウザの TextDecoder では
+   * U+FF0D（全角ハイフン）になる。**同じ明細が読み方で別の行として入っていた**（本番で19行）。
+   * 見分けにくい文字はソースに直接書かず、コードポイントで作る。
+   */
+  it("**陰性**: U+2212（マイナス記号）・U+FF0D（全角ハイフン）・U+002D（ハイフン）を同じにする", () => {
+    const minus = String.fromCharCode(0x2212);
+    const fullwidth = String.fromCharCode(0xff0d);
+    expect(normalizeDescription(`ｶ)ﾄﾘﾋｷ${minus}ｻｷ`)).toBe(
+      normalizeDescription(`ｶ)ﾄﾘﾋｷ${fullwidth}ｻｷ`),
+    );
+    expect(normalizeDescription(`A${minus}B`)).toBe("A-B");
+    expect(csvEventId({ ...KEY, description: `振込${minus}手数料` })).toBe(
+      csvEventId({ ...KEY, description: `振込${fullwidth}手数料` }),
+    );
+  });
+
+  it("**陰性**: 長音符（U+30FC）はハイフンにしない。ハイフンは消さない（潰しすぎない）", () => {
+    const choon = String.fromCharCode(0x30fc);
+    expect(normalizeDescription(`コ${choon}ヒ`)).not.toBe(normalizeDescription("コ-ヒ"));
+    expect(normalizeDescription("A-B")).not.toBe(normalizeDescription("AB"));
+  });
+
   it("空文字を入れても落ちない", () => {
     expect(normalizeDescription("")).toBe("");
   });
@@ -133,7 +158,9 @@ describe("SQL 側の正規化が TypeScript と同じ順序で書かれている
     // `to_char(396000, 'FM999999999999990.999999')` は `396000.` を返す。
     // **`FM` は末尾のゼロを削るが、ピリオドは残る**（2026-09-10 の本番実測）
     expect(migration).toContain("csv_number_text");
-    expect(migration).toContain("rtrim(rtrim(trim(to_char(v, 'FM999999999999990.999999')), '0'), '.')");
+    expect(migration).toContain(
+      "rtrim(rtrim(trim(to_char(v, 'FM999999999999990.999999')), '0'), '.')",
+    );
     // 自表検証が3つの形を実DBで確かめる
     expect(migration).toContain("csv_number_text(396000) <> '396000'");
     expect(migration).toContain("csv_number_text(396000.5) <> '396000.5'");
@@ -143,5 +170,23 @@ describe("SQL 側の正規化が TypeScript と同じ順序で書かれている
     // **`events` に `created_at` は無い**（2026-09-10 の本番実測）。
     // 取り込んだ時刻は `ingested_at` である
     expect(migration).toContain("ORDER BY ingested_at ASC NULLS LAST");
+  });
+});
+
+describe("00051 が SQL 側にも同じ1行を足している（2026-09-13 の点検・PR-3 の 22b）", () => {
+  const m00051 = readFileSync(
+    path.resolve(__dirname, "../../supabase/migrations/00051_csv_normalize_minus_sign.sql"),
+    "utf8",
+  );
+
+  it("U+2212 を '-' に寄せる（見分けにくい文字は chr(8722) で書く）", () => {
+    expect(m00051).toContain("s := replace(s, chr(8722), '-');");
+    expect(m00051).not.toContain(String.fromCharCode(0x2212));
+  });
+
+  it("全角→半角（U+FF0D を含む）のあとに置く（TypeScript と同じ順序）", () => {
+    expect(m00051.indexOf("replace(s, chr(8722), '-')")).toBeGreaterThan(
+      m00051.indexOf("s := replace(s, '　', ' ');"),
+    );
   });
 });

@@ -118,6 +118,20 @@ describe.skipIf(!canRun)("CSV の鍵が TypeScript と SQL で一致する", () 
     expect(half).toBe(csvEventId({ companyId, ...base, description: "デンキ ダイ" }));
   });
 
+  it("**陰性**: マイナス記号（U+2212）と全角ハイフン（U+FF0D）を、SQL 側も同一と読む（00051）", async () => {
+    const base = { date: "2026-08-05", direction: "debit" as const, amount: 3300, balance: 120000 };
+    const minus = await sqlKey({ ...base, description: `ｶ)ﾄﾘﾋｷ${String.fromCharCode(0x2212)}ｻｷ` });
+    const fullwidth = await sqlKey({
+      ...base,
+      description: `ｶ)ﾄﾘﾋｷ${String.fromCharCode(0xff0d)}ｻｷ`,
+    });
+    expect(minus).toBe(fullwidth);
+    // **TypeScript 側と同じ鍵になる**（取り込みと組み直しがずれない）
+    expect(minus).toBe(
+      csvEventId({ companyId, ...base, description: `ｶ)ﾄﾘﾋｷ${String.fromCharCode(0x2212)}ｻｷ` }),
+    );
+  });
+
   it("**陰性**: 別の取引は SQL 側でも別の鍵になる（潰しすぎない）", async () => {
     const base = {
       date: "2026-09-04",

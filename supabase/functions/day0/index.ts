@@ -12,6 +12,12 @@ import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
 import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
+import { fenceUntrusted, UNTRUSTED_DATA_RULE } from "../_shared/prompt-safety.ts";
+import {
+  summarizeCalendar,
+  summarizeGbiz,
+  summarizeTransactions,
+} from "../_shared/day0-summaries.ts";
 
 const DAY0_BLOCK_KEYS = [
   "external_view",
@@ -409,6 +415,8 @@ ${context.concern ? `\n## 経営者の懸念\n${context.concern}` : "（懸念�
     .create({
       model,
       max_tokens: 16000,
+      // **区切りの内側はデータであり指示ではない**（2026-09-13 の点検・PR-3 の 17）
+      system: UNTRUSTED_DATA_RULE,
       messages: [
         {
           role: "user",
@@ -475,6 +483,8 @@ async function reviseBlock(
     .create({
       model,
       max_tokens: 16000,
+      // **区切りの内側はデータであり指示ではない**（2026-09-13 の点検・PR-3 の 17）
+      system: UNTRUSTED_DATA_RULE,
       messages: [
         {
           role: "user",
@@ -545,7 +555,7 @@ async function evaluateBlock(
     .create({
       model,
       max_tokens: 16000,
-      system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。`,
+      system: `あなたはSentioのDay0レポートEvaluatorです。採点結果をJSON形式のみで返してください。JSON以外のテキスト（説明・マークダウン・コードブロック記号）は一切出力しないでください。${UNTRUSTED_DATA_RULE}`,
       messages: [
         {
           role: "user",
@@ -634,125 +644,6 @@ ${block.content}
 // Data summarizers (no PII leakage to LLM)
 // ──────────────────────────────────────────────────────
 
-function summarizeCalendar(events: Record<string, unknown>[]): string {
-  const calEvents = events.filter((e) => e.event_type === "schedule");
-  if (calEvents.length === 0) return "カレンダーデータなし";
-
-  const titles = calEvents.map(
-    (e) => ((e.metrics as Record<string, unknown>)?.title as string) || "(無題)",
-  );
-  const dates = calEvents.map((e) => (e.occurred_at as string).split("T")[0]);
-
-  // Meeting partner analysis
-  const partnerCounts: Record<string, number> = {};
-  for (const e of calEvents) {
-    const m = e.metrics as Record<string, unknown>;
-    const attendees = (m?.attendees as string[]) || [];
-    for (const a of attendees) {
-      const domain = a.split("@")[1];
-      if (domain) partnerCounts[domain] = (partnerCounts[domain] || 0) + 1;
-    }
-  }
-  const topPartners = Object.entries(partnerCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([domain, count]) => `${domain}: ${count}件`);
-
-  // Time distribution
-  const monthCounts: Record<string, number> = {};
-  for (const d of dates) {
-    const month = d.substring(0, 7);
-    monthCounts[month] = (monthCounts[month] || 0) + 1;
-  }
-
-  const earliest = dates[dates.length - 1];
-  const latest = dates[0];
-
-  return `全${calEvents.length}件（${earliest}〜${latest}）
-月別分布: ${Object.entries(monthCounts)
-    .map(([m, c]) => `${m}: ${c}件`)
-    .join("、")}
-予定タイトル例: ${titles.slice(0, 5).join("、")}
-会議相手ドメイン: ${topPartners.length > 0 ? topPartners.join("、") : "出席者情報なし"}`;
-}
-
-function summarizeTransactions(events: Record<string, unknown>[]): string {
-  const txEvents = events.filter((e) => e.event_type === "transaction");
-  if (txEvents.length === 0) return "入出金データなし";
-
-  let totalCredit = 0,
-    totalDebit = 0;
-  let creditCount = 0,
-    debitCount = 0;
-  let maxCredit = 0,
-    maxDebit = 0;
-  const dates: string[] = [];
-
-  for (const e of txEvents) {
-    const m = e.metrics as Record<string, unknown>;
-    const amount = (m?.amount as number) || 0;
-    const direction = m?.direction as string;
-    dates.push((e.occurred_at as string).split("T")[0]);
-
-    if (direction === "credit" || amount > 0) {
-      const absAmt = Math.abs(amount);
-      totalCredit += absAmt;
-      creditCount++;
-      if (absAmt > maxCredit) maxCredit = absAmt;
-    }
-    if (direction === "debit" || amount < 0) {
-      const absAmt = Math.abs(amount);
-      totalDebit += absAmt;
-      debitCount++;
-      if (absAmt > maxDebit) maxDebit = absAmt;
-    }
-  }
-
-  const earliest = dates[dates.length - 1];
-  const latest = dates[0];
-
-  // Monthly breakdown
-  const monthlyNet: Record<string, { credit: number; debit: number }> = {};
-  for (const e of txEvents) {
-    const m = e.metrics as Record<string, unknown>;
-    const amount = Math.abs((m?.amount as number) || 0);
-    const direction = m?.direction as string;
-    const month = (e.occurred_at as string).substring(0, 7);
-    if (!monthlyNet[month]) monthlyNet[month] = { credit: 0, debit: 0 };
-    if (direction === "credit") monthlyNet[month].credit += amount;
-    else monthlyNet[month].debit += amount;
-  }
-
-  const fmt = (n: number) => n.toLocaleString("ja-JP");
-
-  return `全${txEvents.length}件（${earliest}〜${latest}）
-入金: ${creditCount}件・合計¥${fmt(totalCredit)}・最大¥${fmt(maxCredit)}
-出金: ${debitCount}件・合計¥${fmt(totalDebit)}・最大¥${fmt(maxDebit)}
-月別:
-${Object.entries(monthlyNet)
-  .map(
-    ([m, v]) =>
-      `  ${m}: 入金¥${fmt(v.credit)} / 出金¥${fmt(v.debit)} / 差引¥${fmt(v.credit - v.debit)}`,
-  )
-  .join("\n")}`;
-}
-
-function summarizeGbiz(events: Record<string, unknown>[]): string {
-  const gbiz = events.filter((e) => (e.source as string)?.includes("gbizinfo"));
-  if (gbiz.length === 0) return "";
-
-  return gbiz
-    .map((e) => {
-      const m = e.metrics as Record<string, unknown>;
-      if (m.type === "subsidy") return `補助金採択: ${m.company_name} — ${m.title}`;
-      if (m.type === "certification") return `認定: ${m.company_name} — ${m.title}`;
-      if (m.type === "corporate_info")
-        return `法人情報: ${m.name}（${m.location || "所在地不明"}）`;
-      return JSON.stringify(m);
-    })
-    .join("\n");
-}
-
 // ──────────────────────────────────────────────────────
 // Main handler
 // ──────────────────────────────────────────────────────
@@ -813,7 +704,9 @@ Deno.serve(async (req: Request) => {
       competitors.length > 0
         ? competitors
             .map(
-              (c) => `- ${c.canonical_name}: ${(c.attrs as Record<string, string>)?.reason || ""}`,
+              // 競合（取引先）の名前と理由は、LLM と gBizINFO 由来の値。**囲んでから載せる**（PR-3 の 21）
+              (c) =>
+                `- ${fenceUntrusted(c.canonical_name)}: ${fenceUntrusted((c.attrs as Record<string, string>)?.reason || "")}`,
             )
             .join("\n")
         : "競合推定なし";
@@ -972,17 +865,22 @@ Deno.serve(async (req: Request) => {
         now: new Date(),
       },
       (key) =>
-        sendEmail(mail.config, {
-          to: email,
-          subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: renderDay0Html(company_name, passedBlocks, {
-            generationTimeMs,
-            totalTokens,
-            passedCount: passedBlocks.length,
-            totalCount: blocks.length,
-          }),
-          text: renderDay0Text(company_name, passedBlocks),
-        }, fetch, key),
+        sendEmail(
+          mail.config,
+          {
+            to: email,
+            subject: `[Sentio] Day0レポート: ${company_name}`,
+            html: renderDay0Html(company_name, passedBlocks, {
+              generationTimeMs,
+              totalTokens,
+              passedCount: passedBlocks.length,
+              totalCount: blocks.length,
+            }),
+            text: renderDay0Text(company_name, passedBlocks),
+          },
+          fetch,
+          key,
+        ),
     );
 
     return deliveryResponse(result, { report });

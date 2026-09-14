@@ -3,7 +3,12 @@
 // Reads prompts from filesystem at runtime (code embedding prohibited)
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { sanitizeMetrics } from "../_shared/prompt-safety.ts";
+import {
+  INVESTIGATOR_SYSTEM,
+  evaluatorContent,
+  evidenceSummaries as buildEvidenceSummaries,
+  generatorContent,
+} from "../_shared/investigate-prompt.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-client.ts";
 import { resolveCaller, resolveCompanyId } from "../_shared/caller.ts";
 import { errorResponse, mustData, mustMaybe, mustOk } from "../_shared/db.ts";
@@ -83,35 +88,12 @@ async function generate(
     .create({
       model,
       max_tokens: 16000,
+      // **区切りの内側はデータであり指示ではない**（2026-09-13 の点検・PR-3 の 17）
+      system: INVESTIGATOR_SYSTEM,
       messages: [
         {
           role: "user",
-          content: `あなたはSentioのFinding生成器です。以下のシグナルと会社の記憶パケットから、Findingを生成してください。
-
-## 検知されたシグナル
-${JSON.stringify(candidates, null, 2)}
-
-## 会社の記憶パケット
-${memoryPacket}
-
-## Findingテンプレート（この形式に従うこと）
-${findingTemplate}
-
-## 制約
-- 仮説は必ず3件以上生成すること
-- 全ての事実主張に証拠イベントIDを紐付けること
-- 断定表現を使わないこと
-- urgencyはweeklyまたはmonthlyのみ（immediateはmonitor/期日専用のため使用禁止）
-
-以下のJSON形式で応答してください:
-{
-  "what": "何が変わったかの1-2文",
-  "hypotheses": [{"text": "仮説文", "plausibility": "high|medium|low"}],
-  "evidence_event_ids": ["イベントID配列"],
-  "urgency": "weekly|monthly",
-  "next_actions": [{"description": "次の一手", "onetap_type": "calendar|message_draft|employee_check|watch"}],
-  "rendered": "テンプレートに従ったレンダリング済みテキスト"
-}`,
+          content: generatorContent(candidates, memoryPacket, findingTemplate),
         },
       ],
     })
@@ -164,22 +146,12 @@ async function evaluate(
     .create({
       model,
       max_tokens: 16000,
+      // **区切りの内側はデータであり指示ではない**（2026-09-13 の点検・PR-3 の 17）
+      system: INVESTIGATOR_SYSTEM,
       messages: [
         {
           role: "user",
-          content: `あなたはSentioのEvaluatorです。以下のFindingを5つの基準で厳密に判定してください。
-
-## 判定基準
-${criteriaText}
-
-## Finding
-${JSON.stringify(finding, null, 2)}
-
-## 証拠イベント
-${JSON.stringify(evidenceSummaries, null, 2)}
-
-以下のJSON配列で応答してください（5要素、各基準に対応）:
-[{"name": "基準名", "pass": true/false, "reason": "判定理由"}]`,
+          content: evaluatorContent(finding, evidenceSummaries, criteriaText),
         },
       ],
     })
@@ -349,12 +321,7 @@ Deno.serve(async (req: Request) => {
       // **metrics をそのまま渡さない**（発注 E-2）。カレンダー由来の `metrics` には
       // 出席者のメールアドレスがそのまま入っている。Finding に要るのは
       // 「誰と会ったか」ではなく「社内か社外か・何人か」である
-      const evidenceSummaries = (evidenceEvents || []).map((e) => ({
-        event_id: e.event_id,
-        summary:
-          `[${e.event_type}] ${e.source} @ ${e.occurred_at}: ` +
-          JSON.stringify(sanitizeMetrics(e.metrics, ownDomain)),
-      }));
+      const evidenceSummaries = buildEvidenceSummaries(evidenceEvents || [], ownDomain);
 
       // Evaluator loop (max 2 revisions)
       let evalResult = await evaluate(

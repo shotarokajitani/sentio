@@ -12,6 +12,7 @@ import { resolveMailConfig, sendEmail } from "../_shared/mailer.ts";
 import { asDeliveryDb, deliverOnce, deliveryKey } from "../_shared/delivery.ts";
 import { deliveryResponse } from "../_shared/delivery-response.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.39.0";
+import { safeFetch } from "../_shared/safe-fetch.ts";
 
 const DAY0_BLOCK_KEYS = [
   "external_view",
@@ -121,18 +122,22 @@ async function fetchCompetitors(supabase: ReturnType<typeof getSupabaseAdmin>, c
 
 async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
   try {
-    const res = await fetch(url, {
+    // **利用者が入れた URL は safeFetch を通す**（2026-09-13 の点検・PR-3 の 22・SSRF 防止）。
+    // 内部の宛先（169.254.169.254・127.0.0.1 など）とリダイレクトでの迂回を拒否し、
+    // 2MB・10秒で打ち切り、HTML などの文字の応答だけ本文を読む
+    const fetched = await safeFetch(url, {
       headers: { "User-Agent": "Sentio/1.0", Accept: "text/html" },
-      redirect: "follow",
     });
-    if (!res.ok) return { error: `HTTP ${res.status}` };
+    if (!fetched.ok) return { error: `fetch_rejected: ${fetched.reason}` };
+    if (fetched.status < 200 || fetched.status >= 300) return { error: `HTTP ${fetched.status}` };
+    if (fetched.body === null) return { error: "unsupported_content_type" };
 
-    const contentType = res.headers.get("content-type") || "";
+    const contentType = fetched.contentType;
     let charset = "utf-8";
     const cm = contentType.match(/charset=([^\s;]+)/i);
     if (cm) charset = cm[1].toLowerCase();
 
-    const bytes = await res.arrayBuffer();
+    const bytes = fetched.body;
     let html: string;
     try {
       html = new TextDecoder(charset, { fatal: false }).decode(bytes);
@@ -972,17 +977,22 @@ Deno.serve(async (req: Request) => {
         now: new Date(),
       },
       (key) =>
-        sendEmail(mail.config, {
-          to: email,
-          subject: `[Sentio] Day0レポート: ${company_name}`,
-          html: renderDay0Html(company_name, passedBlocks, {
-            generationTimeMs,
-            totalTokens,
-            passedCount: passedBlocks.length,
-            totalCount: blocks.length,
-          }),
-          text: renderDay0Text(company_name, passedBlocks),
-        }, fetch, key),
+        sendEmail(
+          mail.config,
+          {
+            to: email,
+            subject: `[Sentio] Day0レポート: ${company_name}`,
+            html: renderDay0Html(company_name, passedBlocks, {
+              generationTimeMs,
+              totalTokens,
+              passedCount: passedBlocks.length,
+              totalCount: blocks.length,
+            }),
+            text: renderDay0Text(company_name, passedBlocks),
+          },
+          fetch,
+          key,
+        ),
     );
 
     return deliveryResponse(result, { report });

@@ -306,7 +306,8 @@ export function ConnectClient({
 
       if (!res.ok) {
         console.error("csv/ingest 失敗:", res.status);
-        setCsvError(t.csv.ingestFailed);
+        // 413 は「大きすぎる」。取り込みの失敗と同じ文にすると、何を直せばいいか分からない
+        setCsvError(res.status === 413 ? t.csv.tooLarge : t.csv.ingestFailed);
         setCsvStep("error");
         return;
       }

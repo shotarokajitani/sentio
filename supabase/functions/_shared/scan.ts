@@ -14,6 +14,11 @@
  * それは別の判断であり `docs/spec/07_open_items.md` に登録済みである。
  */
 
+// **説明文に連結する metrics の値は、制御文字と区切りを落としてから入れる**（2026-09-13 の点検・PR-3 の 17 と 21）。
+// 説明文は即時アラートとして画面とメールにも出るので、**ここでは切り詰めも囲みもしない**。
+// プロンプトに入れるときに investigate が `fenceUntrusted` で囲む（`_shared/investigate-prompt.ts`）
+import { stripUntrusted } from "./prompt-safety.ts";
+
 export interface ScanCandidate {
   scanType: string;
   source: string;
@@ -179,7 +184,7 @@ export function runScan(
         source: "deadline",
         suggestedUrgency: "immediate",
         evidence_event_ids: [event.event_id],
-        description: `Overdue: ${(event.metrics as Record<string, unknown>)?.expected_date || "unknown"}`,
+        description: `Overdue: ${stripUntrusted((event.metrics as Record<string, unknown>)?.expected_date) || "unknown"}`,
         score: 1,
       });
     }
@@ -193,7 +198,7 @@ export function runScan(
         source: "external",
         suggestedUrgency: "monthly",
         evidence_event_ids: [event.event_id],
-        description: `External: ${(event.metrics as Record<string, unknown>)?.relevance || event.source}`,
+        description: `External: ${stripUntrusted((event.metrics as Record<string, unknown>)?.relevance) || event.source}`,
         score: 0.5,
       });
     }
@@ -209,7 +214,7 @@ export function runScan(
           source: "monitor",
           suggestedUrgency: "immediate",
           evidence_event_ids: [event.event_id],
-          description: `Site down: ${(event.metrics as Record<string, unknown>)?.url || "unknown"}`,
+          description: `Site down: ${stripUntrusted((event.metrics as Record<string, unknown>)?.url) || "unknown"}`,
           score: 10,
         });
       }
@@ -336,7 +341,8 @@ export function runScan(
     // 平常が定まらない系列は見ない（抑制①「ベースライン未成立は対象外」と同じ趣旨）
     if (intervals.length < SERIES_MIN_INTERVALS) continue;
 
-    const label = id.slice(id.indexOf(":") + 1);
+    // 系列の名前は定例の題名・取引先名（利用者由来）。**説明文に連結する前に制御文字と区切りを落とす**
+    const label = stripUntrusted(id.slice(id.indexOf(":") + 1));
     const eventType = id.slice(0, id.indexOf(":"));
     const usual = median([...intervals].sort((a, b) => a - b));
 

@@ -19,6 +19,7 @@ import {
   summarizeGbiz,
   summarizeTransactions,
 } from "../_shared/day0-summaries.ts";
+import { safeFetch } from "../_shared/safe-fetch.ts";
 
 const DAY0_BLOCK_KEYS = [
   "external_view",
@@ -128,18 +129,33 @@ async function fetchCompetitors(supabase: ReturnType<typeof getSupabaseAdmin>, c
 
 async function analyzeUrl(url: string): Promise<Record<string, string | null>> {
   try {
-    const res = await fetch(url, {
+    // **利用者が入れた URL は safeFetch を通す**（2026-09-13 の点検・PR-3 の 22・SSRF 防止）。
+    // 内部の宛先（169.254.169.254・127.0.0.1 など）とリダイレクトでの迂回を拒否し、
+    // 2MB・10秒で打ち切り、HTML などの文字の応答だけ本文を読む
+    const fetched = await safeFetch(url, {
       headers: { "User-Agent": "Sentio/1.0", Accept: "text/html" },
-      redirect: "follow",
     });
-    if (!res.ok) return { error: `HTTP ${res.status}` };
+    if (!fetched.ok) {
+      // **断った理由をログに残す**（本番で dns_failed / blocked_address を見分けるため）。
+      // URL の全体ではなくホスト名だけを出す（パスやクエリに利用者の値が入りうる）
+      let host = "(解析できない URL)";
+      try {
+        host = new URL(fetched.url).hostname;
+      } catch {
+        // host は既定の文言のまま
+      }
+      console.warn(`[sentio:safe-fetch] day0 のサイト取得を拒否した reason=${fetched.reason} host=${host}`);
+      return { error: `fetch_rejected: ${fetched.reason}` };
+    }
+    if (fetched.status < 200 || fetched.status >= 300) return { error: `HTTP ${fetched.status}` };
+    if (fetched.body === null) return { error: "unsupported_content_type" };
 
-    const contentType = res.headers.get("content-type") || "";
+    const contentType = fetched.contentType;
     let charset = "utf-8";
     const cm = contentType.match(/charset=([^\s;]+)/i);
     if (cm) charset = cm[1].toLowerCase();
 
-    const bytes = await res.arrayBuffer();
+    const bytes = fetched.body;
     let html: string;
     try {
       html = new TextDecoder(charset, { fatal: false }).decode(bytes);

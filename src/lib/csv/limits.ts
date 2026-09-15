@@ -61,3 +61,29 @@ export function checkHeaderSize(headers: unknown[]): HeaderSizeVerdict {
   }
   return { ok: true };
 }
+
+/**
+ * プロンプトに入れる見出しから制御文字を落とす（2026-09-13 の点検・PR-3 の 21）。
+ *
+ * U+0000〜U+001F と U+007F〜U+009F を消し、**改行（U+000A）は空白1つにする。**
+ * 制御文字を含む見出しをそのまま入れると、LLM がそれを返したときに応答の JSON が壊れ、
+ * `csv/analyze` が 500 で落ちる。
+ *
+ * **見出しそのものは変えない。** 取り込み（`csv/ingest`）は元の見出しで列を引くので、
+ * LLM が返した列名は `originalHeaderFor` で元の見出しに戻す。
+ */
+export function stripControlChars(value: string): string {
+  return Array.from(value.replace(/\n/g, " "))
+    .filter((c) => {
+      const code = c.codePointAt(0) ?? 0;
+      return !(code <= 0x1f || (code >= 0x7f && code <= 0x9f));
+    })
+    .join("");
+}
+
+/** LLM が返した（制御文字を落とした）列名を、元の見出しに戻す。**見つからなければ null** */
+export function originalHeaderFor(returned: unknown, headers: string[]): string | null {
+  if (typeof returned !== "string") return null;
+  const index = headers.findIndex((h) => stripControlChars(h) === returned);
+  return index >= 0 ? headers[index] : null;
+}

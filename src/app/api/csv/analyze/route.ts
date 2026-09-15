@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { inspectHeaderRow } from "@shared/csv/header-guard";
 import { getAuthedContext, unauthorized } from "@/lib/auth/company";
 import { companySubject, hitRate, rateRules, rateLimitedResponse } from "@/lib/rate-limit";
-import { checkHeaderSize } from "@/lib/csv/limits";
+import { checkHeaderSize, originalHeaderFor, stripControlChars } from "@/lib/csv/limits";
 
 interface TypeStat {
   type: string;
@@ -95,12 +95,17 @@ export async function POST(req: NextRequest) {
   const columnDescriptions = headers
     .map((h) => {
       const stat = type_stats[h];
-      if (!stat) return `- "${h}": 型不明`;
-      const parts = [`- "${h}": 型=${stat.type}, 件数=${stat.sample_count}`];
+      // **プロンプトに入れる見出しとサンプルから制御文字を落とす**（2026-09-13 の点検・PR-3 の 21）。
+      // 型統計は元の見出しで引く
+      const name = stripControlChars(h);
+      if (!stat) return `- "${name}": 型不明`;
+      const parts = [`- "${name}": 型=${stat.type}, 件数=${stat.sample_count}`];
       if (stat.digits !== null) parts.push(`最大桁数=${stat.digits}`);
       if (stat.samples && stat.samples.length > 0) {
         // Only date/number samples are included (string samples are excluded at client)
-        parts.push(`サンプル=[${stat.samples.join(", ")}]`);
+        parts.push(
+          `サンプル=[${stat.samples.map((v) => stripControlChars(String(v))).join(", ")}]`,
+        );
       }
       return parts.join(", ");
     })
@@ -151,10 +156,9 @@ ${columnDescriptions}
   try {
     const mapping = JSON.parse(jsonMatch[0]);
     // Validate that mapped columns exist in headers
+    // LLM が返すのは制御文字を落とした列名なので、**元の見出しに戻す**（見つからなければ null）
     for (const [key, col] of Object.entries(mapping)) {
-      if (col !== null && !headers.includes(col as string)) {
-        mapping[key] = null;
-      }
+      mapping[key] = col === null ? null : originalHeaderFor(col, headers);
     }
     return NextResponse.json({ mapping });
   } catch {
